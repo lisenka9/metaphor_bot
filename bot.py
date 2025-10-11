@@ -35,7 +35,7 @@ def main():
     application.add_handler(CommandHandler("daily", handlers.daily_card))
     application.add_handler(CommandHandler("profile", handlers.profile))
     application.add_handler(CommandHandler("help", handlers.help_command))
-    application.add_handler(CommandHandler("reset", handlers.reset_limit)) 
+    application.add_handler(CommandHandler("resetme", handlers.reset_my_limit)) 
     
     # Обработчик для любых других сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 

@@ -139,29 +139,20 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(help_text)
 
-async def reset_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сброс лимита карт (для администраторов)"""
+async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сброс своего лимита карт (для тестирования)"""
     user = update.effective_user
     
-    # ID администратора (замените на ваш)
-    ADMIN_IDS = [891422895]
-    
-    # Проверяем, является ли пользователь администратором
-    if user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Эта команда только для администраторов")
-        return
-    
     try:
-        # Сбрасываем дату последней карты для всех пользователей
         conn = db.get_connection()
         cursor = conn.cursor()
-        cursor.execute('UPDATE users SET last_daily_card_date = NULL')
+        cursor.execute('UPDATE users SET last_daily_card_date = NULL WHERE user_id = ?', (user.id,))
         conn.commit()
         conn.close()
         
-        await update.message.reply_text("✅ Лимиты всех пользователей сброшены!")
+        await update.message.reply_text("✅ Ваш лимит сброшен! Можете снова взять карту дня.")
         
     except Exception as e:
-        logging.error(f"Error resetting limits: {e}")
-        await update.message.reply_text("❌ Ошибка при сбросе лимитов")
+        logging.error(f"Error resetting limit: {e}")
+        await update.message.reply_text("❌ Ошибка при сбросе лимита")
 
