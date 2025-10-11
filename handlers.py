@@ -253,14 +253,33 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             history_text += f"{i}. **{card_name}** - {date_str}\n"
         
-        history_text += "\n💫 Используйте /history pics чтобы увидеть картинки"
+        # Добавляем кнопку для просмотра с картинками
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
-        await update.message.reply_text(history_text, parse_mode='Markdown')
+        keyboard = [
+            [InlineKeyboardButton("🖼 Показать с картинками", callback_data="show_history_pics")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        history_text += "\n💫 Нажмите кнопку ниже чтобы увидеть картинки карт"
+        
+        await update.message.reply_text(
+            history_text, 
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
         
     except Exception as e:
         logging.error(f"❌ Error in history command: {e}")
         await update.message.reply_text("⚠️ Ошибка при загрузке истории")
 
+
+async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Универсальная команда истории"""
+    if context.args and context.args[0].lower() == "pics":
+        await history_album(update, context)
+    else:
+        await history(update, context)
 
 async def history_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """История в виде альбома (несколько картинок в одном сообщении)"""
@@ -292,8 +311,7 @@ async def history_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
             media_group.append(
                 InputMediaPhoto(
                     media=image_url,
-                    caption=caption,
-                    parse_mode='Markdown'
+                    caption=caption
                 )
             )
         
@@ -301,7 +319,8 @@ async def history_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_media_group(media=media_group)
         
         # Отправляем дополнительное текстовое сообщение
-        total_cards = db.get_user_stats(user.id)[2] if db.get_user_stats(user.id) else 0
+        stats = db.get_user_stats(user.id)
+        total_cards = stats[2] if stats else 0
         await update.message.reply_text(
             f"🎴 Всего карт получено: {total_cards}\n"
             f"💫 Используйте /daily для новой карты"
@@ -312,57 +331,12 @@ async def history_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # В случае ошибки пробуем простой метод
         await simple_history_with_images(update, context)
 
-        
-async def detailed_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подробная история с пагинацией"""
-    user = update.effective_user
-    
-    try:
-        history = db.get_user_card_history(user.id)
-        
-        if not history:
-            await update.message.reply_text("📝 У вас пока нет истории карт.")
-            return
-        
-        # Показываем по 5 карт за раз
-        page = context.args[0] if context.args else "1"
-        try:
-            page = int(page)
-        except:
-            page = 1
-            
-        items_per_page = 5
-        start_idx = (page - 1) * items_per_page
-        end_idx = start_idx + items_per_page
-        
-        total_pages = (len(history) + items_per_page - 1) // items_per_page
-        
-        history_text = f"📚 **Ваши карты (страница {page}/{total_pages}):**\n\n"
-        
-        for i, (card_name, image_url, description, drawn_date) in enumerate(history[start_idx:end_idx], start_idx + 1):
-            if isinstance(drawn_date, str):
-                date_str = drawn_date[:10]
-            else:
-                date_str = drawn_date.strftime("%d.%m.%Y")
-            
-            history_text += f"**{card_name}** - {date_str}\n"
-        
-        if total_pages > 1:
-            history_text += f"\nИспользуйте /history {page+1} для следующей страницы"
-        
-        await update.message.reply_text(history_text, parse_mode='Markdown')
-        
-    except Exception as e:
-        logging.error(f"❌ Error in detailed history: {e}")
-        await update.message.reply_text("⚠️ Ошибка при загрузке истории")
-
-
 async def simple_history_with_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Простая история с картинками (по одной)"""
     user = update.effective_user
     
     try:
-        history = db.get_user_card_history(user.id, limit=10)
+        history = db.get_user_card_history(user.id, limit=5)
         
         if not history:
             await update.message.reply_text(
@@ -399,9 +373,6 @@ async def simple_history_with_images(update: Update, context: ContextTypes.DEFAU
                     caption=caption,
                     parse_mode='Markdown'
                 )
-                # Небольшая задержка между картинками
-                import asyncio
-                await asyncio.sleep(0.5)
             except Exception as e:
                 logging.error(f"Error sending history image {i}: {e}")
                 # Если картинка не загружается, отправляем текстовое описание
@@ -409,17 +380,88 @@ async def simple_history_with_images(update: Update, context: ContextTypes.DEFAU
                     f"#{i} **{card_name}** - {date_str}\n(изображение недоступно)"
                 )
         
-        await update.message.reply_text(
-            "💫 Каждая карта — это момент вашего пути самопознания."
-        )
-        
     except Exception as e:
         logging.error(f"❌ Error in simple history: {e}")
         await update.message.reply_text("⚠️ Ошибка при загрузке истории")
 
-async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Универсальная команда истории"""
-    if context.args and context.args[0] == "pics":
-        await simple_history_with_images(update, context)
-    else:
-        await history(update, context)
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на кнопки"""
+    query = update.callback_query
+    await query.answer()  # важно - подтверждаем нажатие
+    
+    user_data = context.user_data
+    last_card = user_data.get('last_card', {})
+    
+    if query.data == "flip_card":
+        questions_text = f"""🎴 {last_card['card_name']}
+
+👁 Вопросы для размышления:
+
+— Какое состояние вызывает карта?
+— Какое воспоминание всплыло?
+— Какое слово или эмоция пришли первыми?  
+— Как символика карты может помочь вам сегодня?
+
+💭 С каким эмоциональным состоянием у вас ассоциируется изображение?
+
+✨ В работе с метафорическими картами нет «правильных» ответов — важен ваш личный смысл, рождающийся в момент встречи с образом."""
+        
+        # Убираем кнопку после нажатия
+        await query.edit_message_caption(
+            caption=questions_text,
+            reply_markup=None,  # убираем клавиатуру
+            parse_mode='Markdown'
+        )
+    
+    elif query.data == "show_history_pics":
+        # Показываем историю с картинками
+        user = query.from_user
+        await query.edit_message_reply_markup(reply_markup=None)  # убираем кнопку
+        await history_album_from_query(query, context)
+
+async def history_album_from_query(query, context: ContextTypes.DEFAULT_TYPE):
+    """История с картинками для callback query"""
+    user = query.from_user
+    
+    try:
+        history = db.get_user_card_history(user.id, limit=5)
+        
+        if not history:
+            await query.message.reply_text("📝 У вас пока нет истории карт.")
+            return
+        
+        from telegram import InputMediaPhoto
+        
+        # Создаем медиагруппу
+        media_group = []
+        
+        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
+            if isinstance(drawn_date, str):
+                date_str = drawn_date[:10]
+            else:
+                date_str = drawn_date.strftime("%d.%m.%Y")
+            
+            caption = f"#{i} {card_name} - {date_str}"
+            
+            media_group.append(
+                InputMediaPhoto(
+                    media=image_url,
+                    caption=caption
+                )
+            )
+        
+        # Отправляем альбом
+        await query.message.reply_media_group(media=media_group)
+        
+        # Статистика
+        stats = db.get_user_stats(user.id)
+        total_cards = stats[2] if stats else 0
+        await query.message.reply_text(
+            f"🎴 Всего карт получено: {total_cards}\n"
+            f"💫 Используйте /daily для новой карты"
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error in history album from query: {e}")
+        await query.message.reply_text("⚠️ Ошибка при загрузке истории с картинками")
