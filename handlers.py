@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from database import db 
-from config import IMAGES_BASE_URL, ADMIN_IDS
+from config import ADMIN_IDS
 import logging
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
