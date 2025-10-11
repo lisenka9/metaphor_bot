@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-import database as db
-import logging
+from database import db 
 from config import ADMIN_IDS
+import logging
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
