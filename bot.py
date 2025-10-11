@@ -1,6 +1,6 @@
 import logging
 import os
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from config import BOT_TOKEN
 import handlers
 from database import db
