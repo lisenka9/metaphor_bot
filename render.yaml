@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: metaphor-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8077594229:AAEVBbxleFe1QEl2wUow973caQ90QoiHNIA
