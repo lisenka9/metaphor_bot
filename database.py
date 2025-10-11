@@ -45,9 +45,9 @@ class DatabaseManager:
             # Таблица истории выданных карт
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_cards (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),
-                    card_id INTEGER REFERENCES cards(card_id),
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    card_id INTEGER,
                     drawn_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -204,16 +204,29 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
+            # Сначала проверяем существование пользователя
+            cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+            user = cursor.fetchone()
+            
+            if not user:
+                return None
+            
+            # Получаем статистику
             cursor.execute('''
-                SELECT u.daily_cards_limit, u.is_premium, 
-                       COUNT(uc.id), u.registered_date
+                SELECT 
+                    u.daily_cards_limit, 
+                    u.is_premium, 
+                    COUNT(uc.id), 
+                    u.registered_date
                 FROM users u
                 LEFT JOIN user_cards uc ON u.user_id = uc.user_id
-                WHERE u.user_id = %s
-                GROUP BY u.user_id, u.daily_cards_limit, u.is_premium, u.registered_date
+                WHERE u.user_id = ?
+                GROUP BY u.user_id
             ''', (user_id,))
             
-            return cursor.fetchone()
+            result = cursor.fetchone()
+            return result
+            
         except Exception as e:
             logging.error(f"Error getting user stats: {e}")
             return None
