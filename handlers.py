@@ -319,12 +319,7 @@ async def history_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_media_group(media=media_group)
         
         # Отправляем дополнительное текстовое сообщение
-        stats = db.get_user_stats(user.id)
-        total_cards = stats[2] if stats else 0
-        await update.message.reply_text(
-            f"🎴 Всего карт получено: {total_cards}\n"
-            f"💫 Используйте /daily для новой карты"
-        )
+        
         
     except Exception as e:
         logging.error(f"❌ Error in history album: {e}")
@@ -454,12 +449,6 @@ async def history_album_from_query(query, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем альбом
         await query.message.reply_media_group(media=media_group)
         
-        # Статистика
-        stats = db.get_user_stats(user.id)
-        total_cards = stats[2] if stats else 0
-        await query.message.reply_text(
-            f"🎴 Всего карт получено: {total_cards}\n"
-        )
         
     except Exception as e:
         logging.error(f"❌ Error in history album from query: {e}")
