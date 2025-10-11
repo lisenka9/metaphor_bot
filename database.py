@@ -26,7 +26,7 @@ class DatabaseManager:
                     first_name TEXT,
                     last_name TEXT,
                     registered_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    daily_cards_limit INTEGER DEFAULT 1,
+                    daily_cards_limit INTEGER DEFAULT 3,
                     last_daily_card_date DATE,
                     is_premium BOOLEAN DEFAULT FALSE
                 )
@@ -42,12 +42,12 @@ class DatabaseManager:
                 )
             ''')
             
-            # Таблица истории выданных карт
+            # Таблица истории выданных карт - ИСПРАВЛЕНО для PostgreSQL
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_cards (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    card_id INTEGER,
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    card_id INTEGER REFERENCES cards(card_id),
                     drawn_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -64,11 +64,12 @@ class DatabaseManager:
                 self._populate_sample_cards(cursor)
             
             conn.commit()
-            logging.info("Database tables initialized successfully")
+            logging.info("✅ Database tables initialized successfully")
             
         except Exception as e:
-            logging.error(f"Error initializing database: {e}")
+            logging.error(f"❌ Error initializing database: {e}")
             conn.rollback()
+            raise
         finally:
             conn.close()
     
@@ -86,9 +87,10 @@ class DatabaseManager:
             cursor.execute('''
                 INSERT INTO cards (card_id, card_name, image_url, description_text)
                 VALUES (%s, %s, %s, %s)
+                ON CONFLICT (card_id) DO NOTHING
             ''', card)
         
-        logging.info("Added sample cards to database")
+        logging.info("✅ Added sample cards to database")
     
     def get_or_create_user(self, user_id: int, username: str, 
                           first_name: str, last_name: str) -> bool:
@@ -97,7 +99,6 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
-            # Обрабатываем возможные None значения
             username = username or ""
             first_name = first_name or "Пользователь"
             last_name = last_name or ""
@@ -111,13 +112,13 @@ class DatabaseManager:
             conn.commit()
             return True
         except Exception as e:
-            logging.error(f"Error creating user: {e}")
+            logging.error(f"❌ Error creating user: {e}")
             return False
         finally:
             conn.close()
 
-    # Остальные методы остаются аналогичными, но с синтаксисом PostgreSQL
     def can_take_daily_card(self, user_id: int) -> tuple:
+        """Проверяет, может ли пользователь взять карту дня"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -131,20 +132,19 @@ class DatabaseManager:
             if not result:
                 return False, "Пользователь не найден"
             
-            last_date_str, limit = result
+            last_date, limit = result
             today = date.today()
             
-            if not last_date_str:
+            if not last_date:
                 return True, "Можно взять карту"
             
-            last_date = last_date_str.date() if isinstance(last_date_str, datetime) else last_date_str
             if last_date < today:
                 return True, "Можно взять карту"
             else:
                 return False, "Вы уже брали карту сегодня"
                 
         except Exception as e:
-            logging.error(f"Error checking daily card: {e}")
+            logging.error(f"❌ Error checking daily card: {e}")
             return False, "Ошибка базы данных"
         finally:
             conn.close()
@@ -163,7 +163,7 @@ class DatabaseManager:
             ''')
             return cursor.fetchone()
         except Exception as e:
-            logging.error(f"Error getting random card: {e}")
+            logging.error(f"❌ Error getting random card: {e}")
             return None
         finally:
             conn.close()
@@ -192,7 +192,7 @@ class DatabaseManager:
             conn.commit()
             return True
         except Exception as e:
-            logging.error(f"Error recording user card: {e}")
+            logging.error(f"❌ Error recording user card: {e}")
             conn.rollback()
             return False
         finally:
@@ -207,7 +207,7 @@ class DatabaseManager:
             logging.info(f"🔄 Getting stats for user {user_id}")
             
             # Сначала убедимся, что пользователь существует
-            cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT * FROM users WHERE user_id = %s', (user_id,))
             user = cursor.fetchone()
             
             if not user:
@@ -217,13 +217,13 @@ class DatabaseManager:
             logging.info(f"✅ User {user_id} found in database")
             
             # Получаем количество карт пользователя
-            cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = %s', (user_id,))
             total_cards = cursor.fetchone()[0]
             
             # Получаем данные пользователя
             cursor.execute('''
                 SELECT daily_cards_limit, is_premium, registered_date 
-                FROM users WHERE user_id = ?
+                FROM users WHERE user_id = %s
             ''', (user_id,))
             
             user_data = cursor.fetchone()
@@ -252,7 +252,7 @@ class DatabaseManager:
             count = cursor.fetchone()[0]
             return count > 0
         except Exception as e:
-            logging.error(f"Error checking cards: {e}")
+            logging.error(f"❌ Error checking cards: {e}")
             return False
         finally:
             conn.close()

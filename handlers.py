@@ -101,33 +101,32 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
     user = update.effective_user
     
-    # Отладочная информация
     logging.info(f"🔄 Profile command from user {user.id}")
     
-    # Простая версия - показываем базовую информацию
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Проверяем, есть ли пользователь в базе
-        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user.id,))
+        # Проверяем, есть ли пользователь в базе - ИСПРАВЛЕНО для PostgreSQL
+        cursor.execute('SELECT * FROM users WHERE user_id = %s', (user.id,))
         user_data = cursor.fetchone()
         
         if not user_data:
             await update.message.reply_text("❌ Вы не зарегистрированы. Используйте /start")
+            conn.close()
             return
         
-        # Получаем количество карт
-        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = ?', (user.id,))
+        # Получаем количество карт - ИСПРАВЛЕНО для PostgreSQL
+        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = %s', (user.id,))
         total_cards = cursor.fetchone()[0]
         
-        # Получаем лимит
-        cursor.execute('SELECT daily_cards_limit FROM users WHERE user_id = ?', (user.id,))
+        # Получаем лимит - ИСПРАВЛЕНО для PostgreSQL
+        cursor.execute('SELECT daily_cards_limit FROM users WHERE user_id = %s', (user.id,))
         limit_result = cursor.fetchone()
-        limit = limit_result[0] if limit_result else 1
+        limit = limit_result[0] if limit_result else 3
         
         profile_text = f"""
-👤 Ваш профиль
+👤 **Ваш профиль**
 
 📊 Всего карт получено: {total_cards}
 🎯 Лимит карт в день: {limit}
@@ -139,27 +138,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logging.error(f"❌ Error in profile command: {e}")
-        await update.message.reply_text("⚠️ Временная ошибка. Попробуйте позже.")
-    
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /help"""
-    help_text = """
-📖 Доступные команды:
-
-/daily - Получить карту дня
-/profile - Ваша статистика и лимиты
-/help - Эта справка
-
-❓ Как это работает?
-- Каждый день вы можете получить одну случайную карту
-- Карта выбирается из колоды случайным образом
-- Вы можете размышлять над значением карты в контексте вашей жизни
-
-💡 Совет: Не пытайтесь анализировать карту слишком рационально. 
-Дайте образу войти в ваше сознание, обратите внимание на первые мысли и чувства.
-    """
-    
-    await update.message.reply_text(help_text)
+        await update.message.reply_text("⚠️ Ошибка при загрузке профиля")
 
 async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс своего лимита карт (для тестирования)"""
@@ -168,16 +147,16 @@ async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        cursor.execute('UPDATE users SET last_daily_card_date = NULL WHERE user_id = ?', (user.id,))
+        # ИСПРАВЛЕНО для PostgreSQL
+        cursor.execute('UPDATE users SET last_daily_card_date = NULL WHERE user_id = %s', (user.id,))
         conn.commit()
         conn.close()
         
         await update.message.reply_text("✅ Ваш лимит сброшен! Можете снова взять карту дня.")
         
     except Exception as e:
-        logging.error(f"Error resetting limit: {e}")
+        logging.error(f"❌ Error resetting limit: {e}")
         await update.message.reply_text("❌ Ошибка при сбросе лимита")
-
 
 async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Временная команда для отладки базы данных"""
@@ -187,25 +166,29 @@ async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Проверяем таблицы
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = cursor.fetchall()
+        # Проверяем таблицы в PostgreSQL - ИСПРАВЛЕНО
+        cursor.execute('''
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        ''')
+        tables = [table[0] for table in cursor.fetchall()]
         
-        # Проверяем пользователя
-        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user.id,))
+        # Проверяем пользователя - ИСПРАВЛЕНО для PostgreSQL
+        cursor.execute('SELECT * FROM users WHERE user_id = %s', (user.id,))
         user_data = cursor.fetchone()
         
-        # Проверяем карты
-        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = ?', (user.id,))
+        # Проверяем карты - ИСПРАВЛЕНО для PostgreSQL
+        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = %s', (user.id,))
         user_cards_count = cursor.fetchone()[0]
         
         cursor.execute('SELECT COUNT(*) FROM cards')
         total_cards_count = cursor.fetchone()[0]
         
         debug_text = f"""
-🔍 Отладочная информация:
+🔍 **Отладочная информация:**
 
-📋 Таблицы в базе: {[table[0] for table in tables]}
+📋 Таблицы в базе: {tables}
 👤 Ваши данные: {'✅ Есть' if user_data else '❌ Нет'}
 🎴 Ваших карт в истории: {user_cards_count}
 🃏 Всего карт в колоде: {total_cards_count}
