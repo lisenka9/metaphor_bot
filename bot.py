@@ -12,6 +12,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик ошибок"""
+    if isinstance(context.error, Conflict):
+        logger.warning("Bot conflict detected - another instance might be running")
+        # Можно добавить дополнительную логику, например, остановку приложения
+        # context.application.stop()
+    else:
+        logger.error(f"Exception while handling an update: {context.error}")
+
+        
 def main():
     BOT_TOKEN = os.environ.get('BOT_TOKEN')
     # Проверяем наличие токена
