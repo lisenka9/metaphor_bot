@@ -19,8 +19,9 @@ class DatabaseManager:
         
         try:
             from config import DAILY_CARD_LIMIT_FREE
-            # Таблица пользователей
-            cursor.execute('''
+            
+            # Таблица пользователей - ИСПРАВЛЕНО
+            cursor.execute(f'''
                 CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
                     username TEXT,
