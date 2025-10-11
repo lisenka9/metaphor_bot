@@ -3,7 +3,7 @@ import os
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from config import BOT_TOKEN
 import handlers
-import database as db
+from database import db
 
 # Настройка логирования
 logging.basicConfig(
