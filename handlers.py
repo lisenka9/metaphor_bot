@@ -75,7 +75,7 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_photo(
             photo=image_url,  
             caption=card_text,
-            reply_markup=keyboard.get_card_keyboard(),
+            reply_markup=keyboard.get_card_keyboard(),  # добавляем кнопку
             parse_mode='Markdown'
         )
         
@@ -84,64 +84,38 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(
             f"✨ Карта дня: {card_name}**\n\n{card_text}",
-            reply_markup=keyboard.get_card_keyboard(),
+            reply_markup=keyboard.get_card_keyboard(),  # добавляем кнопку
             parse_mode='Markdown'
         )
         db.record_user_card(user.id, card_id)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий на кнопки"""
+    """Обработчик нажатий на кнопку 'Перевернуть карту'"""
     query = update.callback_query
-    await query.answer()
+    await query.answer()  # важно - подтверждаем нажатие
     
     user_data = context.user_data
     last_card = user_data.get('last_card', {})
     
     if query.data == "flip_card":
-        questions_text = f"""🎴 Оборот карты «{last_card['card_name']}»
+        questions_text = f"""🎴 {last_card['card_name']}
 
 👁 Вопросы для размышления:
-• Какое состояние вызывает карта?
-• Какое воспоминание всплыло?
-• Какое слово или эмоция пришли первыми?
-• Как символика карты может помочь вам сегодня?
 
-💭 С каким эмоциональным состоянием ассоциируется изображение?
+— Какое состояние вызывает карта?
+— Какое воспоминание всплыло?
+— Какое слово или эмоция пришли первыми?  
+— Как символика карты может помочь вам сегодня?
 
-✨ Нет «правильных» ответов — важен ваш личный смысл."""
+💭 С каким эмоциональным состоянием у вас ассоциируется изображение?
+
+✨ В работе с метафорическими картами нет «правильных» ответов — важен ваш личный смысл, рождающийся в момент встречи с образом."""
         
+        # Убираем кнопку после нажатия
         await query.edit_message_caption(
             caption=questions_text,
-            reply_markup=keyboard.get_questions_keyboard(),
+            reply_markup=None,  # убираем клавиатуру
             parse_mode='Markdown'
-        )
-    
-    elif query.data == "show_questions":
-        questions_text = f"""❓ Вопросы для карты «{last_card['card_name']}»
-
-1. Что я чувствую, глядя на эту карту?
-2. С чем ассоциируются цвета и формы?
-3. Какая история могла бы произойти с этим образом?
-4. Как это relates к моей текущей ситуации?
-5. Что я хочу взять с собой из этой карты?"""
-        
-        await query.edit_message_caption(
-            caption=questions_text,
-            reply_markup=keyboard.get_questions_keyboard(),
-            parse_mode='Markdown'
-        )
-    
-    elif query.data == "new_card":
-        # Можно сделать новую карту или просто закрыть
-        await query.edit_message_caption(
-            caption="🃏 Для новой карты используйте /daily",
-            reply_markup=None
-        )
-    
-    elif query.data == "save_thoughts":
-        await query.edit_message_caption(
-            caption="💾 Запишите свои мысли — они могут быть ценными для самопознания",
-            reply_markup=None
         )
 
 
