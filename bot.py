@@ -22,6 +22,7 @@ def main():
     # Инициализируем базу данных
     logger.info("Инициализация базы данных...")
     db.init_database()
+    db.update_existing_users_limits()
     
     # Проверяем, есть ли карты в базе
     if not db.check_cards_exist():

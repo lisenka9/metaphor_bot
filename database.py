@@ -18,6 +18,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
+            from config import DAILY_CARD_LIMIT_FREE
             # Таблица пользователей
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -26,7 +27,7 @@ class DatabaseManager:
                     first_name TEXT,
                     last_name TEXT,
                     registered_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    daily_cards_limit INTEGER DEFAULT 3,
+                    daily_cards_limit INTEGER DEFAULT {DAILY_CARD_LIMIT_FREE},
                     last_daily_card_date DATE,
                     is_premium BOOLEAN DEFAULT FALSE
                 )
@@ -257,6 +258,30 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"❌ Error checking cards: {e}")
             return False
+        finally:
+            conn.close()
+
+
+    def update_existing_users_limits(self):
+        """Обновляет лимиты существующих пользователей"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            from config import DAILY_CARD_LIMIT_FREE
+            
+            cursor.execute('''
+                UPDATE users 
+                SET daily_cards_limit = %s 
+                WHERE is_premium = FALSE
+            ''', (DAILY_CARD_LIMIT_FREE,))
+            
+            conn.commit()
+            logging.info(f"✅ Обновлены лимиты пользователей на {DAILY_CARD_LIMIT_FREE}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error updating limits: {e}")
+            conn.rollback()
         finally:
             conn.close()
 
