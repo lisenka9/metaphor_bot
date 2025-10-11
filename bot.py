@@ -1,8 +1,9 @@
 import logging
 import os
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, CallbackQueryHandler, filters
 from config import BOT_TOKEN
 import handlers
+from telegram.error import Conflict
 from database import db
 
 # Настройка логирования
