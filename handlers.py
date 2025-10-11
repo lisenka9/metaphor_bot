@@ -123,40 +123,23 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
     user = update.effective_user
     
-    logging.info(f"🔄 Profile command from user {user.id}")
+    stats = db.get_user_stats(user.id)
     
-    try:
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        
-        # Проверяем, есть ли пользователь в базе - ИСПРАВЛЕНО для PostgreSQL
-        cursor.execute('SELECT * FROM users WHERE user_id = %s', (user.id,))
-        user_data = cursor.fetchone()
-        
-        if not user_data:
-            await update.message.reply_text("❌ Вы не зарегистрированы. Используйте /start")
-            conn.close()
-            return
-        
-        # Получаем количество карт - ИСПРАВЛЕНО для PostgreSQL
-        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = %s', (user.id,))
-        total_cards = cursor.fetchone()[0]
-        
-        # Получаем лимит - ИСПРАВЛЕНО для PostgreSQL
-        cursor.execute('SELECT daily_cards_limit FROM users WHERE user_id = %s', (user.id,))
-        limit_result = cursor.fetchone()
-        limit = limit_result[0] if limit_result else 3
-        
-        profile_text = f"""
-👤 **Ваш профиль**
+    if not stats:
+        await update.message.reply_text("❌ Не удалось загрузить статистику")
+        return
+    
+    limit, is_premium, total_cards, reg_date = stats
+    
+    profile_text = f"""
+👤 Ваш профиль
 
 📊 Всего карт получено: {total_cards}
 🎯 Лимит карт в день: {limit}
-📅 ID пользователя: {user.id}
-        """
-        
-        await update.message.reply_text(profile_text)
-        conn.close()
+📅 Дата регистрации: {reg_date}
+    """
+    
+    await update.message.reply_text(profile_text)
         
     except Exception as e:
         logging.error(f"❌ Error in profile command: {e}")
@@ -208,7 +191,7 @@ async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_cards_count = cursor.fetchone()[0]
         
         debug_text = f"""
-🔍 **Отладочная информация:**
+🔍 Отладочная информация:
 
 📋 Таблицы в базе: {tables}
 👤 Ваши данные: {'✅ Есть' if user_data else '❌ Нет'}

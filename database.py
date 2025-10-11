@@ -206,32 +206,35 @@ class DatabaseManager:
         try:
             logging.info(f"🔄 Getting stats for user {user_id}")
             
-            # Сначала убедимся, что пользователь существует
-            cursor.execute('SELECT * FROM users WHERE user_id = %s', (user_id,))
-            user = cursor.fetchone()
-            
-            if not user:
-                logging.warning(f"User {user_id} not found in database")
-                return None
-            
-            logging.info(f"✅ User {user_id} found in database")
-            
-            # Получаем количество карт пользователя
-            cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = %s', (user_id,))
-            total_cards = cursor.fetchone()[0]
-            
-            # Получаем данные пользователя
+            # Получаем все данные за один запрос
             cursor.execute('''
-                SELECT daily_cards_limit, is_premium, registered_date 
-                FROM users WHERE user_id = %s
+                SELECT 
+                    u.daily_cards_limit, 
+                    u.is_premium, 
+                    COUNT(uc.id) as total_cards,
+                    u.registered_date
+                FROM users u
+                LEFT JOIN user_cards uc ON u.user_id = uc.user_id
+                WHERE u.user_id = %s
+                GROUP BY u.user_id, u.daily_cards_limit, u.is_premium, u.registered_date
             ''', (user_id,))
             
-            user_data = cursor.fetchone()
+            result = cursor.fetchone()
             
-            if user_data:
-                limit, is_premium, reg_date = user_data
-                logging.info(f"📊 User stats - limit: {limit}, premium: {is_premium}, cards: {total_cards}")
-                return (limit, is_premium, total_cards, reg_date)
+            if result:
+                limit, is_premium, total_cards, reg_date = result
+                
+                # Форматируем дату
+                if reg_date:
+                    if isinstance(reg_date, str):
+                        reg_date_formatted = reg_date[:10]
+                    else:
+                        reg_date_formatted = reg_date.strftime("%d-%m-%Y")
+                else:
+                    reg_date_formatted = "Неизвестно"
+                
+                logging.info(f"📊 User stats - limit: {limit}, cards: {total_cards}, reg_date: {reg_date_formatted}")
+                return (limit, is_premium, total_cards, reg_date_formatted)
             else:
                 logging.warning(f"User data not found for {user_id}")
                 return None
