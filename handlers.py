@@ -100,24 +100,46 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
     user = update.effective_user
-    stats = db.get_user_stats(user.id)
     
-    if not stats:
-        await update.message.reply_text("❌ Не удалось загрузить статистику")
-        return
+    # Отладочная информация
+    logging.info(f"🔄 Profile command from user {user.id}")
     
-    limit, is_premium, total_cards, reg_date = stats
-    
-    profile_text = f"""
+    # Простая версия - показываем базовую информацию
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли пользователь в базе
+        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user.id,))
+        user_data = cursor.fetchone()
+        
+        if not user_data:
+            await update.message.reply_text("❌ Вы не зарегистрированы. Используйте /start")
+            return
+        
+        # Получаем количество карт
+        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = ?', (user.id,))
+        total_cards = cursor.fetchone()[0]
+        
+        # Получаем лимит
+        cursor.execute('SELECT daily_cards_limit FROM users WHERE user_id = ?', (user.id,))
+        limit_result = cursor.fetchone()
+        limit = limit_result[0] if limit_result else 1
+        
+        profile_text = f"""
 👤 Ваш профиль
 
 📊 Всего карт получено: {total_cards}
 🎯 Лимит карт в день: {limit}
-💎 Статус: {'Премиум' if is_premium else 'Базовый'}
-📅 Дата регистрации: {reg_date[:10]}
-    """
-    
-    await update.message.reply_text(profile_text)
+📅 ID пользователя: {user.id}
+        """
+        
+        await update.message.reply_text(profile_text)
+        conn.close()
+        
+    except Exception as e:
+        logging.error(f"❌ Error in profile command: {e}")
+        await update.message.reply_text("⚠️ Временная ошибка. Попробуйте позже.")
     
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
@@ -156,3 +178,41 @@ async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Error resetting limit: {e}")
         await update.message.reply_text("❌ Ошибка при сбросе лимита")
 
+
+async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Временная команда для отладки базы данных"""
+    user = update.effective_user
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Проверяем таблицы
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = cursor.fetchall()
+        
+        # Проверяем пользователя
+        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user.id,))
+        user_data = cursor.fetchone()
+        
+        # Проверяем карты
+        cursor.execute('SELECT COUNT(*) FROM user_cards WHERE user_id = ?', (user.id,))
+        user_cards_count = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM cards')
+        total_cards_count = cursor.fetchone()[0]
+        
+        debug_text = f"""
+🔍 Отладочная информация:
+
+📋 Таблицы в базе: {[table[0] for table in tables]}
+👤 Ваши данные: {'✅ Есть' if user_data else '❌ Нет'}
+🎴 Ваших карт в истории: {user_cards_count}
+🃏 Всего карт в колоде: {total_cards_count}
+        """
+        
+        await update.message.reply_text(debug_text)
+        conn.close()
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка отладки: {e}")
