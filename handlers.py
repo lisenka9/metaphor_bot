@@ -140,10 +140,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     await update.message.reply_text(profile_text)
-        
-    except Exception as e:
-        logging.error(f"❌ Error in profile command: {e}")
-        await update.message.reply_text("⚠️ Ошибка при загрузке профиля")
 
 async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс своего лимита карт (для тестирования)"""
