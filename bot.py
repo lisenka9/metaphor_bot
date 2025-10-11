@@ -38,6 +38,7 @@ def main():
     application.add_handler(CommandHandler("help", handlers.help_command))
     application.add_handler(CommandHandler("resetme", handlers.reset_my_limit))
     application.add_handler(CommandHandler("debug", handlers.debug_db))
+    application.add_handler(CallbackQueryHandler(handlers.button_handler))
     
     # Обработчик для любых других сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
