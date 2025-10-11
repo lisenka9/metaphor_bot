@@ -239,11 +239,11 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-        if len(history) > 10:
-            history_text = f"📚 **Последние 10 карт из {len(history)}:**\n\n"
-            history = history[:10]
+        if len(history) > 5:
+            history_text = f"📚 Последние 5 карт из {len(history)}:\n\n"
+            history = history[:5]
         else:
-            history_text = f"📚 **Ваши карты ({len(history)}):**\n\n"
+            history_text = f"📚 Ваши карты ({len(history)}):\n\n"
         
         for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
             if isinstance(drawn_date, str):
@@ -251,7 +251,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 date_str = drawn_date.strftime("%d.%m.%Y")
             
-            history_text += f"{i}. **{card_name}** - {date_str}\n"
+            history_text += f"{i}. {card_name} - {date_str}\n"
         
         # Добавляем кнопку для просмотра с картинками
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
