@@ -459,7 +459,6 @@ async def history_album_from_query(query, context: ContextTypes.DEFAULT_TYPE):
         total_cards = stats[2] if stats else 0
         await query.message.reply_text(
             f"🎴 Всего карт получено: {total_cards}\n"
-            f"💫 Используйте /daily для новой карты"
         )
         
     except Exception as e:
