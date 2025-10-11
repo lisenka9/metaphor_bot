@@ -286,19 +286,20 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def get_user_card_history(self, user_id: int):
-        """Получает историю карт пользователя"""
+    def get_user_card_history(self, user_id: int, limit: int = 10):
+        """Получает историю карт пользователя с ограничением"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
-                SELECT c.card_name, c.image_url, c.description_text, uc.drawn_date
+                SELECT c.card_id, c.card_name, c.image_url, c.description_text, uc.drawn_date
                 FROM user_cards uc
                 JOIN cards c ON uc.card_id = c.card_id
                 WHERE uc.user_id = %s
                 ORDER BY uc.drawn_date DESC
-            ''', (user_id,))
+                LIMIT %s
+            ''', (user_id, limit))
             
             history = cursor.fetchall()
             return history
