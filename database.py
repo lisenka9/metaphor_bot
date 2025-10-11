@@ -78,11 +78,11 @@ class DatabaseManager:
     def _populate_sample_cards(self, cursor):
         """Добавляет тестовые карты в базу"""
         sample_cards = [
-            (1, "Карта 1", "https://ibb.co/prwhMXnV", "Карта 1"),
-            (2, "Карта 2", "https://ibb.co/twBKZvSF", "Карта 2"),
-            (3, "Карта 3", "https://ibb.co/27265Vjj", "Карта 3"),
-            (4, "Карта 4", "https://ibb.co/vxp30Q5N", "Карта 4"),
-            (5, "Карта 5", "https://ibb.co/dsdbPQZz", "Карта 5")
+            (1, "1", "https://ibb.co/prwhMXnV", "Карта 1"),
+            (2, "2", "https://ibb.co/twBKZvSF", "Карта 2"),
+            (3, "3", "https://ibb.co/27265Vjj", "Карта 3"),
+            (4, "4", "https://ibb.co/vxp30Q5N", "Карта 4"),
+            (5, "5", "https://ibb.co/dsdbPQZz", "Карта 5")
         ]
         
         for card in sample_cards:
@@ -283,6 +283,29 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"❌ Error updating limits: {e}")
             conn.rollback()
+        finally:
+            conn.close()
+
+    def get_user_card_history(self, user_id: int):
+        """Получает историю карт пользователя"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT c.card_name, c.image_url, c.description_text, uc.drawn_date
+                FROM user_cards uc
+                JOIN cards c ON uc.card_id = c.card_id
+                WHERE uc.user_id = %s
+                ORDER BY uc.drawn_date DESC
+            ''', (user_id,))
+            
+            history = cursor.fetchall()
+            return history
+            
+        except Exception as e:
+            logging.error(f"❌ Error getting card history: {e}")
+            return None
         finally:
             conn.close()
 

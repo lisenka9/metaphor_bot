@@ -36,6 +36,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /daily - Получить карту дня
 /profile - Ваша статистика
 /help - Помощь
+/history - История ваших карт
 
 🎴 Карта дня - это случайная карта из колоды, которая может подсказать, на что обратить внимание сегодня.
     """
@@ -126,6 +127,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 /daily - Получить карту дня
 /profile - Ваша статистика и лимиты
+/history - Посмотреть историю всех ваших карт
 /help - Эта справка
 
 ❓ Как это работает?
@@ -221,3 +223,85 @@ async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка отладки: {e}")
+
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает историю карт пользователя"""
+    user = update.effective_user
+    
+    try:
+        history = db.get_user_card_history(user.id)
+        
+        if not history:
+            await update.message.reply_text(
+                "📝 У вас пока нет истории карт.\n"
+                "Используйте /daily чтобы получить первую карту!"
+            )
+            return
+        
+        if len(history) > 10:  # Ограничиваем показ для удобства
+            history_text = f"📚 **Последние 10 карт из {len(history)}:**\n\n"
+            history = history[:10]
+        else:
+            history_text = f"📚 **Ваши карты ({len(history)}):**\n\n"
+        
+        for i, (card_name, image_url, description, drawn_date) in enumerate(history, 1):
+            # Форматируем дату
+            if isinstance(drawn_date, str):
+                date_str = drawn_date[:10]
+            else:
+                date_str = drawn_date.strftime("%d.%m.%Y")
+            
+            history_text += f"{i}. **{card_name}** - {date_str}\n"
+        
+        history_text += "\n💫 Каждая карта — это момент вашего пути."
+        
+        await update.message.reply_text(history_text, parse_mode='Markdown')
+        
+    except Exception as e:
+        logging.error(f"❌ Error in history command: {e}")
+        await update.message.reply_text("⚠️ Ошибка при загрузке истории")
+
+
+async def detailed_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подробная история с пагинацией"""
+    user = update.effective_user
+    
+    try:
+        history = db.get_user_card_history(user.id)
+        
+        if not history:
+            await update.message.reply_text("📝 У вас пока нет истории карт.")
+            return
+        
+        # Показываем по 5 карт за раз
+        page = context.args[0] if context.args else "1"
+        try:
+            page = int(page)
+        except:
+            page = 1
+            
+        items_per_page = 5
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        
+        total_pages = (len(history) + items_per_page - 1) // items_per_page
+        
+        history_text = f"📚 **Ваши карты (страница {page}/{total_pages}):**\n\n"
+        
+        for i, (card_name, image_url, description, drawn_date) in enumerate(history[start_idx:end_idx], start_idx + 1):
+            if isinstance(drawn_date, str):
+                date_str = drawn_date[:10]
+            else:
+                date_str = drawn_date.strftime("%d.%m.%Y")
+            
+            history_text += f"**{card_name}** - {date_str}\n"
+        
+        if total_pages > 1:
+            history_text += f"\nИспользуйте /history {page+1} для следующей страницы"
+        
+        await update.message.reply_text(history_text, parse_mode='Markdown')
+        
+    except Exception as e:
+        logging.error(f"❌ Error in detailed history: {e}")
+        await update.message.reply_text("⚠️ Ошибка при загрузке истории")
