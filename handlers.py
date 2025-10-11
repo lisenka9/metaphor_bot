@@ -226,16 +226,11 @@ async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает историю карт пользователя с изображениями"""
+    """Показывает историю карт пользователя"""
     user = update.effective_user
     
     try:
-        # Можно указать лимит: /history 5 или /history 10
-        limit = 10
-        if context.args and context.args[0].isdigit():
-            limit = min(int(context.args[0]), 20)  # Максимум 20 карт
-        
-        history = db.get_user_card_history(user.id, limit)
+        history = db.get_user_card_history(user.id)
         
         if not history:
             await update.message.reply_text(
@@ -244,10 +239,14 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-        # Сначала отправляем текстовое сообщение
-        history_text = f"📚 **Ваши последние {len(history)} карт:**\n\n"
+        if len(history) > 10:  # Ограничиваем показ для удобства
+            history_text = f"📚 **Последние 10 карт из {len(history)}:**\n\n"
+            history = history[:10]
+        else:
+            history_text = f"📚 **Ваши карты ({len(history)}):**\n\n"
         
-        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
+        for i, (card_name, image_url, description, drawn_date) in enumerate(history, 1):
+            # Форматируем дату
             if isinstance(drawn_date, str):
                 date_str = drawn_date[:10]
             else:
@@ -255,42 +254,66 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             history_text += f"{i}. **{card_name}** - {date_str}\n"
         
+        history_text += "\n💫 Каждая карта — это момент вашего пути."
+        
         await update.message.reply_text(history_text, parse_mode='Markdown')
-        
-        # Затем отправляем картинки по одной с задержкой
-        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
-            if isinstance(drawn_date, str):
-                date_str = drawn_date[:10]
-            else:
-                date_str = drawn_date.strftime("%d.%m.%Y")
-            
-            caption = f"#{i} **{card_name}** - {date_str}"
-            
-            try:
-                await update.message.reply_photo(
-                    photo=image_url,
-                    caption=caption,
-                    parse_mode='Markdown'
-                )
-                # Небольшая задержка между картинками
-                import asyncio
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                logging.error(f"Error sending history image {i}: {e}")
-                # Если картинка не загружается, отправляем текстовое описание
-                await update.message.reply_text(
-                    f"#{i} **{card_name}** - {date_str}\n(изображение недоступно)"
-                )
-        
-        await update.message.reply_text(
-            "💫 Каждая карта — это момент вашего пути самопознания."
-        )
         
     except Exception as e:
         logging.error(f"❌ Error in history command: {e}")
         await update.message.reply_text("⚠️ Ошибка при загрузке истории")
 
 
+async def history_album(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """История в виде альбома (несколько картинок в одном сообщении)"""
+    user = update.effective_user
+    
+    try:
+        history = db.get_user_card_history(user.id, limit=5)  # Ограничиваем для альбома
+        
+        if not history:
+            await update.message.reply_text(
+                "📝 У вас пока нет истории карт.\n"
+                "Используйте /daily чтобы получить первую карту!"
+            )
+            return
+        
+        from telegram import InputMediaPhoto
+        
+        # Создаем медиагруппу
+        media_group = []
+        
+        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
+            if isinstance(drawn_date, str):
+                date_str = drawn_date[:10]
+            else:
+                date_str = drawn_date.strftime("%d.%m.%Y")
+            
+            caption = f"#{i} **{card_name}** - {date_str}" if i == 1 else f"#{i} {card_name} - {date_str}"
+            
+            media_group.append(
+                InputMediaPhoto(
+                    media=image_url,
+                    caption=caption,
+                    parse_mode='Markdown' if i == 1 else None  # Только первая подпись с разметкой
+                )
+            )
+        
+        # Отправляем альбом
+        await update.message.reply_media_group(media=media_group)
+        
+        # Отправляем дополнительное текстовое сообщение
+        total_cards = db.get_user_stats(user.id)[2] if db.get_user_stats(user.id) else 0
+        await update.message.reply_text(
+            f"🎴 Всего карт получено: {total_cards}\n"
+            f"💫 Используйте /daily для новой карты"
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error in history album: {e}")
+        # Если альбом не работает, используем обычный метод
+        await history(update, context)
+
+        
 async def detailed_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подробная история с пагинацией"""
     user = update.effective_user
