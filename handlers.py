@@ -58,7 +58,7 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Произошла ошибка при получении карты. Попробуйте позже.")
         return
     
-    card_id, card_name, image_path, description = card
+    card_id, card_name, image_url, description = card
     
     # Новый формат текста карты
     card_text = f"""✨ Выбор сделан! Карта дня на сегодня - {card_name}. 
@@ -74,13 +74,12 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 В работе с метафорическими картами нет «правильных» ответов — важен ваш личный смысл, рождающийся в момент встречи с образом."""
     
     try:
-        # Отправляем картинку с новым описанием
-        with open(image_path, 'rb') as photo:
-            await update.message.reply_photo(
-                photo=photo,
-                caption=card_text,
-                parse_mode='Markdown'
-            )
+        
+        await update.message.reply_photo(
+            photo=image_url,  
+            caption=card_text,
+            parse_mode='Markdown'
+        )
         
         # Записываем в историю
         db.record_user_card(user.id, card_id)
