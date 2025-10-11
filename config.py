@@ -1,8 +1,9 @@
 import os
 
 # Токен бота из переменных окружения
-BOT_TOKEN = os.environ.get("8077594229:AAEVBbxleFe1QEl2wUow973caQ90QoiHNIA")
-
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN not found in environment variables!")
 # ID администратора
 ADMIN_IDS = [891422895]
 
@@ -10,5 +11,4 @@ ADMIN_IDS = [891422895]
 DAILY_CARD_LIMIT_FREE = 1
 DAILY_CARD_LIMIT_PREMIUM = 5
 
-# Для изображений используем URL вместо локальных путей
-IMAGES_BASE_URL = "https://via.placeholder.com/300x400"  # Замените на ваши реальные URL
+print(f"✅ BOT_TOKEN loaded: {BOT_TOKEN[:10]}...") 

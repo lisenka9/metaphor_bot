@@ -13,8 +13,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
+    BOT_TOKEN = os.environ.get('BOT_TOKEN')
     # Проверяем наличие токена
-    if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    if not BOT_TOKEN:
         logger.error("BOT_TOKEN not found in environment variables!")
         return
     
