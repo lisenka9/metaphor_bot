@@ -1,10 +1,9 @@
 import logging
 import os
 import threading
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from config import BOT_TOKEN
 import handlers
-from telegram.error import Conflict
 from database import db
 
 # Настройка логирования
@@ -14,41 +13,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def start_health_server():
-    """Запускает простой HTTP сервер для проверки здоровья"""
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    import os
+def start_flask_app():
+    """Запускает Flask приложение для health checks"""
+    from flask import Flask
+    app = Flask(__name__)
     
-    class HealthHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == '/health':
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b'OK')
-            else:
-                self.send_response(404)
-                self.end_headers()
-        
-        def log_message(self, format, *args):
-            pass
+    @app.route('/')
+    def home():
+        return "Metaphor Cards Bot is running!"
     
-    port = int(os.environ.get('PORT', 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthHandler)
-    logger.info(f"Health server started on port {port}")
-    server.serve_forever()
+    @app.route('/health')
+    def health():
+        return "OK"
     
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик ошибок"""
-    if isinstance(context.error, Conflict):
-        logger.warning("Bot conflict detected - another instance might be running")
-        # Можно добавить дополнительную логику, например, остановку приложения
-        # context.application.stop()
-    else:
-        logger.error(f"Exception while handling an update: {context.error}")
+    logger.error(f"Exception while handling an update: {context.error}")
 
-        
 def main():
-    BOT_TOKEN = os.environ.get('BOT_TOKEN')
     # Проверяем наличие токена
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not found in environment variables!")
@@ -59,12 +44,13 @@ def main():
     db.init_database()
     db.update_existing_users_limits()
     
-    # Проверяем, есть ли карты в базе
     if not db.check_cards_exist():
         logger.warning("В базе данных нет карт!")
     
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
+    
+    application.add_error_handler(error_handler)
     
     # Добавляем обработчики команд
     application.add_handler(CommandHandler("start", handlers.start))
@@ -76,13 +62,31 @@ def main():
     application.add_handler(CommandHandler("history", handlers.history_command))
     application.add_handler(CallbackQueryHandler(handlers.button_handler))
     
-    # Обработчик для любых других сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
                                          handlers.help_command))
     
-    # Запускаем бота
-    logger.info("Бот запущен на Railway...")
-    application.run_polling()
+    # Webhook режим для Render
+    RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    
+    if RENDER_EXTERNAL_HOSTNAME:
+        logger.info("Запуск в режиме Webhook...")
+        
+        # Запускаем Flask в отдельном потоке
+        flask_thread = threading.Thread(target=start_flask_app, daemon=True)
+        flask_thread.start()
+        
+        port = int(os.environ.get("PORT", 10000))
+        webhook_url = f'https://{RENDER_EXTERNAL_HOSTNAME}/{BOT_TOKEN}'
+        
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=BOT_TOKEN,
+            webhook_url=webhook_url
+        )
+    else:
+        logger.info("Запуск в режиме Polling...")
+        application.run_polling()
 
 if __name__ == '__main__':
     main()
