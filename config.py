@@ -5,7 +5,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN not found in environment variables!")
 # ID администратора
-ADMIN_IDS = [891422895]
+ADMIN_IDS = [int(id.strip()) for id in os.environ.get("ADMIN_IDS", "").split(",") if id.strip()]
 
 # Лимиты карт
 DAILY_CARD_LIMIT_FREE = 1
