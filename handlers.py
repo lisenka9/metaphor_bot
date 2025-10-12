@@ -649,19 +649,53 @@ async def add_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logging.error(f"❌ Error in add_cards: {e}")
-        await update.message.reply_text("❌ Ошибка при добавлении карт")async def add_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Добавляет недостающие карты в базу"""
-    user = update.effective_user
-    
-    # Проверяем, является ли пользователь администратором
-    if user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ У вас нет прав для этой команды")
-        return
+        await update.message.reply_text("❌ Ошибка при добавлении карт")
+
+
+def add_missing_cards(self):
+    """Добавляет отсутствующие карты в базу"""
+    conn = self.get_connection()
+    cursor = conn.cursor()
     
     try:
-        added_count = db.add_missing_cards()
-        await update.message.reply_text(f"✅ Добавлено {added_count} новых карт в колоду")
+        sample_cards = [
+            (1, "1", "https://ibb.co/spkyBGgP", "Карта 1"),
+            (2, "2", "https://ibb.co/qTVQtQC", "Карта 2"),
+            (3, "3", "https://ibb.co/MyxPJXmG", "Карта 3"),
+            (4, "4", "https://ibb.co/5XF99ZvF", "Карта 4"),
+            (5, "5", "https://ibb.co/rf5dqnGD", "Карта 5"),
+            (6, "6", "https://ibb.co/BHpJppcw", "Карта 6"),
+            (7, "7", "https://ibb.co/QvHN4ZZ3", "Карта 7"),
+            (8, "8", "https://ibb.co/Wp69gcDm", "Карта 8"),
+            (9, "9", "https://ibb.co/MyqV7Yz4", "Карта 9"),
+            (10, "10", "https://ibb.co/jkKCdQNL", "Карта 10"),
+            (11, "11", "https://ibb.co/Kx0w554m", "Карта 11"),
+            (12, "12", "https://ibb.co/gZqW9DN7", "Карта 12"),
+            (13, "13", "https://ibb.co/MyzYPfWk", "Карта 13"),
+            (14, "14", "https://ibb.co/9m3c6Pdq", "Карта 14"),
+            (15, "15", "https://ibb.co/Pz4NH4hD", "Карта 15"),
+            (16, "16", "https://ibb.co/RTdtXSLt", "Карта 16"),
+            (17, "17", "https://ibb.co/JR6KKYHC", "Карта 17"),
+        ]
+        
+        added_count = 0
+        for card in sample_cards:
+            cursor.execute('''
+                INSERT INTO cards (card_id, card_name, image_url, description_text)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (card_id) DO NOTHING
+                RETURNING card_id
+            ''', card)
+            if cursor.fetchone():
+                added_count += 1
+        
+        conn.commit()
+        logging.info(f"✅ Добавлено {added_count} новых карт")
+        return added_count
         
     except Exception as e:
-        logging.error(f"❌ Error in add_cards: {e}")
-        await update.message.reply_text("❌ Ошибка при добавлении карт")
+        logging.error(f"❌ Error adding cards: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        conn.close()
