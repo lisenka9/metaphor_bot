@@ -60,6 +60,9 @@ def main():
     application.add_handler(CommandHandler("resetme", handlers.reset_my_limit))
     application.add_handler(CommandHandler("debug", handlers.debug_db))
     application.add_handler(CommandHandler("history", handlers.history_command))
+    application.add_handler(CommandHandler("stats", handlers.admin_stats))
+    application.add_handler(CommandHandler("users", handlers.admin_users))
+    application.add_handler(CommandHandler("export", handlers.export_data))
     application.add_handler(CallbackQueryHandler(handlers.button_handler))
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 

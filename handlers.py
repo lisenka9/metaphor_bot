@@ -4,6 +4,8 @@ from database import db
 from config import ADMIN_IDS
 import logging
 import keyboard
+import csv
+import io
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -453,3 +455,181 @@ async def history_album_from_query(query, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"❌ Error in history album from query: {e}")
         await query.message.reply_text("⚠️ Ошибка при загрузке истории с картинками")
+
+
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Статистика для администратора"""
+    user = update.effective_user
+    
+    # Проверяем, является ли пользователь администратором
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Общая статистика
+        cursor.execute('SELECT COUNT(*) FROM users')
+        total_users = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM user_cards')
+        total_cards_issued = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM cards')
+        total_cards_in_deck = cursor.fetchone()[0]
+        
+        # Активные пользователи (брали карты за последние 7 дней)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT user_id) 
+            FROM user_cards 
+            WHERE drawn_date >= CURRENT_DATE - INTERVAL '7 days'
+        ''')
+        active_users = cursor.fetchone()[0]
+        
+        # Новые пользователи за последние 7 дней
+        cursor.execute('''
+            SELECT COUNT(*) 
+            FROM users 
+            WHERE registered_date >= CURRENT_DATE - INTERVAL '7 days'
+        ''')
+        new_users = cursor.fetchone()[0]
+        
+        # Топ пользователей по количеству карт
+        cursor.execute('''
+            SELECT u.user_id, u.first_name, u.username, COUNT(uc.id) as card_count
+            FROM users u
+            JOIN user_cards uc ON u.user_id = uc.user_id
+            GROUP BY u.user_id, u.first_name, u.username
+            ORDER BY card_count DESC
+            LIMIT 10
+        ''')
+        top_users = cursor.fetchall()
+        
+        stats_text = f"""
+📊 Статистика бота
+
+👥 Пользователи:
+• Всего пользователей: {total_users}
+• Активных (7 дней): {active_users}
+• Новых (7 дней): {new_users}
+
+🎴 Карты:
+• Всего карт в колоде: {total_cards_in_deck}
+• Всего выдано карт: {total_cards_issued}
+
+🏆 **Топ пользователей:**
+"""
+        
+        for i, (user_id, first_name, username, card_count) in enumerate(top_users, 1):
+            username_display = f"@{username}" if username else first_name
+            stats_text += f"{i}. {username_display} - {card_count} карт\n"
+        
+        await update.message.reply_text(stats_text, parse_mode='Markdown')
+        
+        conn.close()
+        
+    except Exception as e:
+        logging.error(f"❌ Error getting admin stats: {e}")
+        await update.message.reply_text("❌ Ошибка при получении статистики")
+
+
+async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Список всех пользователей"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем всех пользователей с количеством карт
+        cursor.execute('''
+            SELECT u.user_id, u.username, u.first_name, u.registered_date, 
+                   COUNT(uc.id) as card_count,
+                   MAX(uc.drawn_date) as last_activity
+            FROM users u
+            LEFT JOIN user_cards uc ON u.user_id = uc.user_id
+            GROUP BY u.user_id, u.username, u.first_name, u.registered_date
+            ORDER BY u.registered_date DESC
+        ''')
+        
+        users = cursor.fetchall()
+        
+        if not users:
+            await update.message.reply_text("📝 Пользователей пока нет")
+            return
+        
+        users_text = f"👥 **Все пользователи ({len(users)}):**\n\n"
+        
+        for i, (user_id, username, first_name, reg_date, card_count, last_activity) in enumerate(users[:20], 1):
+            username_display = f"@{username}" if username else first_name
+            reg_date_str = reg_date.strftime("%d.%m.%Y") if reg_date else "неизвестно"
+            last_activity_str = last_activity.strftime("%d.%m.%Y") if last_activity else "нет активности"
+            
+            users_text += f"{i}. {username_display}\n"
+            users_text += f"   ID: {user_id}\n"
+            users_text += f"   Карт: {card_count}\n"
+            users_text += f"   Регистрация: {reg_date_str}\n"
+            users_text += f"   Последняя активность: {last_activity_str}\n\n"
+        
+        if len(users) > 20:
+            users_text += f"\n... и еще {len(users) - 20} пользователей"
+        
+        await update.message.reply_text(users_text, parse_mode='Markdown')
+        
+        conn.close()
+        
+    except Exception as e:
+        logging.error(f"❌ Error getting users list: {e}")
+        await update.message.reply_text("❌ Ошибка при получении списка пользователей")
+
+
+async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Экспорт данных в CSV"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Экспорт пользователей
+        cursor.execute('''
+            SELECT user_id, username, first_name, last_name, registered_date
+            FROM users 
+            ORDER BY registered_date
+        ''')
+        users_data = cursor.fetchall()
+        
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Заголовки
+        writer.writerow(['User ID', 'Username', 'First Name', 'Last Name', 'Registered Date'])
+        
+        # Данные
+        for row in users_data:
+            writer.writerow(row)
+        
+        # Отправляем файл
+        output.seek(0)
+        await update.message.reply_document(
+            document=io.BytesIO(output.getvalue().encode()),
+            filename="users_export.csv",
+            caption="📊 Экспорт пользователей"
+        )
+        
+        conn.close()
+        
+    except Exception as e:
+        logging.error(f"❌ Error exporting data: {e}")
+        await update.message.reply_text("❌ Ошибка при экспорте данных")
