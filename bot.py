@@ -1,6 +1,5 @@
 import logging
 import os
-import threading
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from config import BOT_TOKEN
 import handlers
@@ -12,22 +11,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-def start_flask_app():
-    """Запускает Flask приложение для health checks"""
-    from flask import Flask
-    app = Flask(__name__)
-    
-    @app.route('/')
-    def home():
-        return "Metaphor Cards Bot is running!"
-    
-    @app.route('/health')
-    def health():
-        return "OK"
-    
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик ошибок"""
@@ -73,10 +56,6 @@ def main():
     
     if RENDER_EXTERNAL_HOSTNAME:
         logger.info("Запуск в режиме Webhook...")
-        
-        # Запускаем Flask в отдельном потоке
-        flask_thread = threading.Thread(target=start_flask_app, daemon=True)
-        flask_thread.start()
         
         port = int(os.environ.get("PORT", 10000))
         webhook_url = f'https://{RENDER_EXTERNAL_HOSTNAME}/{BOT_TOKEN}'
