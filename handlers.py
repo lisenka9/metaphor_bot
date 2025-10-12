@@ -633,3 +633,35 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"❌ Error exporting data: {e}")
         await update.message.reply_text("❌ Ошибка при экспорте данных")
+
+async def add_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавляет недостающие карты в базу"""
+    user = update.effective_user
+    
+    # Проверяем, является ли пользователь администратором
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        added_count = db.add_missing_cards()
+        await update.message.reply_text(f"✅ Добавлено {added_count} новых карт в колоду")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in add_cards: {e}")
+        await update.message.reply_text("❌ Ошибка при добавлении карт")async def add_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавляет недостающие карты в базу"""
+    user = update.effective_user
+    
+    # Проверяем, является ли пользователь администратором
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        added_count = db.add_missing_cards()
+        await update.message.reply_text(f"✅ Добавлено {added_count} новых карт в колоду")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in add_cards: {e}")
+        await update.message.reply_text("❌ Ошибка при добавлении карт")
