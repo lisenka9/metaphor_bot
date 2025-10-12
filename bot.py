@@ -1,6 +1,7 @@
 import logging
 import os
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, CallbackQueryHandler, filters
+import threading
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, CallbackQueryHandler, ContextTypes, filters
 from config import BOT_TOKEN
 import handlers
 from telegram.error import Conflict
@@ -13,6 +14,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def start_health_server():
+    """Запускает простой HTTP сервер для проверки здоровья"""
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import os
+    
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == '/health':
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'OK')
+            else:
+                self.send_response(404)
+                self.end_headers()
+        
+        def log_message(self, format, *args):
+            pass
+    
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logger.info(f"Health server started on port {port}")
+    server.serve_forever()
+    
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик ошибок"""
     if isinstance(context.error, Conflict):
