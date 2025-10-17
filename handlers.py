@@ -151,9 +151,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_daily_message(query, context)
         
     elif query.data == "flip_card":
-        # Старая функциональность (если нужно сохранить)
+        # Пользователь нажал "Посмотреть вопросы"
         await handle_flip_card(query, context)
+    
+    elif query.data == "show_history_pics":
+        # Показываем историю с картинками
+        user = query.from_user
+        await query.edit_message_reply_markup(reply_markup=None)  # убираем кнопку
+        await history_album_from_query(query, context)
 
+        
 async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает карту дня с вопросами для размышления"""
     user = query.from_user
@@ -635,7 +642,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Всего карт в колоде: {total_cards_in_deck}
 • Всего выдано карт: {total_cards_issued}
 
-🏆 **Топ пользователей:**
+🏆 Топ пользователей:
 """
         
         for i, (user_id, first_name, username, card_count) in enumerate(top_users, 1):
@@ -780,7 +787,6 @@ async def consult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сначала отправляем фото с коротким заголовком
         await update.message.reply_photo(
             photo=photo_url,
-            caption="💫 Консультация с Светланой Скромовой",
             parse_mode='Markdown'
         )
         
