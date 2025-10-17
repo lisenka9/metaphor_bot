@@ -6,6 +6,7 @@ import logging
 import keyboard
 import csv
 import io
+from datetime import datetime
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -121,10 +122,7 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💎 Сформулируйте свой вопрос к карте.
 
-💡 Подсказка: Пусть вопрос будет открытым, например:
-• «Какой ресурс поможет мне сегодня?»
-• «В чём мне стоит проявить осторожность?»
-• «Что важно увидеть мне сегодня?»
+💡 Подсказка: Пусть вопрос будет открытым, например:«Какой ресурс поможет мне сегодня?» или «В чём мне стоит проявить осторожность?»
 
 Нажмите кнопку ниже, чтобы получить свою карту дня!
 """
@@ -140,24 +138,41 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    # ✅ Защита от множественных нажатий
+    user_id = query.from_user.id
+    current_time = datetime.now().timestamp()
+    
+    if 'last_button_click' in context.user_data:
+        last_click = context.user_data['last_button_click']
+        if current_time - last_click < 3:  # 3 секунды между нажатиями
+            logging.info(f"⚡ Fast click protection for user {user_id}")
+            return
+    
+    context.user_data['last_button_click'] = current_time
+    
+    # ✅ Логируем какая кнопка нажата
+    logging.info(f"🔄 Button pressed: {query.data} by user {user_id}")
+    
     user_data = context.user_data
     
     if query.data == "get_daily_card":
-        # Пользователь нажал "Карта дня" - показываем карту
+        # Проверяем лимит ДО показа карты
+        can_take, reason = db.can_take_daily_card(user_id)
+        if not can_take:
+            await query.message.reply_text(f"❌ {reason}")
+            return
+            
         await show_daily_card(query, context)
         
     elif query.data == "get_daily_message":
-        # Пользователь нажал "Послание дня" - показываем послание
         await show_daily_message(query, context)
         
     elif query.data == "flip_card":
-        # Пользователь нажал "Посмотреть вопросы"
         await handle_flip_card(query, context)
     
     elif query.data == "show_history_pics":
-        # Показываем историю с картинками
         user = query.from_user
-        await query.edit_message_reply_markup(reply_markup=None)  # убираем кнопку
+        await query.edit_message_reply_markup(reply_markup=None)
         await history_album_from_query(query, context)
 
         
@@ -165,25 +180,30 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает карту дня с вопросами для размышления"""
     user = query.from_user
     
-    # Получаем случайную карту
-    card = db.get_random_card()
-    if not card:
-        await query.message.reply_text("⚠️ Ошибка при получении карты.")
-        return
+    # ✅ Сразу убираем кнопку и показываем "загрузку"
+    await query.edit_message_reply_markup(reply_markup=None)
+    loading_message = await query.message.reply_text("🔄 Загружаем вашу карту дня...")
     
-    card_id, card_name, image_url, description = card
-    
-    # Сохраняем карту в контексте
-    context.user_data['last_card'] = {
-        'card_id': card_id,
-        'card_name': card_name,
-        'image_url': image_url
-    }
-    
-    # Записываем карту пользователю
-    db.record_user_card(user.id, card_id)
-    
-    card_text = f"""🎴 Карта дня: {card_name}
+    try:
+        # Получаем случайную карту
+        card = db.get_random_card()
+        if not card:
+            await loading_message.edit_text("⚠️ Ошибка при получении карты.")
+            return
+        
+        card_id, card_name, image_url, description = card
+        
+        # Сохраняем карту в контексте
+        context.user_data['last_card'] = {
+            'card_id': card_id,
+            'card_name': card_name,
+            'image_url': image_url
+        }
+        
+        # Записываем карту пользователю
+        db.record_user_card(user.id, card_id)
+        
+        card_text = f"""🎴 Карта дня: {card_name}
 
 👁 Посмотрите на карту, не торопитесь. Позвольте образу говорить с вами.
 
@@ -198,24 +218,31 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
 🔹 Шаг вперед: Какой самый первый, самый легкий шаг вы можете предпринять сегодня, вдохновившись этой картой?
 
 Помните: В работе с метафорическими картами нет «правильных» ответов. Важен Ваш уникальный, личный смысл, рождающийся в момент встречи с образом."""
-    
-    try:
-        await query.message.reply_photo(
-            photo=image_url,
-            caption=card_text,
-            reply_markup=keyboard.get_card_reflection_keyboard(),  # Кнопка "Послание дня"
-            parse_mode='Markdown'
-        )
-        await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопку из предыдущего сообщения
         
+        try:
+            # ✅ Удаляем сообщение "загрузка"
+            await loading_message.delete()
+            
+            # ✅ Отправляем карту ОДИН раз
+            await query.message.reply_photo(
+                photo=image_url,
+                caption=card_text,
+                reply_markup=keyboard.get_card_reflection_keyboard(),
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logging.error(f"❌ Error sending card image: {e}")
+            await loading_message.edit_text("❌ Ошибка при загрузке изображения")
+            await query.message.reply_text(
+                card_text,
+                reply_markup=keyboard.get_card_reflection_keyboard(),
+                parse_mode='Markdown'
+            )
+            
     except Exception as e:
-        logging.error(f"Error sending card image: {e}")
-        await query.message.reply_text(
-            card_text,
-            reply_markup=keyboard.get_card_reflection_keyboard(),
-            parse_mode='Markdown'
-        )
-        await query.edit_message_reply_markup(reply_markup=None)
+        logging.error(f"❌ Error in show_daily_card: {e}")
+        await loading_message.edit_text("❌ Произошла ошибка при получении карты")
 
 async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает послание дня"""
