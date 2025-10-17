@@ -66,9 +66,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=welcome_text,
             parse_mode='Markdown'
         )
+        logging.info(f"✅ Photo sent successfully for user {user.id}")
     except Exception as e:
         # Если фото не загружается, отправляем только текст
         logging.error(f"Error sending photo: {e}")
+        logging.error(f"Photo URL: {photo_url}")
         await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,8 +197,6 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     message_id, image_url, message_text = message_data
     
     message_caption = f"""🦋 Послание Дня
-
-{message_text}
 
 Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
 
