@@ -58,7 +58,7 @@ def main():
     
     if RENDER_EXTERNAL_HOSTNAME:
         logger.info("Запуск в режиме Webhook...")
-        
+         
         port = int(os.environ.get("PORT", 10000))
         webhook_url = f'https://{RENDER_EXTERNAL_HOSTNAME}/{BOT_TOKEN}'
         
