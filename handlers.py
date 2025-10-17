@@ -255,6 +255,9 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает послание дня"""
     user = query.from_user
     
+    # ✅ Сразу убираем кнопку "Послание дня"
+    await query.edit_message_reply_markup(reply_markup=None)
+    
     # Получаем случайное послание
     message_data = db.get_random_message()
     if not message_data:
@@ -280,7 +283,6 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard.get_daily_message_keyboard(),  # Добавляем кнопку "Вернуться в меню"
             parse_mode='Markdown'
         )
-        # Не редактируем предыдущее сообщение, оставляем его как есть
         
     except Exception as e:
         logging.error(f"Error sending message image: {e}")
@@ -289,6 +291,7 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard.get_daily_message_keyboard(),
             parse_mode='Markdown'
         )
+
 
 async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает профиль из кнопки меню"""
