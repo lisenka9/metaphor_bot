@@ -72,7 +72,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /daily с интерактивной картой"""
+    """Обработчик команды /daily с новой структурой"""
     user = update.effective_user
     
     can_take, reason = db.can_take_daily_card(user.id)
@@ -81,9 +81,59 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ {reason}")
         return
     
+    # Сохраняем в контексте, что пользователь начал процесс
+    context.user_data['daily_in_progress'] = True
+    
+    intro_text = """
+🌊 Настройка на волну дня
+
+Прежде, чем сделать выбор карты, создайте для себя пространство тишины и спокойствия 🦋
+
+💎 Сделайте несколько глубоких вдохов, закройте глаза и направьте внимание внутрь: какой вопрос или задача сейчас для вас наиболее актуальна?
+
+💎 Сформулируйте свой вопрос к карте.
+
+💡 Подсказка: Пусть вопрос будет открытым, например:
+• «Какой ресурс поможет мне сегодня?»
+• «В чём мне стоит проявить осторожность?»
+• «Что важно увидеть мне сегодня?»
+
+Нажмите кнопку ниже, чтобы получить свою карту дня!
+"""
+    
+    await update.message.reply_text(
+        intro_text,
+        reply_markup=keyboard.get_daily_intro_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_data = context.user_data
+    
+    if query.data == "get_daily_card":
+        # Пользователь нажал "Карта дня" - показываем карту
+        await show_daily_card(query, context)
+        
+    elif query.data == "get_daily_message":
+        # Пользователь нажал "Послание дня" - показываем послание
+        await show_daily_message(query, context)
+        
+    elif query.data == "flip_card":
+        # Старая функциональность (если нужно сохранить)
+        await handle_flip_card(query, context)
+
+async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту дня с вопросами для размышления"""
+    user = query.from_user
+    
+    # Получаем случайную карту
     card = db.get_random_card()
     if not card:
-        await update.message.reply_text("⚠️ Ошибка при получении карты.")
+        await query.message.reply_text("⚠️ Ошибка при получении карты.")
         return
     
     card_id, card_name, image_url, description = card
@@ -95,39 +145,88 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'image_url': image_url
     }
     
-    card_text = f"""✨ Карта дня: {card_name}
+    # Записываем карту пользователю
+    db.record_user_card(user.id, card_id)
+    
+    card_text = f"""🎴 Карта дня: {card_name}
 
-Посмотрите на изображение... 
-Какие первые ощущения?"""
+👁 Посмотрите на карту, не торопитесь. Позвольте образу говорить с вами.
+
+Опирайтесь на вопросы, которые помогут вам заглянуть внутрь себя и извлечь максимум смысла. Запишите ответы в свой блокнот для большего осознания ⤵️
+
+🔹 Состояние: Какое состояние или чувство рождается внутри вас, когда вы смотрите на эту карту? Что вы чувствуете телом?
+
+🔹 Первый Отклик: Какое слово или эмоция пришли к вам первыми? (Доверьтесь этой первой искре!)
+
+🔹 Путеводная Звезда: Как символика карты (цвета, объекты) может стать ключом к решению вашего вопроса? О чём именно этот образ хочет вам сказать?
+
+🔹 Шаг вперед: Какой самый первый, самый легкий шаг вы можете предпринять сегодня, вдохновившись этой картой?
+
+Помните: В работе с метафорическими картами нет «правильных» ответов. Важен Ваш уникальный, личный смысл, рождающийся в момент встречи с образом."""
     
     try:
-        await update.message.reply_photo(
-            photo=image_url,  
+        await query.message.reply_photo(
+            photo=image_url,
             caption=card_text,
-            reply_markup=keyboard.get_card_keyboard(),  # добавляем кнопку
+            reply_markup=keyboard.get_card_reflection_keyboard(),
             parse_mode='Markdown'
         )
-        
-        db.record_user_card(user.id, card_id)
+        await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопку из предыдущего сообщения
         
     except Exception as e:
-        await update.message.reply_text(
-            f"✨ Карта дня: {card_name}**\n\n{card_text}",
-            reply_markup=keyboard.get_card_keyboard(),  # добавляем кнопку
+        logging.error(f"Error sending card image: {e}")
+        await query.message.reply_text(
+            card_text,
+            reply_markup=keyboard.get_card_reflection_keyboard(),
             parse_mode='Markdown'
         )
-        db.record_user_card(user.id, card_id)
+        await query.edit_message_reply_markup(reply_markup=None)
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий на кнопку 'Перевернуть карту'"""
-    query = update.callback_query
-    await query.answer()  # важно - подтверждаем нажатие
+async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает послание дня"""
+    user = query.from_user
     
+    # Получаем случайное послание
+    message_data = db.get_random_message()
+    if not message_data:
+        await query.message.reply_text("⚠️ Ошибка при получении послания.")
+        return
+    
+    message_id, image_url, message_text = message_data
+    
+    message_caption = f"""🦋 Послание Дня
+
+{message_text}
+
+Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
+
+🔹 Как реагирует ваше тело?
+🔹 Какие эмоции поднимаются?
+🔹 Что важного это послание несет вам?
+🔹 Как это послание поможет вам на вашем жизненном пути?"""
+    
+    try:
+        await query.message.reply_photo(
+            photo=image_url,
+            caption=message_caption,
+            parse_mode='Markdown'
+        )
+        await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопку
+        
+    except Exception as e:
+        logging.error(f"Error sending message image: {e}")
+        await query.message.reply_text(
+            message_caption,
+            parse_mode='Markdown'
+        )
+        await query.edit_message_reply_markup(reply_markup=None)
+
+async def handle_flip_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик переворота карты (старая функциональность)"""
     user_data = context.user_data
     last_card = user_data.get('last_card', {})
     
-    if query.data == "flip_card":
-        questions_text = f"""🎴 {last_card['card_name']}
+    questions_text = f"""🎴 {last_card['card_name']}
 
 👁 Вопросы для размышления:
 
@@ -139,13 +238,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💭 С каким эмоциональным состоянием у вас ассоциируется изображение?
 
 ✨ В работе с метафорическими картами нет «правильных» ответов — важен ваш личный смысл, рождающийся в момент встречи с образом."""
-        
-        # Убираем кнопку после нажатия
-        await query.edit_message_caption(
-            caption=questions_text,
-            reply_markup=None,  # убираем клавиатуру
-            parse_mode='Markdown'
-        )
+    
+    await query.edit_message_caption(
+        caption=questions_text,
+        reply_markup=None,
+        parse_mode='Markdown'
+    )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

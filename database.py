@@ -513,6 +513,55 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_random_message(self):
+        """Получает случайное послание дня"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Таблица для посланий (создаем если нет)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS daily_messages (
+                    message_id INTEGER PRIMARY KEY,
+                    image_url TEXT NOT NULL,
+                    message_text TEXT NOT NULL
+                )
+            ''')
+            
+            # Проверяем, есть ли послания, если нет - добавляем
+            cursor.execute('SELECT COUNT(*) FROM daily_messages')
+            if cursor.fetchone()[0] == 0:
+                self._populate_daily_messages(cursor)
+            
+            cursor.execute('''
+                SELECT message_id, image_url, message_text 
+                FROM daily_messages 
+                ORDER BY RANDOM() 
+                LIMIT 1
+            ''')
+            return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"❌ Error getting random message: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def _populate_daily_messages(self, cursor):
+        """Добавляет послания дня в базу"""
+        daily_messages = [
+            (1, "https://ibb.co/wZd8BTHM", "Послание 1"),
+            (2, "https://ibb.co/PGWbXCyP", "Послание 2"),
+            
+        ]
+        
+        for message in daily_messages:
+            cursor.execute('''
+                INSERT INTO daily_messages (message_id, image_url, message_text)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (message_id) DO NOTHING
+            ''', message)
+        
+        logging.info("✅ Added daily messages to database")
 
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()
