@@ -3,7 +3,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 def get_daily_intro_keyboard():
     """Клавиатура для введения в карту дня"""
     keyboard = [
-        [InlineKeyboardButton("🎴 Карта дня", callback_data="get_daily_card")],
+        [InlineKeyboardButton("👀 Посмотреть карту дня", callback_data="get_daily_card")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -27,6 +27,13 @@ def get_history_keyboard():
     """Клавиатура для истории"""
     keyboard = [
         [InlineKeyboardButton("🖼 Показать с картинками", callback_data="show_history_pics")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_history_pics_keyboard():
+    """Клавиатура после показа картинок истории"""
+    keyboard = [
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -56,7 +63,7 @@ def get_help_keyboard():
 def get_main_menu_keyboard():
     """Клавиатура для главного меню"""
     keyboard = [
-        [InlineKeyboardButton("🎴 Карта дня", callback_data="get_daily_card")],
+        [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
         [InlineKeyboardButton("📚 История карт", callback_data="history")],
         [InlineKeyboardButton("💫 Консультация", callback_data="consult")]
