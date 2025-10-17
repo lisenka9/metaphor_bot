@@ -57,7 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /history - История ваших карт
     """
     
-    photo_url = "https://ibb.co/0bc2b6M" 
+    photo_url = "https://ibb.co/279SfcJ4" 
     
     try:
         # Отправляем фото с текстом
@@ -168,7 +168,7 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_photo(
             photo=image_url,
             caption=card_text,
-            reply_markup=keyboard.get_card_reflection_keyboard(),
+            reply_markup=keyboard.get_card_reflection_keyboard(),  # Кнопка "Послание дня"
             parse_mode='Markdown'
         )
         await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопку из предыдущего сообщения
@@ -505,41 +505,6 @@ async def simple_history_with_images(update: Update, context: ContextTypes.DEFAU
         logging.error(f"❌ Error in simple history: {e}")
         await update.message.reply_text("⚠️ Ошибка при загрузке истории")
 
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий на кнопки"""
-    query = update.callback_query
-    await query.answer()  # важно - подтверждаем нажатие
-    
-    user_data = context.user_data
-    last_card = user_data.get('last_card', {})
-    
-    if query.data == "flip_card":
-        questions_text = f"""🎴 {last_card['card_name']}
-
-👁 Вопросы для размышления:
-
-— Какое состояние вызывает карта?
-— Какое воспоминание всплыло?
-— Какое слово или эмоция пришли первыми?  
-— Как символика карты может помочь вам сегодня?
-
-💭 С каким эмоциональным состоянием у вас ассоциируется изображение?
-
-✨ В работе с метафорическими картами нет «правильных» ответов — важен ваш личный смысл, рождающийся в момент встречи с образом."""
-        
-        # Убираем кнопку после нажатия
-        await query.edit_message_caption(
-            caption=questions_text,
-            reply_markup=None,  # убираем клавиатуру
-            parse_mode='Markdown'
-        )
-    
-    elif query.data == "show_history_pics":
-        # Показываем историю с картинками
-        user = query.from_user
-        await query.edit_message_reply_markup(reply_markup=None)  # убираем кнопку
-        await history_album_from_query(query, context)
 
 async def history_album_from_query(query, context: ContextTypes.DEFAULT_TYPE):
     """История с картинками для callback query"""

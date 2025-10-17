@@ -1,21 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-def get_card_keyboard():
-    """Клавиатура с одной кнопкой 'Перевернуть карту'"""
-    keyboard = [
-        [InlineKeyboardButton("Посмотреть вопросы", callback_data="flip_card")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_history_keyboard():
-    """Клавиатура для истории"""
-    keyboard = [
-        [InlineKeyboardButton("🖼 Показать с картинками", callback_data="show_history_pics")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
 def get_daily_intro_keyboard():
     """Клавиатура для введения в карту дня"""
     keyboard = [
@@ -30,9 +14,16 @@ def get_card_reflection_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_card_keyboard():
-    """Клавиатура с одной кнопкой 'Перевернуть карту'"""
+def get_card_questions_keyboard():
+    """Клавиатура с кнопкой 'Посмотреть вопросы'"""
     keyboard = [
-        [InlineKeyboardButton("🔄 Перевернуть карту", callback_data="flip_card")]
+        [InlineKeyboardButton("👁 Посмотреть вопросы", callback_data="flip_card")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_history_keyboard():
+    """Клавиатура для истории"""
+    keyboard = [
+        [InlineKeyboardButton("🖼 Показать с картинками", callback_data="show_history_pics")]
     ]
     return InlineKeyboardMarkup(keyboard)
