@@ -133,6 +133,7 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на кнопки"""
     query = update.callback_query
@@ -154,13 +155,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"🔄 Button pressed: {query.data} by user {user_id}")
     
     if query.data == "get_daily_card":
-        # ВАЖНО: Проверяем лимит ДО показа карты
-        can_take, reason = db.can_take_daily_card(user_id)
-        if not can_take:
-            await query.message.reply_text(f"❌ {reason}")
-            return
-            
-        await show_daily_card(query, context)  # Показываем карту сразу
+        # ВАЖНО: Показываем интро, а не сразу карту
+        await show_daily_intro_from_button(query, context)
         
     elif query.data == "get_daily_message":
         await show_daily_message(query, context)
@@ -169,12 +165,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_flip_card(query, context)
     
     elif query.data == "show_history_pics":
-        user = query.from_user
-        await query.edit_message_reply_markup(reply_markup=None)
-        await history_album_from_query(query, context)
+        await show_history_pics_from_button(query, context)
     
     elif query.data == "main_menu":
-        await show_main_menu_from_button(query, context)  # Используем новую функцию
+        await show_main_menu_from_button(query, context)
     
     elif query.data == "profile":
         await show_profile_from_button(query, context)
@@ -184,6 +178,29 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "consult":
         await show_consult_from_button(query, context)
+
+async def show_daily_intro_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает интро для карты дня при нажатии кнопки из меню"""
+    intro_text = """
+🌊 Настройка на волну дня
+
+Прежде, чем сделать выбор карты, создайте для себя пространство тишины и спокойствия 🦋
+
+💎 Сделайте несколько глубоких вдохов, закройте глаза и направьте внимание внутрь: какой вопрос или задача сейчас для вас наиболее актуальна?
+
+💎 Сформулируйте свой вопрос к карте.
+
+💡 Подсказка: Пусть вопрос будет открытым, например:«Какой ресурс поможет мне сегодня?» или «В чём мне стоит проявить осторожность?»
+
+Нажмите кнопку ниже, чтобы получить свою карту дня!
+"""
+    
+    # Отправляем новое сообщение с интро, не редактируя предыдущее
+    await query.message.reply_text(
+        intro_text,
+        reply_markup=keyboard.get_daily_intro_keyboard(),
+        parse_mode='Markdown'
+    )
 
 async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню при нажатии кнопки (не редактирует предыдущее сообщение)"""
@@ -268,7 +285,8 @@ async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     stats = db.get_user_stats(user.id)
     
     if not stats:
-        await query.edit_message_text("❌ Не удалось загрузить статистику")
+        # Отправляем новое сообщение с ошибкой
+        await query.message.reply_text("❌ Не удалось загрузить статистику")
         return
     
     limit, is_premium, total_cards, reg_date = stats
@@ -281,11 +299,13 @@ async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 📅 Дата регистрации: {reg_date}
     """
     
-    await query.edit_message_text(
+    # Отправляем новое сообщение с профилем, не редактируя предыдущее
+    await query.message.reply_text(
         profile_text,
-        reply_markup=keyboard.get_profile_keyboard(),  # Используем специальную клавиатуру для профиля
+        reply_markup=keyboard.get_profile_keyboard(),
         parse_mode='Markdown'
     )
+
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
@@ -343,9 +363,10 @@ async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 Если Вы чувствуете отклик внутри и готовы к внутренним трансформациям - я буду рада стать Вашим проводником к изменениям 💛
 """
     
-    await query.edit_message_text(
+    # Отправляем новое сообщение с консультацией, не редактируя предыдущее
+    await query.message.reply_text(
         consult_text,
-        reply_markup=keyboard.get_consult_keyboard(),  # Используем специальную клавиатуру для консультации
+        reply_markup=keyboard.get_consult_keyboard(),
         parse_mode='Markdown'
     )
 
@@ -466,7 +487,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         help_text,
-        reply_markup=keyboard.get_main_menu_keyboard(),
+        reply_markup=keyboard.get_help_keyboard(),  # Используем специальную клавиатуру для помощи
         parse_mode='Markdown'
     )
     
@@ -684,47 +705,6 @@ async def simple_history_with_images(update: Update, context: ContextTypes.DEFAU
     except Exception as e:
         logging.error(f"❌ Error in simple history: {e}")
         await update.message.reply_text("⚠️ Ошибка при загрузке истории")
-
-
-async def history_album_from_query(query, context: ContextTypes.DEFAULT_TYPE):
-    """История с картинками для callback query"""
-    user = query.from_user
-    
-    try:
-        history = db.get_user_card_history(user.id, limit=5)
-        
-        if not history:
-            await query.message.reply_text("📝 У вас пока нет истории карт.")
-            return
-        
-        from telegram import InputMediaPhoto
-        
-        # Создаем медиагруппу
-        media_group = []
-        
-        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
-            if isinstance(drawn_date, str):
-                date_str = drawn_date[:10]
-            else:
-                date_str = drawn_date.strftime("%d.%m.%Y")
-            
-            caption = f"#{i} {card_name} - {date_str}"
-            
-            media_group.append(
-                InputMediaPhoto(
-                    media=image_url,
-                    caption=caption
-                )
-            )
-        
-        # Отправляем альбом
-        await query.message.reply_media_group(media=media_group)
-        
-        
-    except Exception as e:
-        logging.error(f"❌ Error in history album from query: {e}")
-        await query.message.reply_text("⚠️ Ошибка при загрузке истории с картинками")
-
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Статистика для администратора"""
@@ -1081,9 +1061,10 @@ async def show_history_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         history = db.get_user_card_history(user.id, limit=20)
         
         if not history:
-            await query.edit_message_text(
+            # Отправляем новое сообщение
+            await query.message.reply_text(
                 "📝 У вас пока нет истории карт.\n\nИспользуйте /daily чтобы получить первую карту!",
-                reply_markup=keyboard.get_main_menu_keyboard(),
+                reply_markup=keyboard.get_history_keyboard(),
                 parse_mode='Markdown'
             )
             return
@@ -1104,7 +1085,8 @@ async def show_history_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         
         history_text += "\n💫 Нажмите кнопку ниже чтобы увидеть картинки карт"
         
-        await query.edit_message_text(
+        # Отправляем новое сообщение с историей, не редактируя предыдущее
+        await query.message.reply_text(
             history_text, 
             reply_markup=keyboard.get_history_keyboard(),
             parse_mode='Markdown'
@@ -1112,10 +1094,60 @@ async def show_history_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logging.error(f"❌ Error in history from button: {e}")
-        await query.edit_message_text(
+        # Отправляем новое сообщение с ошибкой
+        await query.message.reply_text(
             "⚠️ Ошибка при загрузке истории",
-            reply_markup=keyboard.get_main_menu_keyboard(),
+            reply_markup=keyboard.get_history_keyboard(),
             parse_mode='Markdown'
         )
 
+
+async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает историю с картинками и кнопкой возврата"""
+    user = query.from_user
+    
+    try:
+        history = db.get_user_card_history(user.id, limit=5)
+        
+        if not history:
+            await query.message.reply_text("📝 У вас пока нет истории карт.")
+            return
+        
+        from telegram import InputMediaPhoto
+        
+        # Создаем медиагруппу
+        media_group = []
+        
+        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
+            if isinstance(drawn_date, str):
+                date_str = drawn_date[:10]
+            else:
+                date_str = drawn_date.strftime("%d.%m.%Y")
+            
+            caption = f"#{i} {card_name} - {date_str}"
+            
+            media_group.append(
+                InputMediaPhoto(
+                    media=image_url,
+                    caption=caption
+                )
+            )
+        
+        # Отправляем альбом
+        await query.message.reply_media_group(media=media_group)
+        
+        # Отправляем сообщение с кнопкой "Вернуться в меню"
+        await query.message.reply_text(
+            "🖼 Вот ваши последние карты:",
+            reply_markup=keyboard.get_history_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error in history album from query: {e}")
+        await query.message.reply_text(
+            "⚠️ Ошибка при загрузке истории с картинками",
+            reply_markup=keyboard.get_history_keyboard(),
+            parse_mode='Markdown'
+        )
 
