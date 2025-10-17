@@ -57,7 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /history - История ваших карт
     """
     
-    photo_url = "https://ibb.co/279SfcJ4" 
+    photo_url = "https://ibb.co/999DDkSf" 
     
     try:
         # Отправляем фото с текстом
