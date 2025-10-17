@@ -174,6 +174,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = query.from_user
         await query.edit_message_reply_markup(reply_markup=None)
         await history_album_from_query(query, context)
+    
+    elif query.data == "main_menu":
+        # ✅ Новая кнопка - возврат в главное меню
+        await show_main_menu(update, context)
+    
+    elif query.data == "profile":
+        # Показываем профиль
+        stats = db.get_user_stats(user_id)
+        if stats:
+            limit, is_premium, total_cards, reg_date = stats
+            profile_text = f"""
+👤 Ваш профиль
+
+📊 Всего карт получено: {total_cards}
+🎯 Лимит карт в день: {limit}
+📅 Дата регистрации: {reg_date}
+"""
+            await query.edit_message_text(
+                profile_text,
+                reply_markup=keyboard.get_main_menu_keyboard(),
+                parse_mode='Markdown'
+            )
+    
+    elif query.data == "history":
+        # Показываем историю
+        await show_history_from_button(query, context)
+    
+    elif query.data == "consult":
+        # Показываем консультацию
+        await show_consult_from_button(query, context)
 
         
 async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
@@ -327,7 +357,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     await update.message.reply_text(help_text)
-
+    await update.message.reply_text(
+        help_text,
+        reply_markup=keyboard.get_main_menu_keyboard(),
+        parse_mode='Markdown'
+    )
     
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
@@ -350,6 +384,11 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     await update.message.reply_text(profile_text)
+    await update.message.reply_text(
+        profile_text,
+        reply_markup=keyboard.get_main_menu_keyboard(),
+        parse_mode='Markdown'
+    )
 
 async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс своего лимита карт (для тестирования)"""
@@ -417,7 +456,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
     try:
-        history = db.get_user_card_history(user.id, limit=20)
+        history = db.get_user_card_history(user.id, limit=88)
         
         if not history:
             await update.message.reply_text(
@@ -902,3 +941,121 @@ async def consult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
+
+
+
+async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает главное меню бота"""
+    menu_text = """
+🌊 О колоде и миссии бота
+
+Море, как и наша жизнь, многолико: оно может быть ласковым, умиротворяющим, а порой — грозным и разрушительным. Этот образ идеально отражает внутренние состояния человека: от штиля до бури.
+
+Каждая карта колоды пропитана энергией моря и создана для того, чтобы помочь вам:
+
+Увидеть подсказки для решения жизненных ситуаций.
+
+Наполниться ресурсами и энергией, которую несет в себе морская стихия.
+
+Научиться распознавать свои эмоции и быть с ними в контакте.
+
+Колода "Настроение как море" помогает заглянуть в глубину собственного бессознательного, осознать эмоции, встретиться с тем, что подавлено, и открыть новые ресурсы для роста.
+
+✨ В добрый путь!
+Я благодарю Вас за доверие и интерес к своему внутреннему миру.
+
+Выбирайте в меню бота то, что для Вас сейчас наиболее актуально!
+
+✨ Команды:
+/daily - Получить карту дня
+/profile - Ваша статистика
+/help - Помощь
+/history - История ваших карт
+/consult - Запись на консультацию
+"""
+    
+    # Если это callback query (нажатие кнопки), редактируем сообщение
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(
+            menu_text,
+            reply_markup=keyboard.get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+    else:
+        # Если это обычная команда, отправляем новое сообщение
+        await update.message.reply_text(
+            menu_text,
+            reply_markup=keyboard.get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+
+
+
+async def show_history_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает историю из кнопки меню"""
+    user = query.from_user
+    
+    try:
+        history = db.get_user_card_history(user.id, limit=20)
+        
+        if not history:
+            await query.edit_message_text(
+                "📝 У вас пока нет истории карт.\n\nИспользуйте /daily чтобы получить первую карту!",
+                reply_markup=keyboard.get_main_menu_keyboard(),
+                parse_mode='Markdown'
+            )
+            return
+        
+        if len(history) > 5:
+            history_text = f"📚 Последние 5 карт из {len(history)}:\n\n"
+            history = history[:5]
+        else:
+            history_text = f"📚 Ваши карты ({len(history)}):\n\n"
+        
+        for i, (card_id, card_name, image_url, description, drawn_date) in enumerate(history, 1):
+            if isinstance(drawn_date, str):
+                date_str = drawn_date[:10]
+            else:
+                date_str = drawn_date.strftime("%d.%m.%Y")
+            
+            history_text += f"{i}. {card_name} - {date_str}\n"
+        
+        history_text += "\n💫 Нажмите кнопку ниже чтобы увидеть картинки карт"
+        
+        await query.edit_message_text(
+            history_text, 
+            reply_markup=keyboard.get_history_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error in history from button: {e}")
+        await query.edit_message_text(
+            "⚠️ Ошибка при загрузке истории",
+            reply_markup=keyboard.get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о консультации из кнопки меню"""
+    consult_text = """
+💫Приветствую! Я Светлана Скромова, и я очень рада, что Вы сделали шаг к записи на консультацию...
+
+[полный текст консультации как в consult_command]
+"""
+    
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    keyboard_consult = [
+        [InlineKeyboardButton("📅 Записаться на консультацию (60 минут)", url="https://t.me/Skromova_Svetlana_psy")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard_consult)
+    
+    await query.edit_message_text(
+        consult_text,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
