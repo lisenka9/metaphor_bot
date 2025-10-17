@@ -39,6 +39,13 @@ def get_consult_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_profile_keyboard():
+    """Клавиатура для профиля - только кнопка 'Вернуться в меню'"""
+    keyboard = [
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 def get_main_menu_keyboard():
     """Клавиатура для главного меню"""
     keyboard = [
