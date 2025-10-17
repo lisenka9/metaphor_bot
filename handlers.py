@@ -25,9 +25,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Создаем приветственное сообщение с учетом доступных данных
     if user.first_name:
-        greeting = f"@{user.first_name}, приветствую!"
+        greeting = f"{user.first_name}, приветствую!"
     else:
-        greeting = f"{user.username}, приветствую!"
+        greeting = f"@{user.username}, приветствую!"
     
     welcome_text = f"""
 {greeting}
@@ -57,7 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /history - История ваших карт
     """
     
-    photo_url = "https://ibb.co/bMzLVznYhttps://ibb.co/0bc2b6M" 
+    photo_url = "https://ibb.co/0bc2b6M" 
     
     try:
         # Отправляем фото с текстом
