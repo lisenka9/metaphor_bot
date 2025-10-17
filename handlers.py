@@ -153,16 +153,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ Логируем какая кнопка нажата
     logging.info(f"🔄 Button pressed: {query.data} by user {user_id}")
     
-    user_data = context.user_data
-    
     if query.data == "get_daily_card":
-        # Проверяем лимит ДО показа карты
-        can_take, reason = db.can_take_daily_card(user_id)
-        if not can_take:
-            await query.message.reply_text(f"❌ {reason}")
-            return
-            
-        await show_daily_card(query, context)
+        # ВАЖНО: Показываем интро, а не сразу карту
+        await show_daily_intro_from_button(query, context)
         
     elif query.data == "get_daily_message":
         await show_daily_message(query, context)
@@ -176,34 +169,139 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await history_album_from_query(query, context)
     
     elif query.data == "main_menu":
-        # ✅ Новая кнопка - возврат в главное меню
         await show_main_menu(update, context)
     
     elif query.data == "profile":
-        # Показываем профиль
-        stats = db.get_user_stats(user_id)
-        if stats:
-            limit, is_premium, total_cards, reg_date = stats
-            profile_text = f"""
+        await show_profile_from_button(query, context)
+    
+    elif query.data == "history":
+        await show_history_from_button(query, context)
+    
+    elif query.data == "consult":
+        await show_consult_from_button(query, context)
+
+async def show_daily_intro_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает интро для карты дня при нажатии кнопки"""
+    intro_text = """
+🌊 Настройка на волну дня
+
+Прежде, чем сделать выбор карты, создайте для себя пространство тишины и спокойствия 🦋
+
+💎 Сделайте несколько глубоких вдохов, закройте глаза и направьте внимание внутрь: какой вопрос или задача сейчас для вас наиболее актуальна?
+
+💎 Сформулируйте свой вопрос к карте.
+
+💡 Подсказка: Пусть вопрос будет открытым, например:«Какой ресурс поможет мне сегодня?» или «В чём мне стоит проявить осторожность?»
+
+Нажмите кнопку ниже, чтобы получить свою карту дня!
+"""
+    
+    await query.edit_message_text(
+        intro_text,
+        reply_markup=keyboard.get_daily_intro_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает послание дня"""
+    user = query.from_user
+    
+    # Получаем случайное послание
+    message_data = db.get_random_message()
+    if not message_data:
+        await query.message.reply_text("⚠️ Ошибка при получении послания.")
+        return
+    
+    message_id, image_url, message_text = message_data
+    
+    message_caption = f"""🦋 Послание Дня
+
+Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
+
+🔹 Как реагирует ваше тело?
+🔹 Какие эмоции поднимаются?
+🔹 Что важного это послание несет вам?
+🔹 Как это послание поможет вам на вашем жизненном пути?"""
+    
+    try:
+        # Отправляем новое сообщение с посланием
+        await query.message.reply_photo(
+            photo=image_url,
+            caption=message_caption,
+            reply_markup=keyboard.get_daily_message_keyboard(),  # Добавляем кнопку "Вернуться в меню"
+            parse_mode='Markdown'
+        )
+        # Не редактируем предыдущее сообщение, оставляем его как есть
+        
+    except Exception as e:
+        logging.error(f"Error sending message image: {e}")
+        await query.message.reply_text(
+            message_caption,
+            reply_markup=keyboard.get_daily_message_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает профиль из кнопки меню"""
+    user = query.from_user
+    
+    stats = db.get_user_stats(user.id)
+    
+    if not stats:
+        await query.edit_message_text("❌ Не удалось загрузить статистику")
+        return
+    
+    limit, is_premium, total_cards, reg_date = stats
+    
+    profile_text = f"""
 👤 Ваш профиль
 
 📊 Всего карт получено: {total_cards}
 🎯 Лимит карт в день: {limit}
 📅 Дата регистрации: {reg_date}
+    """
+    
+    await query.edit_message_text(
+        profile_text,
+        reply_markup=keyboard.get_main_menu_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о консультации из кнопки меню"""
+    consult_text = """
+💫Приветствую! Я Светлана Скромова, и я очень рада, что Вы сделали шаг к записи на консультацию. Если Вы здесь, значит, внутри уже есть готовность к важным переменам и внутренним трансформациям.
+
+Я психотерапевт (магистр психологии, Москва) с более чем 7-летним опытом частной практики. Работаю онлайн с русскоговорящими клиентами по всему миру, создавая безопасное пространство, где мы вместе можем найти причину Ваших сложностей.
+
+Какие вопросы мы можем решить:
+🔸 Жизненные кризисы (утрата, развод, переезд)
+🔸 Эмоциональное выгорание, депрессия, тревожность, апатия, стресс
+🔸 Сложности в отношениях, эмоциональная зависимость, одиночество, страх отвержения/близости
+🔸 Самооценка, неуверенность в себе, неумение говорить "нет"
+🔸 Психологическое сопровождение в эмиграции (я сама прошла этот путь и знаю, как сложно строить жизнь с нуля)
+
+⚓️ Мои инструменты: мультимодальный подход
+
+🦋Моя работа — это не просто разговоры. Это глубинная и мягкая трансформация, где я использую проверенные и эффективные методы. Подбираю индивидуальные инструменты для каждого клиента.
+
+💵 Стоимость и формат работы
+Формат: Индивидуальная видео-консультация (WhatsApp, Telegram, Google Meet, Teams)
+
+Продолжительность: 60 минут
+
+Стоимость: 5500 ₽ (или 250₪). При оплате не из России происходит конвертация вашей валюты в шекели по банковскому курсу.
+
+💎Первая консультация диагностическая (60-90 минут), чтобы мы могли познакомиться и наметить план дальнейшей работы. Я озвучу свое виденье вашей проблемы и инструменты для её решения.
+
+Если Вы чувствуете отклик внутри и готовы к внутренним трансформациям - я буду рада стать Вашим проводником к изменениям 💛
 """
-            await query.edit_message_text(
-                profile_text,
-                reply_markup=keyboard.get_main_menu_keyboard(),
-                parse_mode='Markdown'
-            )
     
-    elif query.data == "history":
-        # Показываем историю
-        await show_history_from_button(query, context)
-    
-    elif query.data == "consult":
-        # Показываем консультацию
-        await show_consult_from_button(query, context)
+    await query.edit_message_text(
+        consult_text,
+        reply_markup=keyboard.get_consult_keyboard(),  # Используем специальную клавиатуру для консультации
+        parse_mode='Markdown'
+    )
 
         
 async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
@@ -274,42 +372,6 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"❌ Error in show_daily_card: {e}")
         await loading_message.edit_text("❌ Произошла ошибка при получении карты")
 
-async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает послание дня"""
-    user = query.from_user
-    
-    # Получаем случайное послание
-    message_data = db.get_random_message()
-    if not message_data:
-        await query.message.reply_text("⚠️ Ошибка при получении послания.")
-        return
-    
-    message_id, image_url, message_text = message_data
-    
-    message_caption = f"""🦋 Послание Дня
-
-Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
-
-🔹 Как реагирует ваше тело?
-🔹 Какие эмоции поднимаются?
-🔹 Что важного это послание несет вам?
-🔹 Как это послание поможет вам на вашем жизненном пути?"""
-    
-    try:
-        await query.message.reply_photo(
-            photo=image_url,
-            caption=message_caption,
-            parse_mode='Markdown'
-        )
-        await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопку
-        
-    except Exception as e:
-        logging.error(f"Error sending message image: {e}")
-        await query.message.reply_text(
-            message_caption,
-            parse_mode='Markdown'
-        )
-        await query.edit_message_reply_markup(reply_markup=None)
 
 async def handle_flip_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик переворота карты (старая функциональность)"""
@@ -356,7 +418,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Дайте образу войти в ваше сознание, обратите внимание на первые мысли и чувства.
     """
     
-    await update.message.reply_text(help_text)
     await update.message.reply_text(
         help_text,
         reply_markup=keyboard.get_main_menu_keyboard(),
@@ -383,7 +444,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📅 Дата регистрации: {reg_date}
     """
     
-    await update.message.reply_text(profile_text)
     await update.message.reply_text(
         profile_text,
         reply_markup=keyboard.get_main_menu_keyboard(),
@@ -1038,24 +1098,4 @@ async def show_history_from_button(query, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает информацию о консультации из кнопки меню"""
-    consult_text = """
-💫Приветствую! Я Светлана Скромова, и я очень рада, что Вы сделали шаг к записи на консультацию...
 
-[полный текст консультации как в consult_command]
-"""
-    
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    
-    keyboard_consult = [
-        [InlineKeyboardButton("📅 Записаться на консультацию (60 минут)", url="https://t.me/Skromova_Svetlana_psy")],
-        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard_consult)
-    
-    await query.edit_message_text(
-        consult_text,
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )

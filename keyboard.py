@@ -16,10 +16,9 @@ def get_card_reflection_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_card_questions_keyboard():
-    """Клавиатура с кнопкой 'Посмотреть вопросы'"""
+def get_daily_message_keyboard():
+    """Клавиатура после послания дня"""
     keyboard = [
-        [InlineKeyboardButton("👁 Посмотреть вопросы", callback_data="flip_card")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -28,6 +27,14 @@ def get_history_keyboard():
     """Клавиатура для истории"""
     keyboard = [
         [InlineKeyboardButton("🖼 Показать с картинками", callback_data="show_history_pics")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_consult_keyboard():
+    """Клавиатура для консультации"""
+    keyboard = [
+        [InlineKeyboardButton("📅 Записаться на консультацию (60 минут)", url="https://t.me/Skromova_Svetlana_psy")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
