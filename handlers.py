@@ -133,7 +133,6 @@ async def daily_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на кнопки"""
     query = update.callback_query
@@ -185,6 +184,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_daily_intro_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает интро для карты дня при нажатии кнопки из меню"""
+    user = query.from_user
+    
+    # ✅ Проверяем лимит СРАЗУ при нажатии "Карта дня" в меню
+    can_take, reason = db.can_take_daily_card(user.id)
+    if not can_take:
+        await query.message.reply_text(f"❌ {reason}")
+        return
+    
     intro_text = """
 🌊 Настройка на волну дня
 
@@ -205,6 +212,7 @@ async def show_daily_intro_from_button(query, context: ContextTypes.DEFAULT_TYPE
         reply_markup=keyboard.get_daily_intro_keyboard(),
         parse_mode='Markdown'
     )
+
 
 async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню при нажатии кнопки (не редактирует предыдущее сообщение)"""
@@ -339,6 +347,20 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает информацию о консультации из кнопки меню"""
+    # URL фото для консультации
+    photo_url = "https://ibb.co/SXQR8ryT"  
+    
+    try:
+        # Сначала отправляем фото
+        await query.message.reply_photo(
+            photo=photo_url,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending consult photo: {e}")
+        # Если фото не загружается, продолжаем без него
+    
     consult_text = """
 💫Приветствую! Я Светлана Скромова, и я очень рада, что Вы сделали шаг к записи на консультацию. Если Вы здесь, значит, внутри уже есть готовность к важным переменам и внутренним трансформациям.
 
@@ -367,7 +389,7 @@ async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 Если Вы чувствуете отклик внутри и готовы к внутренним трансформациям - я буду рада стать Вашим проводником к изменениям 💛
 """
     
-    # Отправляем новое сообщение с консультацией, не редактируя предыдущее
+    # Отправляем текст консультации с кнопками
     await query.message.reply_text(
         consult_text,
         reply_markup=keyboard.get_consult_keyboard(),
@@ -379,7 +401,7 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает карту дня с вопросами для размышления"""
     user = query.from_user
     
-    # ✅ Проверяем лимит ДО показа карты
+    # ✅ Дополнительная проверка лимита (на всякий случай)
     can_take, reason = db.can_take_daily_card(user.id)
     if not can_take:
         await query.message.reply_text(f"❌ {reason}")
@@ -913,6 +935,20 @@ async def add_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def consult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /consult - запись на консультацию"""
+    # URL фото для консультации
+    photo_url = "https://ibb.co/SXQR8ryT"  
+    
+    try:
+        # Сначала отправляем фото
+        await update.message.reply_photo(
+            photo=photo_url,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending consult photo: {e}")
+        # Если фото не загружается, продолжаем без него
+    
     consult_text = """
 💫Приветствую! Я Светлана Скромова, и я очень рада, что Вы сделали шаг к записи на консультацию. Если Вы здесь, значит, внутри уже есть готовность к важным переменам и внутренним трансформациям.
 
@@ -947,8 +983,6 @@ async def consult_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard.get_consult_keyboard(),
         parse_mode='Markdown'
     )
-
-    
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню бота"""
@@ -1084,7 +1118,6 @@ async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYP
         
         # Отправляем сообщение с кнопкой "Вернуться в меню"
         await query.message.reply_text(
-            "🖼 Вот ваши последние карты:",
             reply_markup=keyboard.get_history_pics_keyboard(),  # Используем клавиатуру только с кнопкой возврата
             parse_mode='Markdown'
         )
