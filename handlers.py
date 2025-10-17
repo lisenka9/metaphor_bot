@@ -1118,6 +1118,7 @@ async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYP
         
         # Отправляем сообщение с кнопкой "Вернуться в меню"
         await query.message.reply_text(
+            "Ваши карты"
             reply_markup=keyboard.get_history_pics_keyboard(),  # Используем клавиатуру только с кнопкой возврата
             parse_mode='Markdown'
         )
