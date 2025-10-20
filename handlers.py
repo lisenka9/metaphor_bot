@@ -237,7 +237,7 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif step == 2:
         user_data['problem'] = user_answer
         user_data['step'] = 3
-        question_text = "3. В какое время/дни Вам было бы удобно провести консультацию?\n\nНапример: \n• вторник после 18:00 МСК\n• среда с 9:00 до 12:00 МСК\n• суббота утро"
+        question_text = "3. Напишите время с воскресенья по среду, которое подходит для консультации"
         await update.message.reply_text(question_text, parse_mode='Markdown')
         
     elif step == 3:
