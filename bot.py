@@ -48,6 +48,7 @@ def main():
     application.add_handler(CommandHandler("export", handlers.export_data))
     application.add_handler(CommandHandler("addcards", handlers.add_cards))
     application.add_handler(CommandHandler("consult", handlers.consult_command))
+    application.add_handler(CommandHandler("consult_requests", handlers.admin_consult_requests))
     application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 

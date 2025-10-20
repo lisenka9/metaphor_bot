@@ -230,56 +230,24 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_answer = update.message.text
     
     if step == 1:
-        # Сохраняем ответ на первый вопрос
         user_data['name'] = user_answer
         user_data['step'] = 2
-        
-        # Второй вопрос
-        question_text = """
-2. Опишите в нескольких словах проблему/запрос, с которым хотите прийти на консультацию
-"""
-        await update.message.reply_text(
-            question_text,
-            parse_mode='Markdown'
-        )
+        question_text = "2. Опишите в нескольких словах проблему/запрос, с которым хотите прийти на консультацию"
+        await update.message.reply_text(question_text, parse_mode='Markdown')
         
     elif step == 2:
-        # Сохраняем ответ на второй вопрос
         user_data['problem'] = user_answer
         user_data['step'] = 3
-        
-        # Третий вопрос
-        question_text = """
-3. В какое время/дни Вам было бы удобно провести консультацию?
-
-Например: 
-• вторник после 18:00 МСК
-• среда с 9:00 до 12:00 МСК
-• суббота утро
-"""
-        await update.message.reply_text(
-            question_text,
-            parse_mode='Markdown'
-        )
+        question_text = "3. В какое время/дни Вам было бы удобно провести консультацию?\n\nНапример: \n• вторник после 18:00 МСК\n• среда с 9:00 до 12:00 МСК\n• суббота утро"
+        await update.message.reply_text(question_text, parse_mode='Markdown')
         
     elif step == 3:
-        # Сохраняем ответ на третий вопрос
         user_data['preferred_time'] = user_answer
         user_data['step'] = 4
-        
-        # Четвертый вопрос
-        question_text = """
-4. Укажите Ваш Telegram-ник или WhatsApp для связи
-
-В ближайшие 24 часа я напишу Вам для подтверждения времени консультации.
-"""
-        await update.message.reply_text(
-            question_text,
-            parse_mode='Markdown'
-        )
+        question_text = "4. Укажите Ваш Telegram-ник или WhatsApp для связи\n\nВ ближайшие 24 часа я напишу Вам для подтверждения времени консультации."
+        await update.message.reply_text(question_text, parse_mode='Markdown')
         
     elif step == 4:
-        # Сохраняем ответ на четвертый вопрос
         user_data['contact'] = user_answer
         
         # Формируем итоговое сообщение для отправки психологу
@@ -288,6 +256,7 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 👤 *От пользователя:* {user_data.get('username', 'Не указано')}
 🆔 *ID пользователя:* {user_id}
+📧 *Username:* @{update.effective_user.username or 'не указан'}
 
 📝 *Данные формы:*
 • *Имя:* {user_data.get('name', 'Не указано')}
@@ -299,29 +268,38 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
 """
         
         try:
-            # Отправляем заявку психологу (используем ID вместо username)
-            # Замените 123456789 на реальный ID пользователя @Skromova_Svetlana_psy
-            psychologist_chat_id = 123456789  # Нужно получить реальный ID
+            # Отправляем заявку всем администраторам
+            from config import ADMIN_IDS
+            sent_to_admins = []
             
-            await context.bot.send_message(
-                chat_id=psychologist_chat_id,
-                text=consult_summary,
-                parse_mode='Markdown'
-            )
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=consult_summary,
+                        parse_mode='Markdown'
+                    )
+                    sent_to_admins.append(admin_id)
+                    logging.info(f"✅ Consult form sent to admin {admin_id}")
+                except Exception as admin_error:
+                    logging.error(f"❌ Error sending to admin {admin_id}: {admin_error}")
             
-            # Подтверждаем пользователю
-            success_text = """
+            if sent_to_admins:
+                # Подтверждаем пользователю
+                success_text = f"""
 ✅ *Спасибо! Ваша заявка отправлена!*
 
 В ближайшие 24 часа я свяжусь с вами для подтверждения времени консультации.
 
-Если у вас есть срочный вопрос, вы можете написать напрямую: @Skromova_Svetlana_psy
+*Отправлено администраторам:* {len(sent_to_admins)}
 """
-            await update.message.reply_text(
-                success_text,
-                parse_mode='Markdown',
-                reply_markup=keyboard.get_main_menu_keyboard()
-            )
+                await update.message.reply_text(
+                    success_text,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard.get_main_menu_keyboard()
+                )
+            else:
+                raise Exception("Не удалось отправить ни одному администратору")
             
         except Exception as e:
             logging.error(f"❌ Error sending consult form: {e}")
@@ -347,6 +325,28 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Очищаем данные формы
         if 'consult_form' in context.user_data:
             del context.user_data['consult_form']
+
+
+            
+
+async def admin_consult_requests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает заявки на консультацию для администратора"""
+    user = update.effective_user
+    
+    # Проверяем, является ли пользователь администратором
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    # Здесь можно добавить логику для просмотра заявок из базы данных
+    # если вы решите сохранять их в базу
+    
+    await update.message.reply_text(
+        "📋 Команда для просмотра заявок на консультацию.\n"
+        "Заявки автоматически отправляются всем администраторам.",
+        parse_mode='Markdown'
+    )
+
 
 async def show_daily_intro_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает интро для карты дня при нажатии кнопки из меню"""
