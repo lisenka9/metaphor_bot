@@ -185,7 +185,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "start_consult_form":
         await start_consult_form(query, context)
 
-# Добавляем новые функции для формы консультации
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
     # Убираем кнопку из предыдущего сообщения
@@ -249,6 +248,15 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     elif step == 4:
         user_data['contact'] = user_answer
+        
+        # Получаем московское время
+        try:
+            import pytz
+            moscow_tz = pytz.timezone('Europe/Moscow')
+            moscow_time = datetime.now(moscow_tz)
+        except:
+            # Если pytz не установлен, используем локальное время с пометкой МСК
+            moscow_time = datetime.now()
         
         # Формируем итоговое сообщение для отправки психологу
         consult_summary = f"""
@@ -322,7 +330,6 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Очищаем данные формы
         if 'consult_form' in context.user_data:
             del context.user_data['consult_form']
-
 
             
 
