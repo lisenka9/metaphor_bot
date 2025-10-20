@@ -254,9 +254,7 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
         consult_summary = f"""
 📋 *Новая заявка на консультацию*
 
-👤 *От пользователя:* {user_data.get('username', 'Не указано')}
-🆔 *ID пользователя:* {user_id}
-📧 *Username:* @{update.effective_user.username or 'не указан'}
+👤 *От пользователя:* @{update.effective_user.username or 'не указан'}
 
 📝 *Данные формы:*
 • *Имя:* {user_data.get('name', 'Не указано')}
@@ -290,8 +288,6 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
 ✅ *Спасибо! Ваша заявка отправлена!*
 
 В ближайшие 24 часа я свяжусь с вами для подтверждения времени консультации.
-
-*Отправлено администраторам:* {len(sent_to_admins)}
 """
                 await update.message.reply_text(
                     success_text,
