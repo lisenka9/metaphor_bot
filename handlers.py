@@ -262,7 +262,7 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
 • *Удобное время:* {user_data.get('preferred_time', 'Не указано')}
 • *Контакт:* {user_data.get('contact', 'Не указано')}
 
-⏰ *Время заявки:* {datetime.now().strftime('%d.%m.%Y %H:%M')}
+⏰ *Время заявки:* {moscow_time.strftime('%d.%m.%Y %H:%M')} (мск)
 """
         
         try:
@@ -311,6 +311,7 @@ async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE
 *Удобное время:* {user_data.get('preferred_time', 'Не указано')}
 *Контакт:* {user_data.get('contact', 'Не указано')}
 *Мой Telegram:* @{update.effective_user.username or 'не указан'}
+*Время заявки:* {moscow_time.strftime('%d.%m.%Y %H:%M')} (мск)
 """
             await update.message.reply_text(
                 copyable_form,
