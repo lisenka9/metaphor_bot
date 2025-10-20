@@ -181,6 +181,161 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "consult":
         await show_consult_from_button(query, context)
+    
+    elif query.data == "start_consult_form":
+        await start_consult_form(query, context)
+
+# Добавляем новые функции для формы консультации
+async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает процесс заполнения формы консультации"""
+    # Убираем кнопку из предыдущего сообщения
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Сохраняем состояние формы
+    context.user_data['consult_form'] = {
+        'step': 1,
+        'user_id': query.from_user.id,
+        'username': query.from_user.username or query.from_user.first_name
+    }
+    
+    # Первый вопрос формы
+    question_text = """
+📝 Запись на консультацию
+
+Пожалуйста, заполните форму ниже. Это поможет мне лучше понять ваш запрос и подготовиться к нашей встрече.
+
+1. Как я могу к вам обращаться?
+"""
+    
+    await query.message.reply_text(
+        question_text,
+        parse_mode='Markdown'
+    )
+
+async def handle_consult_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ответы формы консультации"""
+    user_data = context.user_data.get('consult_form', {})
+    
+    if not user_data or 'step' not in user_data:
+        await handlers.help_command(update, context)
+        return
+    
+    step = user_data['step']
+    user_id = user_data['user_id']
+    
+    # Проверяем, что сообщение от того же пользователя
+    if update.effective_user.id != user_id:
+        return
+    
+    user_answer = update.message.text
+    
+    if step == 1:
+        # Сохраняем ответ на первый вопрос
+        user_data['name'] = user_answer
+        user_data['step'] = 2
+        
+        # Второй вопрос
+        question_text = """
+2. Опишите в нескольких словах проблему/запрос, с которым хотите прийти на консультацию
+"""
+        await update.message.reply_text(
+            question_text,
+            parse_mode='Markdown'
+        )
+        
+    elif step == 2:
+        # Сохраняем ответ на второй вопрос
+        user_data['problem'] = user_answer
+        user_data['step'] = 3
+        
+        # Третий вопрос
+        question_text = """
+3. В какое время/дни Вам было бы удобно провести консультацию?
+
+Например: 
+• вторник после 18:00 МСК
+• среда с 9:00 до 12:00 МСК
+• суббота утро
+"""
+        await update.message.reply_text(
+            question_text,
+            parse_mode='Markdown'
+        )
+        
+    elif step == 3:
+        # Сохраняем ответ на третий вопрос
+        user_data['preferred_time'] = user_answer
+        user_data['step'] = 4
+        
+        # Четвертый вопрос
+        question_text = """
+4. Укажите Ваш Telegram-ник или WhatsApp для связи
+
+В ближайшие 24 часа я напишу Вам для подтверждения времени консультации.
+"""
+        await update.message.reply_text(
+            question_text,
+            parse_mode='Markdown'
+        )
+        
+    elif step == 4:
+        # Сохраняем ответ на четвертый вопрос
+        user_data['contact'] = user_answer
+        
+        # Формируем итоговое сообщение для отправки психологу
+        consult_summary = f"""
+📋 Новая заявка на консультацию
+
+👤 От пользователя: {user_data.get('username', 'Не указано')}
+🆔 ID пользователя: {user_id}
+
+📝 Данные формы:
+• Имя: {user_data.get('name', 'Не указано')}
+• Проблема/запрос: {user_data.get('problem', 'Не указано')}
+• Удобное время: {user_data.get('preferred_time', 'Не указано')}
+• Контакт: {user_data.get('contact', 'Не указано')}
+
+⏰ Время заявки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+"""
+        
+        try:
+            # Отправляем заявку психологу
+            await context.bot.send_message(
+                chat_id="@Skromova_Svetlana_psy",  # Замените на реальный username психолога
+                text=consult_summary,
+                parse_mode='Markdown'
+            )
+            
+            # Подтверждаем пользователю
+            success_text = """
+✅ Спасибо! Ваша заявка отправлена!
+
+В ближайшие 24 часа я свяжусь с вами для подтверждения времени консультации.
+
+Если у вас есть срочный вопрос, вы можете написать напрямую: @Skromova_Svetlana_psy
+"""
+            await update.message.reply_text(
+                success_text,
+                parse_mode='Markdown',
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            
+        except Exception as e:
+            logging.error(f"❌ Error sending consult form: {e}")
+            error_text = """
+❌ *Произошла ошибка при отправке заявки*
+
+Пожалуйста, напишите напрямую: @Skromova_Svetlana_psy
+"""
+            await update.message.reply_text(
+                error_text,
+                parse_mode='Markdown',
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+        
+        # Очищаем данные формы
+        if 'consult_form' in context.user_data:
+            del context.user_data['consult_form']
 
 async def show_daily_intro_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает интро для карты дня при нажатии кнопки из меню"""

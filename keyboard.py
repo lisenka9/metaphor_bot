@@ -41,7 +41,7 @@ def get_history_pics_keyboard():
 def get_consult_keyboard():
     """Клавиатура для консультации"""
     keyboard = [
-        [InlineKeyboardButton("📅 Записаться на консультацию (60 минут)", url="https://t.me/Skromova_Svetlana_psy")],
+        [InlineKeyboardButton("📝 Записаться на консультацию и заполнить форму", callback_data="start_consult_form")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)

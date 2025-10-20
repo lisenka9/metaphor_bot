@@ -49,6 +49,9 @@ def main():
     application.add_handler(CommandHandler("addcards", handlers.add_cards))
     application.add_handler(CommandHandler("consult", handlers.consult_command))
     application.add_handler(CallbackQueryHandler(handlers.button_handler))
+
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
+                                     handlers.handle_consult_form))
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
                                          handlers.help_command))
