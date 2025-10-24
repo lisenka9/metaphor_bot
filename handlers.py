@@ -1460,3 +1460,11 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+
+async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Временная команда для получения file_id"""
+    if update.message.document:
+        file_id = update.message.document.file_id
+        await update.message.reply_text(f"📎 File ID: `{file_id}`", parse_mode='Markdown')
+    else:
+        await update.message.reply_text("❌ Отправьте PDF файл как документ")
