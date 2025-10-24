@@ -24,7 +24,7 @@ def keep_alive():
     while True:
         try:
             # URL вашего сервиса Render
-            url = "https://metaphor-bot-zdpb.onrender.com"
+            url = "https://metaphor-bot.onrender.com/"
             requests.get(url, timeout=10)
             print(f"🔄 Self-ping at {time.strftime('%H:%M:%S')}")
         except:
