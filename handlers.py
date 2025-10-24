@@ -96,6 +96,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ✨ Команды:
 /daily - Получить карту дня
+/resources - Архипелаг ресурсов 
+/guide - Гайд по Эмоциональному Интеллекту
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
@@ -1330,7 +1332,7 @@ async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /guide"""
     try:
-        pdf_url = "https://www.mediafire.com/file/6xft0yejnq07bgz/%25D0%2593%25D0%2590%25D0%2599%25D0%2594_%25D0%25BF%25D0%25BE_%25D1%2580%25D0%25B0%25D0%25B7%25D0%25B2%25D0%25B8%25D1%2582%25D0%25B8%25D1%258E_%25D1%258D%25D0%25BC%25D0%25BE%25D1%2586%25D0%25B8%25D0%25BE%25D0%25BD%25D0%25B0%25D0%25BB%25D1%258C%25D0%25BD%25D0%25BE%25D0%25B3%25D0%25BE_%25D0%25B8%25D0%25BD%25D1%2582%25D0%25B5%25D0%25BB%25D0%25BB%25D0%25B5%25D0%25BA%25D1%2582%25D0%25B0.pdf/file"  
+        pdf_url = "https://disk.yandex.ru/i/ZOLHkHgsZVBeTw"  
         
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
@@ -1371,8 +1373,6 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 🗺️ Архипелаг ресурсов
 
 Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
-
-Здесь будут собраны полезные материалы, упражнения и ресурсы для вашего развития.
 """
     
     await query.message.reply_text(
@@ -1384,8 +1384,7 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает гайд из кнопки меню"""
     try:
-        # URL PDF файла (замените на ваш реальный URL)
-        pdf_url = "https://www.mediafire.com/file/6xft0yejnq07bgz/%25D0%2593%25D0%2590%25D0%2599%25D0%2594_%25D0%25BF%25D0%25BE_%25D1%2580%25D0%25B0%25D0%25B7%25D0%25B2%25D0%25B8%25D1%2582%25D0%25B8%25D1%258E_%25D1%258D%25D0%25BC%25D0%25BE%25D1%2586%25D0%25B8%25D0%25BE%25D0%25BD%25D0%25B0%25D0%25BB%25D1%258C%25D0%25BD%25D0%25BE%25D0%25B3%25D0%25BE_%25D0%25B8%25D0%25BD%25D1%2582%25D0%25B5%25D0%25BB%25D0%25BB%25D0%25B5%25D0%25BA%25D1%2582%25D0%25B0.pdf/file"  # ЗАМЕНИТЕ НА РЕАЛЬНЫЙ URL
+        pdf_url = "https://disk.yandex.ru/i/ZOLHkHgsZVBeTw"  
         
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
