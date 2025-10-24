@@ -4,6 +4,38 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from config import BOT_TOKEN
 import handlers
 from database import db
+import threading
+import requests
+import time
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+@app.route('/health')
+def health_check():
+    return "OK", 200
+
+def keep_alive():
+    """Пинг самого себя каждые 10 минут"""
+    while True:
+        try:
+            # URL вашего сервиса Render
+            url = "https://metaphor-bot-zdpb.onrender.com"
+            requests.get(url, timeout=10)
+            print(f"🔄 Self-ping at {time.strftime('%H:%M:%S')}")
+        except:
+            print("❌ Ping failed")
+        time.sleep(600)  # 10 минут
+
+# Запускаем в отдельном потоке при старте
+def start_keep_alive():
+    thread = threading.Thread(target=keep_alive)
+    thread.daemon = True
+    thread.start()
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,6 +49,9 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 def main():
+    # Запускаем самопинг
+    start_keep_alive()
+
     # Проверяем наличие токена
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not found in environment variables!")
