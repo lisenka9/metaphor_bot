@@ -65,6 +65,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ✨ Команды:
 /daily - Получить карту дня
+/resources - Архипелаг ресурсов 
+/guide - Гайд по Эмоциональному Интеллекту
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
@@ -154,11 +156,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"🔄 Button pressed: {query.data} by user {user_id}")
     
     if query.data == "show_daily_intro":
-        # Показываем интро для карты дня
         await show_daily_intro_from_button(query, context)
         
     elif query.data == "get_daily_card":
-        # Показываем карту дня (после интро)
         await show_daily_card(query, context)
         
     elif query.data == "get_daily_message":
@@ -184,6 +184,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "start_consult_form":
         await start_consult_form(query, context)
+    
+    elif query.data == "resources":
+        await show_resources_from_button(query, context)
+    
+    elif query.data == "guide":
+        await show_guide_from_button(query, context)
 
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
@@ -676,6 +682,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📖 Доступные команды:
 
 /daily - Получить карту дня
+/resources - Архипелаг ресурсов 
+/guide - Гайд по Эмоциональному Интеллекту
 /profile - Ваша статистика и лимиты
 /history - Посмотреть историю всех ваших карт
 /consult - Запись на консультацию
@@ -692,10 +700,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         help_text,
-        reply_markup=keyboard.get_help_keyboard(),  # Используем специальную клавиатуру для помощи
+        reply_markup=keyboard.get_help_keyboard(),
         parse_mode='Markdown'
     )
-    
+
 async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс своего лимита карт (для тестирования)"""
     user = update.effective_user
@@ -1256,6 +1264,7 @@ async def show_history_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+
     """Показывает историю с картинками и кнопкой возврата"""
     user = query.from_user
     
@@ -1301,5 +1310,112 @@ async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text(
             "⚠️ Ошибка при загрузке истории с картинками",
             reply_markup=keyboard.get_history_pics_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /resources"""
+    resources_text = """
+🗺️ Архипелаг ресурсов
+
+Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
+"""
+    
+    await update.message.reply_text(
+        resources_text,
+        reply_markup=keyboard.get_resources_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /guide"""
+    try:
+        pdf_url = "https://www.mediafire.com/file/6xft0yejnq07bgz/%25D0%2593%25D0%2590%25D0%2599%25D0%2594_%25D0%25BF%25D0%25BE_%25D1%2580%25D0%25B0%25D0%25B7%25D0%25B2%25D0%25B8%25D1%2582%25D0%25B8%25D1%258E_%25D1%258D%25D0%25BC%25D0%25BE%25D1%2586%25D0%25B8%25D0%25BE%25D0%25BD%25D0%25B0%25D0%25BB%25D1%258C%25D0%25BD%25D0%25BE%25D0%25B3%25D0%25BE_%25D0%25B8%25D0%25BD%25D1%2582%25D0%25B5%25D0%25BB%25D0%25BB%25D0%25B5%25D0%25BA%25D1%2582%25D0%25B0.pdf/file"  
+        
+        guide_text = """
+📚 Гайд по Эмоциональному Интеллекту
+
+Отправляю вам полезный гайд по развитию эмоционального интеллекта.
+
+Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
+"""
+        
+        # Отправляем PDF файл
+        await update.message.reply_document(
+            document=pdf_url,
+            caption=guide_text,
+            reply_markup=keyboard.get_guide_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending guide PDF: {e}")
+        
+        # Если PDF не загружается, отправляем текстовое сообщение
+        error_text = """
+📚 Гайд по Эмоциональному Интеллекту
+
+К сожалению, файл временно недоступен. Пожалуйста, попробуйте позже.
+
+Извините за неудобства!
+"""
+        await update.message.reply_text(
+            error_text,
+            reply_markup=keyboard.get_guide_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает ресурсы из кнопки меню"""
+    resources_text = """
+🗺️ Архипелаг ресурсов
+
+Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
+
+Здесь будут собраны полезные материалы, упражнения и ресурсы для вашего развития.
+"""
+    
+    await query.message.reply_text(
+        resources_text,
+        reply_markup=keyboard.get_resources_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает гайд из кнопки меню"""
+    try:
+        # URL PDF файла (замените на ваш реальный URL)
+        pdf_url = "https://www.mediafire.com/file/6xft0yejnq07bgz/%25D0%2593%25D0%2590%25D0%2599%25D0%2594_%25D0%25BF%25D0%25BE_%25D1%2580%25D0%25B0%25D0%25B7%25D0%25B2%25D0%25B8%25D1%2582%25D0%25B8%25D1%258E_%25D1%258D%25D0%25BC%25D0%25BE%25D1%2586%25D0%25B8%25D0%25BE%25D0%25BD%25D0%25B0%25D0%25BB%25D1%258C%25D0%25BD%25D0%25BE%25D0%25B3%25D0%25BE_%25D0%25B8%25D0%25BD%25D1%2582%25D0%25B5%25D0%25BB%25D0%25BB%25D0%25B5%25D0%25BA%25D1%2582%25D0%25B0.pdf/file"  # ЗАМЕНИТЕ НА РЕАЛЬНЫЙ URL
+        
+        guide_text = """
+📚 Гайд по Эмоциональному Интеллекту
+
+Отправляю вам полезный гайд по развитию эмоционального интеллекта.
+
+Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
+"""
+        
+        # Отправляем PDF файл
+        await query.message.reply_document(
+            document=pdf_url,
+            caption=guide_text,
+            reply_markup=keyboard.get_guide_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending guide PDF from button: {e}")
+        
+        # Если PDF не загружается, отправляем текстовое сообщение
+        error_text = """
+📚 Гайд по Эмоциональному Интеллекту
+
+К сожалению, файл временно недоступен. Пожалуйста, попробуйте позже.
+
+Извините за неудобства!
+"""
+        await query.message.reply_text(
+            error_text,
+            reply_markup=keyboard.get_guide_keyboard(),
             parse_mode='Markdown'
         )
