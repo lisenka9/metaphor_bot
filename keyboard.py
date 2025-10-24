@@ -74,12 +74,20 @@ def get_guide_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_buy_keyboard():
+    """Клавиатура для покупки колоды"""
+    keyboard = [
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 def get_main_menu_keyboard():
     """Клавиатура для главного меню"""
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
+        [InlineKeyboardButton("🛒 Купить колоду", callback_data="buy")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
         [InlineKeyboardButton("📖 История карт", callback_data="history")],
         [InlineKeyboardButton("💫 Консультация", callback_data="consult")]

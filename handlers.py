@@ -67,6 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /daily - Получить карту дня
 /resources - Архипелаг ресурсов 
 /guide - Гайд по Эмоциональному Интеллекту
+/buy - Купить колоду
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
@@ -98,6 +99,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /daily - Получить карту дня
 /resources - Архипелаг ресурсов 
 /guide - Гайд по Эмоциональному Интеллекту
+/buy - Купить колоду
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
@@ -192,6 +194,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "guide":
         await show_guide_from_button(query, context)
+    
+    elif query.data == "buy":
+        await show_buy_from_button(query, context)
 
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
@@ -416,6 +421,9 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 ✨ Команды:
 /daily - Получить карту дня
+/resources - Архипелаг ресурсов 
+/guide - Гайд по Эмоциональному Интеллекту
+/buy - Купить колоду
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
@@ -686,6 +694,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /daily - Получить карту дня
 /resources - Архипелаг ресурсов 
 /guide - Гайд по Эмоциональному Интеллекту
+/buy - Купить колоду
 /profile - Ваша статистика и лимиты
 /history - Посмотреть историю всех ваших карт
 /consult - Запись на консультацию
@@ -1191,6 +1200,9 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ✨ Команды:
 /daily - Получить карту дня
+/resources - Архипелаг ресурсов 
+/guide - Гайд по Эмоциональному Интеллекту
+/buy - Купить колоду
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
@@ -1332,7 +1344,7 @@ async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /guide"""
     try:
-        pdf_url = "https://disk.yandex.ru/i/ZOLHkHgsZVBeTw"  
+        pdf_url = "https://disk.yandex.ru/d/ZOLHkHgsZVBeTw"  
         
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
@@ -1384,7 +1396,7 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает гайд из кнопки меню"""
     try:
-        pdf_url = "https://disk.yandex.ru/i/ZOLHkHgsZVBeTw"  
+        pdf_url = "https://disk.yandex.ru/d/ZOLHkHgsZVBeTw"  
         
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
@@ -1413,8 +1425,38 @@ async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 Извините за неудобства!
 """
+
         await query.message.reply_text(
             error_text,
             reply_markup=keyboard.get_guide_keyboard(),
             parse_mode='Markdown'
         )
+
+async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /buy"""
+    buy_text = """
+🛒 Купить колоду
+
+Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
+"""
+    
+    await update.message.reply_text(
+        buy_text,
+        reply_markup=keyboard.get_buy_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о покупке из кнопки меню"""
+    buy_text = """
+🛒 Купить колоду
+
+Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
+"""
+    
+    await query.message.reply_text(
+        buy_text,
+        reply_markup=keyboard.get_buy_keyboard(),
+        parse_mode='Markdown'
+    )
+
