@@ -8,7 +8,6 @@ import threading
 import requests
 import time
 from flask import Flask
-import asyncio
 from threading import Thread
 
 # Создаем Flask приложение
@@ -23,15 +22,15 @@ def health_check():
     return "OK", 200
 
 def run_flask():
-    """Запускает Flask сервер в отдельном потоке"""
-    port = int(os.environ.get("PORT", 10000))
+    """Запускает Flask сервер на порту 8080"""
+    port = 8080  # Используем другой порт для Flask
     app.run(host='0.0.0.0', port=port, debug=False)
 
 def keep_alive():
     """Пинг самого себя каждые 10 минут"""
     while True:
         try:
-            # URL вашего сервиса Render
+            # Пингуем health endpoint
             url = "https://metaphor-bot.onrender.com/health"
             response = requests.get(url, timeout=10)
             print(f"🔄 Self-ping at {time.strftime('%H:%M:%S')} - Status: {response.status_code}")
@@ -39,14 +38,14 @@ def keep_alive():
             print(f"❌ Ping failed: {e}")
         time.sleep(600)  # 10 минут
 
-# Запускаем в отдельном потоке при старте
 def start_keep_alive():
+    """Запускает самопинг в отдельном потоке"""
     thread = threading.Thread(target=keep_alive)
     thread.daemon = True
     thread.start()
 
 def start_flask():
-    """Запускает Flask в отдельном потоке"""
+    """Запускает Flask в отдельном потоке на порту 8080"""
     thread = Thread(target=run_flask)
     thread.daemon = True
     thread.start()
@@ -63,9 +62,12 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 def main():
-    # Запускаем Flask сервер
-    logger.info("Запуск Flask сервера...")
+    # Запускаем Flask сервер на порту 8080
+    logger.info("Запуск Flask сервера на порту 8080...")
     start_flask()
+    
+    # Даем Flask время запуститься
+    time.sleep(2)
     
     # Запускаем самопинг
     start_keep_alive()
@@ -107,16 +109,13 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
                                      handlers.handle_consult_form))
     
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
-                                         handlers.help_command))
-    
     # Webhook режим для Render
     RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
     
     if RENDER_EXTERNAL_HOSTNAME:
         logger.info("Запуск в режиме Webhook...")
          
-        port = int(os.environ.get("PORT", 10000))
+        port = int(os.environ.get("PORT", 10000))  # Telegram bot использует порт 10000
         webhook_url = f'https://{RENDER_EXTERNAL_HOSTNAME}/{BOT_TOKEN}'
         
         application.run_webhook(
