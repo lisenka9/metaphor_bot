@@ -8,7 +8,10 @@ import threading
 import requests
 import time
 from flask import Flask
+import asyncio
+from threading import Thread
 
+# Создаем Flask приложение
 app = Flask(__name__)
 
 @app.route('/')
@@ -19,21 +22,32 @@ def home():
 def health_check():
     return "OK", 200
 
+def run_flask():
+    """Запускает Flask сервер в отдельном потоке"""
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
+
 def keep_alive():
     """Пинг самого себя каждые 10 минут"""
     while True:
         try:
             # URL вашего сервиса Render
-            url = "https://metaphor-bot.onrender.com/"
-            requests.get(url, timeout=10)
-            print(f"🔄 Self-ping at {time.strftime('%H:%M:%S')}")
-        except:
-            print("❌ Ping failed")
+            url = "https://metaphor-bot.onrender.com/health"
+            response = requests.get(url, timeout=10)
+            print(f"🔄 Self-ping at {time.strftime('%H:%M:%S')} - Status: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Ping failed: {e}")
         time.sleep(600)  # 10 минут
 
 # Запускаем в отдельном потоке при старте
 def start_keep_alive():
     thread = threading.Thread(target=keep_alive)
+    thread.daemon = True
+    thread.start()
+
+def start_flask():
+    """Запускает Flask в отдельном потоке"""
+    thread = Thread(target=run_flask)
     thread.daemon = True
     thread.start()
 
@@ -49,6 +63,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 def main():
+    # Запускаем Flask сервер
+    logger.info("Запуск Flask сервера...")
+    start_flask()
+    
     # Запускаем самопинг
     start_keep_alive()
 
