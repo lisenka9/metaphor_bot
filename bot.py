@@ -4,6 +4,25 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from config import BOT_TOKEN
 import handlers
 from database import db
+import threading
+from flask import Flask
+
+# Создаем Flask приложение для health checks
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🌊 Metaphor Bot is running!"
+
+@app.route('/health')
+def health_check():
+    return "OK", 200
+
+def start_flask():
+    """Запускает Flask сервер в отдельном потоке"""
+    port = int(os.environ.get("PORT", 10000))
+    logging.info(f"🚀 Starting Flask server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # Настройка логирования
 logging.basicConfig(
@@ -17,6 +36,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Exception while handling an update: {context.error}")
 
 def main():
+    # Запускаем Flask сервер в отдельном потоке
+    flask_thread = threading.Thread(target=start_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
     # Проверяем наличие токена
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not found in environment variables!")
