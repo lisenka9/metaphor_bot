@@ -1346,17 +1346,16 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         file_id = "BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ"
         
+        logging.info(f"🔄 Attempting to send guide with file_id: {file_id}")
+        
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
 
 Отправляю вам полезный гайд по развитию эмоционального интеллекта.
-
-Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
-
-💡 *Совет:* Сохраните этот файл для постоянного доступа!
 """
         
-        await update.message.reply_document(
+        # Пробуем отправить документ
+        result = await update.message.reply_document(
             document=file_id,
             filename="ГАЙД_по_развитию_эмоционального_интеллекта.pdf",
             caption=guide_text,
@@ -1364,10 +1363,12 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         
-        logging.info("✅ Guide PDF sent successfully")
+        logging.info(f"✅ Guide sent successfully! Message ID: {result.message_id}")
         
     except Exception as e:
         logging.error(f"❌ Error sending guide PDF: {e}")
+        logging.error(f"❌ Error type: {type(e)}")
+        logging.error(f"❌ Full traceback:", exc_info=True)
         
         error_text = """
 📚 Гайд по Эмоциональному Интеллекту
@@ -1387,17 +1388,15 @@ async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     try:
         file_id = "BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ"
         
+        logging.info(f"🔄 Attempting to send guide from button with file_id: {file_id}")
+        
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
 
 Отправляю вам полезный гайд по развитию эмоционального интеллекта.
-
-Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
-
-💡 *Совет:* Сохраните этот файл для постоянного доступа!
 """
         
-        await query.message.reply_document(
+        result = await query.message.reply_document(
             document=file_id,
             filename="ГАЙД_по_развитию_эмоционального_интеллекта.pdf",
             caption=guide_text,
@@ -1405,10 +1404,12 @@ async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         
-        logging.info("✅ Guide PDF sent from button")
+        logging.info(f"✅ Guide from button sent successfully! Message ID: {result.message_id}")
         
     except Exception as e:
         logging.error(f"❌ Error sending guide PDF from button: {e}")
+        logging.error(f"❌ Error type: {type(e)}")
+        logging.error(f"❌ Full traceback:", exc_info=True)
         
         error_text = """
 📚 Гайд по Эмоциональному Интеллекту
