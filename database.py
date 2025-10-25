@@ -4,7 +4,6 @@ from datetime import datetime, date
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-
 class DatabaseManager:
     def __init__(self):
         self.database_url = os.environ.get('DATABASE_URL')
