@@ -1554,4 +1554,6 @@ ID пользователя: {user_id}
 - Тип: {last_doc['mime_type']}
 """
 
+
     await update.message.reply_text(debug_info, parse_mode='Markdown')
+    
