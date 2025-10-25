@@ -4,6 +4,3 @@ python-dotenv
 flask
 pytz
 requests
-yookassa==2.4.0
-stripe==7.0.0
-sqlite3
