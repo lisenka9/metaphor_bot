@@ -1461,25 +1461,23 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Временная команда для получения file_id"""
+async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Автоматически обрабатывает любой отправленный документ"""
     if update.message.document:
-        # Это сработает когда отправляем как "File"
         file_id = update.message.document.file_id
         file_name = update.message.document.file_name or "Unknown"
         
         await update.message.reply_text(
-            f"✅ File ID получен!\n"
-            f"📎 File ID: `{file_id}`\n"
-            f"📄 File name: {file_name}",
+            f"📎 Получен документ!\n"
+            f"File ID: `{file_id}`\n"
+            f"Имя файла: {file_name}\n\n"
+            f"✅ Теперь используйте этот File ID в коде бота",
             parse_mode='Markdown'
         )
-    else:
-        await update.message.reply_text(
-            "❌ Файл не распознан как документ.\n\n"
-            "Как отправить:\n"
-            "1. Нажмите 📎 (скрепка)\n"
-            "2. Выберите 'File'\n" 
-            "3. Выберите PDF файл\n"
-            "4. Отправьте"
-        )
+
+async def debug_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная информация о сообщении"""
+    await update.message.reply_text(
+        f"Тип сообщения: {update.message.content_type}\n"
+        f"Есть документ: {bool(update.message.document)}"
+    )
