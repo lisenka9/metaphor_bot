@@ -1461,23 +1461,83 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для получения file_id последнего документа"""
+    # Проверяем, был ли отправлен документ в этом чате
+    user_id = update.effective_user.id
+    if 'last_document' in context.chat_data:
+        file_id = context.chat_data['last_document']['file_id']
+        file_name = context.chat_data['last_document']['file_name']
+        
+        await update.message.reply_text(
+            f"✅ Последний полученный документ:\n"
+            f"📎 File ID: `{file_id}`\n"
+            f"📄 File name: {file_name}",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "❌ Документы не найдены.\n\n"
+            "Как получить file_id:\n"
+            "1. Отправьте PDF файл как 'File'\n"
+            "2. Бот автоматически сохранит file_id\n"
+            "3. Используйте /getfileid для просмотра"
+        )
+
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Автоматически обрабатывает любой отправленный документ"""
     if update.message.document:
         file_id = update.message.document.file_id
         file_name = update.message.document.file_name or "Unknown"
+        mime_type = update.message.document.mime_type or "Unknown"
+        
+        # Сохраняем информацию о документе в контексте чата
+        context.chat_data['last_document'] = {
+            'file_id': file_id,
+            'file_name': file_name,
+            'mime_type': mime_type
+        }
         
         await update.message.reply_text(
-            f"📎 Получен документ!\n"
-            f"File ID: `{file_id}`\n"
-            f"Имя файла: {file_name}\n\n"
-            f"✅ Теперь используйте этот File ID в коде бота",
+            f"📎 Документ получен!\n"
+            f"Имя: {file_name}\n"
+            f"Тип: {mime_type}\n\n"
+            f"✅ File ID сохранен! Используйте /getfileid чтобы посмотреть",
             parse_mode='Markdown'
         )
+        
+        # Логируем для отладки
+        logging.info(f"Document received - File: {file_name}, MIME: {mime_type}, ID: {file_id}")
 
 async def debug_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отладочная информация о сообщении"""
-    await update.message.reply_text(
-        f"Тип сообщения: {update.message.content_type}\n"
-        f"Есть документ: {bool(update.message.document)}"
-    )
+    user_id = update.effective_user.id
+    
+    debug_info = f"""
+🔍 Отладочная информация:
+
+Тип сообщения: {update.message.content_type}
+ID пользователя: {user_id}
+Текст: {update.message.text or 'Нет текста'}
+"""
+
+    if update.message.document:
+        document = update.message.document
+        debug_info += f"""
+📎 Документ:
+- File ID: {document.file_id}
+- Имя файла: {document.file_name or 'Неизвестно'}
+- MIME тип: {document.mime_type or 'Неизвестно'}
+- Размер: {document.file_size or 'Неизвестно'}
+"""
+    
+    if 'last_document' in context.chat_data:
+        last_doc = context.chat_data['last_document']
+        debug_info += f"""
+💾 Последний сохраненный документ:
+- File ID: {last_doc['file_id']}
+- Имя: {last_doc['file_name']}
+- Тип: {last_doc['mime_type']}
+"""
+
+    await update.message.reply_text(debug_info, parse_mode='Markdown')
