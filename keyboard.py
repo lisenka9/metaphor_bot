@@ -85,7 +85,7 @@ def get_main_menu_keyboard():
     """Клавиатура для главного меню"""
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
-        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🗺 Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить колоду", callback_data="buy")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
