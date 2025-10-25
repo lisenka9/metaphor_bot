@@ -1462,17 +1462,24 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Временная команда для получения file_id документа"""
+    """Временная команда для получения file_id"""
     if update.message.document:
+        # Это сработает когда отправляем как "File"
         file_id = update.message.document.file_id
         file_name = update.message.document.file_name or "Unknown"
         
         await update.message.reply_text(
-            f"📎 Document File ID: `{file_id}`\n"
+            f"✅ File ID получен!\n"
+            f"📎 File ID: `{file_id}`\n"
             f"📄 File name: {file_name}",
             parse_mode='Markdown'
         )
-    elif update.message.text:
-        await update.message.reply_text("❌ Отправьте PDF файл как 📎 ДОКУМЕНТ")
     else:
-        await update.message.reply_text("❌ Это не документ. Отправьте PDF как 📎 ДОКУМЕНТ")
+        await update.message.reply_text(
+            "❌ Файл не распознан как документ.\n\n"
+            "Как отправить:\n"
+            "1. Нажмите 📎 (скрепка)\n"
+            "2. Выберите 'File'\n" 
+            "3. Выберите PDF файл\n"
+            "4. Отправьте"
+        )
