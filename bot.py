@@ -76,10 +76,7 @@ def main():
     application.add_handler(CommandHandler("resources", handlers.resources_command))
     application.add_handler(CommandHandler("guide", handlers.guide_command))
     application.add_handler(CommandHandler("buy", handlers.buy_command))
-    application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
-    application.add_handler(CommandHandler("db", handlers.debug_message))
     application.add_handler(CallbackQueryHandler(handlers.button_handler))
-    application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
                                      handlers.handle_consult_form))

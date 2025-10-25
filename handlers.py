@@ -1344,7 +1344,7 @@ async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /guide"""
     try:
-        pdf_url = "https://disk.yandex.ru/d/ZOLHkHgsZVBeTw"  
+        file_id = "BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ"
         
         guide_text = """
 📚 Гайд по Эмоциональному Интеллекту
@@ -1352,20 +1352,23 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Отправляю вам полезный гайд по развитию эмоционального интеллекта.
 
 Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
+
+💡 *Совет:* Сохраните этот файл для постоянного доступа!
 """
         
-        # Отправляем PDF файл
         await update.message.reply_document(
-            document=pdf_url,
+            document=file_id,
+            filename="ГАЙД_по_развитию_эмоционального_интеллекта.pdf",
             caption=guide_text,
             reply_markup=keyboard.get_guide_keyboard(),
             parse_mode='Markdown'
         )
         
+        logging.info("✅ Guide PDF sent successfully")
+        
     except Exception as e:
         logging.error(f"❌ Error sending guide PDF: {e}")
         
-        # Если PDF не загружается, отправляем текстовое сообщение
         error_text = """
 📚 Гайд по Эмоциональному Интеллекту
 
@@ -1374,6 +1377,47 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Извините за неудобства!
 """
         await update.message.reply_text(
+            error_text,
+            reply_markup=keyboard.get_guide_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает гайд из кнопки меню"""
+    try:
+        file_id = "BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ"
+        
+        guide_text = """
+📚 Гайд по Эмоциональному Интеллекту
+
+Отправляю вам полезный гайд по развитию эмоционального интеллекта.
+
+Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
+
+💡 *Совет:* Сохраните этот файл для постоянного доступа!
+"""
+        
+        await query.message.reply_document(
+            document=file_id,
+            filename="ГАЙД_по_развитию_эмоционального_интеллекта.pdf",
+            caption=guide_text,
+            reply_markup=keyboard.get_guide_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+        logging.info("✅ Guide PDF sent from button")
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending guide PDF from button: {e}")
+        
+        error_text = """
+📚 Гайд по Эмоциональному Интеллекту
+
+К сожалению, файл временно недоступен. Пожалуйста, попробуйте позже.
+
+Извините за неудобства!
+"""
+        await query.message.reply_text(
             error_text,
             reply_markup=keyboard.get_guide_keyboard(),
             parse_mode='Markdown'
@@ -1392,45 +1436,6 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard.get_resources_keyboard(),
         parse_mode='Markdown'
     )
-
-async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает гайд из кнопки меню"""
-    try:
-        pdf_url = "https://disk.yandex.ru/d/ZOLHkHgsZVBeTw"  
-        
-        guide_text = """
-📚 Гайд по Эмоциональному Интеллекту
-
-Отправляю вам полезный гайд по развитию эмоционального интеллекта.
-
-Этот материал поможет вам лучше понимать свои эмоции и управлять ими.
-"""
-        
-        # Отправляем PDF файл
-        await query.message.reply_document(
-            document=pdf_url,
-            caption=guide_text,
-            reply_markup=keyboard.get_guide_keyboard(),
-            parse_mode='Markdown'
-        )
-        
-    except Exception as e:
-        logging.error(f"❌ Error sending guide PDF from button: {e}")
-        
-        # Если PDF не загружается, отправляем текстовое сообщение
-        error_text = """
-📚 Гайд по Эмоциональному Интеллекту
-
-К сожалению, файл временно недоступен. Пожалуйста, попробуйте позже.
-
-Извините за неудобства!
-"""
-
-        await query.message.reply_text(
-            error_text,
-            reply_markup=keyboard.get_guide_keyboard(),
-            parse_mode='Markdown'
-        )
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /buy"""
