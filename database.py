@@ -619,39 +619,39 @@ class DatabaseManager:
         logging.info("✅ Added daily messages to database")
 
     def get_user_subscription(self, user_id: int):
-    """Получает активную подписку пользователя"""
-    conn = self.get_connection()
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute('''
-            SELECT subscription_type, end_date 
-            FROM subscriptions 
-            WHERE user_id = %s AND is_active = TRUE AND end_date > CURRENT_TIMESTAMP
-            ORDER BY end_date DESC 
-            LIMIT 1
-        ''', (user_id,))
+        """Получает активную подписку пользователя"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
-        result = cursor.fetchone()
-        
-        # Также проверяем поле premium_until в users
-        if not result:
+        try:
             cursor.execute('''
-                SELECT premium_until 
-                FROM users 
-                WHERE user_id = %s AND premium_until > CURRENT_TIMESTAMP
+                SELECT subscription_type, end_date 
+                FROM subscriptions 
+                WHERE user_id = %s AND is_active = TRUE AND end_date > CURRENT_TIMESTAMP
+                ORDER BY end_date DESC 
+                LIMIT 1
             ''', (user_id,))
             
-            premium_result = cursor.fetchone()
-            if premium_result:
-                return ("premium", premium_result[0])
-        
-        return result
-    except Exception as e:
-        logging.error(f"Error getting user subscription: {e}")
-        return None
-    finally:
-        conn.close()
+            result = cursor.fetchone()
+            
+            # Также проверяем поле premium_until в users
+            if not result:
+                cursor.execute('''
+                    SELECT premium_until 
+                    FROM users 
+                    WHERE user_id = %s AND premium_until > CURRENT_TIMESTAMP
+                ''', (user_id,))
+                
+                premium_result = cursor.fetchone()
+                if premium_result:
+                    return ("premium", premium_result[0])
+            
+            return result
+        except Exception as e:
+            logging.error(f"Error getting user subscription: {e}")
+            return None
+        finally:
+            conn.close()
 
     def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
         """Создает подписку для пользователя"""
