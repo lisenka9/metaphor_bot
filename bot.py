@@ -4,12 +4,32 @@ import os
 import time
 import requests
 import threading
-from flask import Flask
+from flask import Flask, request, jsonify
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from config import BOT_TOKEN
 import handlers
 from database import db
+
+@app.route('/payment_callback', methods=['POST'])
+def payment_callback():
+    """Обрабатывает уведомления от ЮMoney"""
+    try:
+        data = request.form
+        
+        # Проверяем уведомление
+        label, is_success = payment_processor.verify_payment_notification(dict(data))
+        
+        if label and is_success:
+            # Активируем подписку
+            payment_processor.activate_subscription(label)
+            return jsonify({"status": "success"}), 200
+        else:
+            return jsonify({"status": "error", "message": "Invalid payment"}), 400
+            
+    except Exception as e:
+        logging.error(f"Error in payment callback: {e}")
+        return jsonify({"status": "error"}), 500
 
 # Настройка логирования
 logging.basicConfig(

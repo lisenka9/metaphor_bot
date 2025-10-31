@@ -320,42 +320,61 @@ class DatabaseManager:
             conn.close()
 
     def get_user_stats(self, user_id: int):
-        """Получает статистику пользователя"""
+        """Получает статистику пользователя включая подписку"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
             logging.info(f"🔄 Getting stats for user {user_id}")
             
-            # Получаем все данные за один запрос
+            # Получаем основные данные пользователя
             cursor.execute('''
                 SELECT 
                     u.daily_cards_limit, 
                     u.is_premium, 
                     COUNT(uc.id) as total_cards,
-                    u.registered_date
+                    u.registered_date,
+                    u.premium_until
                 FROM users u
                 LEFT JOIN user_cards uc ON u.user_id = uc.user_id
                 WHERE u.user_id = %s
-                GROUP BY u.user_id, u.daily_cards_limit, u.is_premium, u.registered_date
+                GROUP BY u.user_id, u.daily_cards_limit, u.is_premium, u.registered_date, u.premium_until
             ''', (user_id,))
             
             result = cursor.fetchone()
             
             if result:
-                limit, is_premium, total_cards, reg_date = result
+                limit, is_premium, total_cards, reg_date, premium_until = result
                 
-                # Форматируем дату
+                # Получаем информацию о подписке
+                subscription_info = self.get_user_subscription(user_id)
+                
+                # Форматируем даты
                 if reg_date:
                     if isinstance(reg_date, str):
                         reg_date_formatted = reg_date[:10]
                     else:
-                        reg_date_formatted = reg_date.strftime("%d-%m-%Y")
+                        reg_date_formatted = reg_date.strftime("%d.%m.%Y")
                 else:
                     reg_date_formatted = "Неизвестно"
                 
-                logging.info(f"📊 User stats - limit: {limit}, cards: {total_cards}, reg_date: {reg_date_formatted}")
-                return (limit, is_premium, total_cards, reg_date_formatted)
+                # Форматируем дату окончания подписки
+                subscription_end = None
+                if subscription_info:
+                    subscription_type, end_date = subscription_info
+                    if end_date:
+                        if isinstance(end_date, str):
+                            subscription_end = end_date[:10]
+                        else:
+                            subscription_end = end_date.strftime("%d.%m.%Y")
+                elif premium_until:
+                    if isinstance(premium_until, str):
+                        subscription_end = premium_until[:10]
+                    else:
+                        subscription_end = premium_until.strftime("%d.%m.%Y")
+                
+                logging.info(f"📊 User stats - limit: {limit}, cards: {total_cards}, premium: {is_premium}")
+                return (limit, is_premium, total_cards, reg_date_formatted, subscription_end)
             else:
                 logging.warning(f"User data not found for {user_id}")
                 return None
@@ -600,36 +619,39 @@ class DatabaseManager:
         logging.info("✅ Added daily messages to database")
 
     def get_user_subscription(self, user_id: int):
-        """Получает активную подписку пользователя"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+    """Получает активную подписку пользователя"""
+    conn = self.get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT subscription_type, end_date 
+            FROM subscriptions 
+            WHERE user_id = %s AND is_active = TRUE AND end_date > CURRENT_TIMESTAMP
+            ORDER BY end_date DESC 
+            LIMIT 1
+        ''', (user_id,))
         
-        try:
+        result = cursor.fetchone()
+        
+        # Также проверяем поле premium_until в users
+        if not result:
             cursor.execute('''
-                SELECT subscription_type, end_date 
-                FROM subscriptions 
-                WHERE user_id = %s AND is_active = TRUE AND end_date > CURRENT_TIMESTAMP
-                ORDER BY end_date DESC 
-                LIMIT 1
+                SELECT premium_until 
+                FROM users 
+                WHERE user_id = %s AND premium_until > CURRENT_TIMESTAMP
             ''', (user_id,))
             
-            result = cursor.fetchone()
-            
-            # Также проверяем поле premium_until в users
-            if not result:
-                cursor.execute('''
-                    SELECT premium_until 
-                    FROM users 
-                    WHERE user_id = %s AND premium_until > CURRENT_TIMESTAMP
-                ''', (user_id,))
-                
-                premium_result = cursor.fetchone()
-                if premium_result:
-                    return ("premium", premium_result[0])
-            
-            return result
-        finally:
-            conn.close()
+            premium_result = cursor.fetchone()
+            if premium_result:
+                return ("premium", premium_result[0])
+        
+        return result
+    except Exception as e:
+        logging.error(f"Error getting user subscription: {e}")
+        return None
+    finally:
+        conn.close()
 
     def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
         """Создает подписку для пользователя"""

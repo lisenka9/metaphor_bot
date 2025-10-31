@@ -498,35 +498,6 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard.get_daily_message_keyboard()  # Кнопка "Вернуться в меню"
     )
 
-async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает профиль из кнопки меню"""
-    user = query.from_user
-    
-    stats = db.get_user_stats(user.id)
-    
-    if not stats:
-        # Отправляем новое сообщение с ошибкой
-        await query.message.reply_text("❌ Не удалось загрузить статистику")
-        return
-    
-    limit, is_premium, total_cards, reg_date = stats
-    
-    profile_text = f"""
-👤 Ваш профиль
-
-📊 Всего карт получено: {total_cards}
-🎯 Лимит карт в день: {limit}
-📅 Дата регистрации: {reg_date}
-    """
-    
-    # Отправляем новое сообщение с профилем, не редактируя предыдущее
-    await query.message.reply_text(
-        profile_text,
-        reply_markup=keyboard.get_profile_keyboard(),
-        parse_mode='Markdown'
-    )
-
-
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
     user = update.effective_user
@@ -537,21 +508,62 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Не удалось загрузить статистику")
         return
     
-    limit, is_premium, total_cards, reg_date = stats
+    limit, is_premium, total_cards, reg_date, subscription_end = stats
+    
+    # Формируем текст о подписке
+    if subscription_end:
+        subscription_text = f"✅ Активна до: {subscription_end}"
+    else:
+        subscription_text = "❌ Нет активной подписки"
     
     profile_text = f"""
 👤 Ваш профиль
 
 📊 Всего карт получено: {total_cards}
 🎯 Лимит карт в день: {limit}
+💎 Подписка: {subscription_text}
 📅 Дата регистрации: {reg_date}
     """
     
     await update.message.reply_text(
         profile_text,
-        reply_markup=keyboard.get_profile_keyboard(),  # Используем специальную клавиатуру для профиля
+        reply_markup=keyboard.get_profile_keyboard(),
         parse_mode='Markdown'
     )
+
+async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает профиль из кнопки меню"""
+    user = query.from_user
+    
+    stats = db.get_user_stats(user.id)
+    
+    if not stats:
+        await query.message.reply_text("❌ Не удалось загрузить статистику")
+        return
+    
+    limit, is_premium, total_cards, reg_date, subscription_end = stats
+    
+    # Формируем текст о подписке
+    if subscription_end:
+        subscription_text = f"✅ Активна до: {subscription_end}"
+    else:
+        subscription_text = "❌ Нет активной подписки"
+    
+    profile_text = f"""
+👤 Ваш профиль
+
+📊 Всего карт получено: {total_cards}
+🎯 Лимит карт в день: {limit}
+💎 Подписка: {subscription_text}
+📅 Дата регистрации: {reg_date}
+    """
+    
+    await query.message.reply_text(
+        profile_text,
+        reply_markup=keyboard.get_profile_keyboard(),
+        parse_mode='Markdown'
+    )
+
 
 async def show_consult_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает информацию о консультации из кнопки меню"""
@@ -1712,9 +1724,9 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🎯 **Тарифы:**
 • 1 месяц - 99₽
-• 3 месяца - 199₽ (экономия 33%)
-• 6 месяцев - 399₽ (экономия 33%)
-• 1 год - 799₽ (экономия 33%)
+• 3 месяца - 199₽
+• 6 месяцев - 399₽ 
+• 1 год - 799₽ 
 
 Выберите срок подписки:
 """
@@ -1740,9 +1752,9 @@ async def show_subscribe_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 🎯 **Тарифы:**
 • 1 месяц - 99₽
-• 3 месяца - 199₽ (экономия 33%)
-• 6 месяцев - 399₽ (экономия 33%)
-• 1 год - 799₽ (экономия 33%)
+• 3 месяца - 199₽ 
+• 6 месяцев - 399₽ 
+• 1 год - 799₽
 
 Выберите срок подписки:
 """

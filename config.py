@@ -11,14 +11,14 @@ ADMIN_IDS = [int(id.strip()) for id in os.environ.get("ADMIN_IDS", "").split(","
 DAILY_CARD_LIMIT_FREE = 1
 DAILY_CARD_LIMIT_PREMIUM = 5
 
-
 # Настройки ЮMoney
 YOOMONEY_CLIENT_ID = os.environ.get("YOOMONEY_CLIENT_ID", "")
-YOOMONEY_REDIRECT_URI = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "") + "/payment_success"
+YOOMONEY_REDIRECT_URI = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "") + "/payment_callback"
 YOOMONEY_SCOPE = "payment-p2p"
+YOOMONEY_SECRET = os.environ.get("YOOMONEY_SECRET", "")
 
 # Реквизиты
-YOOMONEY_RECEIVER = "5536913811891791"
+YOOMONEY_RECEIVER = os.environ.get("YOOMONEY_RECEIVER")
 
 # Цены подписок
 SUBSCRIPTION_PRICES = {
