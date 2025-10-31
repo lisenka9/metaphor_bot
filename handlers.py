@@ -1881,8 +1881,8 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает послание дня при нажатии кнопки"""
     user = query.from_user
     
-    # ✅ Сразу убираем кнопку "Послание дня"
-    await query.edit_message_reply_markup(reply_markup=None)
+    # ✅ НЕ редактируем предыдущее сообщение, просто отвечаем новым
+    await query.answer()  # Просто подтверждаем нажатие
     
     # Проверяем лимит посланий
     can_take, reason = db.can_take_daily_message(user.id)
@@ -1893,17 +1893,21 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
         if stats:
             if stats['has_subscription']:
                 limit_text = f"❌ {reason}\n\n📊 Сегодня: {stats['today_count']}/5 посланий"
+                reply_markup = keyboard.get_main_menu_keyboard()
             else:
                 if stats['can_take']:
                     limit_text = "✅ Можно взять послание (1 раз в неделю)"
+                    reply_markup = keyboard.get_main_menu_keyboard()
                 else:
                     limit_text = f"❌ {reason}\n\n📅 Следующее послание через {stats['days_until_next']} дней"
+                    reply_markup = keyboard.get_message_status_keyboard()
         else:
             limit_text = f"❌ {reason}"
+            reply_markup = keyboard.get_main_menu_keyboard()
         
         await query.message.reply_text(
             limit_text,
-            reply_markup=keyboard.get_main_menu_keyboard()
+            reply_markup=reply_markup
         )
         return
     
@@ -1919,7 +1923,14 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     message_id, image_url, message_text = message_data
     
     # Записываем факт получения послания
-    db.record_user_message(user.id, message_id)
+    success = db.record_user_message(user.id, message_id)
+    if not success:
+        logging.error(f"❌ Failed to record message for user {user.id}")
+        await query.message.reply_text(
+            "❌ Ошибка при сохранении послания. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
     
     message_caption = f'''🦋 Послание Дня
 
@@ -2016,13 +2027,21 @@ async def debug_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Получаем историю посланий
         cursor.execute('''
-            SELECT drawn_date 
-            FROM user_messages 
-            WHERE user_id = %s 
-            ORDER BY drawn_date DESC 
+            SELECT um.drawn_date, dm.message_text 
+            FROM user_messages um
+            LEFT JOIN daily_messages dm ON um.message_id = dm.message_id
+            WHERE um.user_id = %s 
+            ORDER BY um.drawn_date DESC 
             LIMIT 5
         ''', (user.id,))
         message_history = cursor.fetchall()
+        
+        # Проверяем количество посланий в базе
+        cursor.execute('SELECT COUNT(*) FROM daily_messages')
+        total_messages = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM user_messages WHERE user_id = %s', (user.id,))
+        user_messages_count = cursor.fetchone()[0]
         
         # Проверяем лимит
         can_take, reason = db.can_take_daily_message(user.id)
@@ -2036,11 +2055,16 @@ async def debug_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ✅ Можно взять: {can_take}
 📝 Причина: {reason}
 
-📊 История посланий:
+📊 Статистика:
+• Всего посланий в базе: {total_messages}
+• Ваших посланий в истории: {user_messages_count}
+
+📋 История ваших посланий:
 """
         
-        for i, (drawn_date,) in enumerate(message_history, 1):
-            debug_text += f"{i}. {drawn_date}\n"
+        for i, (drawn_date, message_text) in enumerate(message_history, 1):
+            date_str = drawn_date.strftime("%Y-%m-%d %H:%M") if hasattr(drawn_date, 'strftime') else str(drawn_date)
+            debug_text += f"{i}. {date_str} - {message_text[:30]}...\n"
         
         if not message_history:
             debug_text += "Нет истории посланий"
@@ -2050,3 +2074,46 @@ async def debug_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка отладки: {e}")
+
+async def init_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принудительно создает тестовые послания в базе"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Создаем таблицу
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS daily_messages (
+                message_id SERIAL PRIMARY KEY,
+                image_url TEXT NOT NULL,
+                message_text TEXT NOT NULL
+            )
+        ''')
+        
+        # Очищаем таблицу
+        cursor.execute('DELETE FROM daily_messages')
+        
+        # Добавляем тестовые послания
+        daily_messages = [
+            (1, "https://ibb.co/wZd8BTHM", "Послание 1"),
+            (2, "https://ibb.co/PGWbXCyP", "Послание 2")
+        ]
+        
+        for message_id, image_url, message_text in daily_messages:
+            cursor.execute('''
+                INSERT INTO daily_messages (message_id, image_url, message_text)
+                VALUES (%s, %s, %s)
+            ''', (message_id, image_url, message_text))
+        
+        conn.commit()
+        
+        await update.message.reply_text(f"✅ Создано {len(daily_messages)} тестовых посланий в базе данных")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
