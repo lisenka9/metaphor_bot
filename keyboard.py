@@ -108,7 +108,7 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("🦋 Послание дня", callback_data="get_daily_message")],
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
-        [InlineKeyboardButton("🛒 Купить колоду", callback_data="buy")],
+        [InlineKeyboardButton("🛒 Купить колоду онлайн", callback_data="buy")],
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
         [InlineKeyboardButton("📖 История карт", callback_data="history")],
