@@ -452,21 +452,54 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает послание дня"""
+    """Показывает послание дня при нажатии кнопки"""
     user = query.from_user
     
     # ✅ Сразу убираем кнопку "Послание дня"
     await query.edit_message_reply_markup(reply_markup=None)
     
-    # Временно закомментированная логика выполнения
-    """
+    # Проверяем лимит посланий
+    can_take, reason = db.can_take_daily_message(user.id)
+    
+    if not can_take:
+        # Показываем статистику и информацию о лимитах
+        stats = db.get_user_message_stats(user.id)
+        if stats:
+            if stats['has_subscription']:
+                limit_text = f"❌ {reason}\n\n📊 Сегодня: {stats['today_count']}/5 посланий"
+                reply_markup = keyboard.get_main_menu_keyboard()
+            else:
+                if stats['can_take']:
+                    limit_text = "✅ Можно взять послание (1 раз в неделю)"
+                    reply_markup = keyboard.get_main_menu_keyboard()
+                else:
+                    limit_text = f"❌ {reason}\n\n📅 Следующее послание через {stats['days_until_next']} дней"
+                    reply_markup = keyboard.get_message_status_keyboard()
+        else:
+            limit_text = f"❌ {reason}"
+            reply_markup = keyboard.get_main_menu_keyboard()
+        
+        await query.message.reply_text(
+            limit_text,
+            reply_markup=reply_markup
+        )
+        return
+    
     # Получаем случайное послание
     message_data = db.get_random_message()
     if not message_data:
-        await query.message.reply_text("⚠️ Ошибка при получении послания.")
+        await query.message.reply_text(
+            "⚠️ Ошибка при получении послания. Пожалуйста, попробуйте позже.",
+            reply_markup=keyboard.get_daily_message_keyboard()
+        )
         return
     
     message_id, image_url, message_text = message_data
+    
+    # Записываем факт получения послания
+    success = db.record_user_message(user.id, message_id)
+    if not success:
+        logging.error(f"❌ Failed to record message for user {user.id}")
     
     message_caption = f'''🦋 Послание Дня
 
@@ -482,24 +515,17 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_photo(
             photo=image_url,
             caption=message_caption,
-            reply_markup=keyboard.get_daily_message_keyboard(),  # Добавляем кнопку "Вернуться в меню"
+            reply_markup=keyboard.get_daily_message_keyboard(),
             parse_mode='Markdown'
         )
         
     except Exception as e:
-        logging.error(f"Error sending message image: {e}")
+        logging.error(f"❌ Error sending message image: {e}")
         await query.message.reply_text(
-            message_caption,
+            f"{message_caption}\n\n📝 *Текст послания:* {message_text}",
             reply_markup=keyboard.get_daily_message_keyboard(),
             parse_mode='Markdown'
         )
-    """
-    
-    # Временное сообщение о технических работах
-    await query.message.reply_text(
-        "Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!",
-        reply_markup=keyboard.get_daily_message_keyboard()  # Кнопка "Вернуться в меню"
-    )
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
@@ -1924,9 +1950,8 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-# Добавляем команду для проверки статуса посланий
 async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает статус посланий пользователя"""
+    """Показывает статус посланий пользователя с кнопками подписки"""
     user = update.effective_user
     
     stats = db.get_user_message_stats(user.id)
@@ -1944,6 +1969,8 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💫 Используйте /message чтобы получить послание!
 """
+        # Для премиум пользователей - только кнопка "Вернуться в меню"
+        reply_markup = keyboard.get_main_menu_keyboard()
     else:
         if stats['can_take']:
             status_text = """
@@ -1965,10 +1992,12 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⚡ Оформите подписку для доступа к 5 посланиям в день!
 """
 
+        # Для бесплатных пользователей - кнопки "Приобрести подписку" и "Вернуться в меню"
+        reply_markup = keyboard.get_message_status_keyboard()
+
     await update.message.reply_text(
         status_text,
-        reply_markup=keyboard.get_main_menu_keyboard(),
+        reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-    

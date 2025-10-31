@@ -105,6 +105,7 @@ def get_main_menu_keyboard():
     """Обновленная клавиатура для главного меню"""
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
+        [InlineKeyboardButton("🦋 Послание дня", callback_data="get_daily_message")],
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить колоду", callback_data="buy")],
@@ -137,6 +138,15 @@ def get_card_display_keyboard():
 def get_card_questions_keyboard():
     """Клавиатура после показа вопросов к карте"""
     keyboard = [
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_message_status_keyboard():
+    """Клавиатура для статуса посланий (для бесплатных пользователей)"""
+    keyboard = [
+        [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
