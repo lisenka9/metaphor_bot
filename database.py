@@ -712,80 +712,80 @@ class DatabaseManager:
             conn.close()
 
     def can_take_daily_message(self, user_id: int) -> tuple:
-    """Проверяет, может ли пользователь взять послание дня"""
-    conn = self.get_connection()
-    cursor = conn.cursor()
-    
-    try:
-        # Получаем информацию о пользователе и подписке
-        cursor.execute('''
-            SELECT u.is_premium, u.premium_until
-            FROM users u 
-            WHERE u.user_id = %s
-        ''', (user_id,))
+        """Проверяет, может ли пользователь взять послание дня"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
-        result = cursor.fetchone()
-        if not result:
-            return False, "Пользователь не найден"
-        
-        is_premium, premium_until = result
-        today = date.today()
-        
-        # Проверяем активную подписку
-        has_active_subscription = False
-        if premium_until:
-            if hasattr(premium_until, 'date'):
-                premium_date = premium_until.date()
-            else:
-                premium_date = premium_until
-            has_active_subscription = is_premium and premium_date >= today
-        
-        if has_active_subscription:
-            # Для премиум: проверяем лимит 5 раз в день
+        try:
+            # Получаем информацию о пользователе и подписке
             cursor.execute('''
-                SELECT COUNT(*) 
-                FROM user_messages 
-                WHERE user_id = %s AND DATE(drawn_date) = %s
-            ''', (user_id, today))
-            
-            today_messages_count = cursor.fetchone()[0]
-            if today_messages_count >= 5:
-                return False, "Вы уже получили максимальное количество посланий сегодня (5)"
-            else:
-                return True, f"Можно взять послание ({today_messages_count + 1}/5 сегодня)"
-        else:
-            # Для бесплатных: проверяем 1 раз в неделю
-            cursor.execute('''
-                SELECT MAX(drawn_date) 
-                FROM user_messages 
-                WHERE user_id = %s
+                SELECT u.is_premium, u.premium_until
+                FROM users u 
+                WHERE u.user_id = %s
             ''', (user_id,))
             
-            last_message_result = cursor.fetchone()
-            if not last_message_result or not last_message_result[0]:
-                return True, "Можно взять послание"
+            result = cursor.fetchone()
+            if not result:
+                return False, "Пользователь не найден"
             
-            last_message_date = last_message_result[0]
+            is_premium, premium_until = result
+            today = date.today()
             
-            # Преобразуем дату в объект date
-            if hasattr(last_message_date, 'date'):
-                last_message_date_only = last_message_date.date()
-            else:
-                last_message_date_only = last_message_date
+            # Проверяем активную подписку
+            has_active_subscription = False
+            if premium_until:
+                if hasattr(premium_until, 'date'):
+                    premium_date = premium_until.date()
+                else:
+                    premium_date = premium_until
+                has_active_subscription = is_premium and premium_date >= today
             
-            days_since_last_message = (today - last_message_date_only).days
-            
-            if days_since_last_message >= 7:
-                return True, "Можно взять послание"
-            else:
-                days_left = 7 - days_since_last_message
-                return False, f"Следующее бесплатное послание будет доступно через {days_left} дней"
+            if has_active_subscription:
+                # Для премиум: проверяем лимит 5 раз в день
+                cursor.execute('''
+                    SELECT COUNT(*) 
+                    FROM user_messages 
+                    WHERE user_id = %s AND DATE(drawn_date) = %s
+                ''', (user_id, today))
                 
-    except Exception as e:
-        logging.error(f"❌ Error checking daily message: {e}")
-        return False, "Ошибка базы данных"
-    finally:
-        conn.close()
+                today_messages_count = cursor.fetchone()[0]
+                if today_messages_count >= 5:
+                    return False, "Вы уже получили максимальное количество посланий сегодня (5)"
+                else:
+                    return True, f"Можно взять послание ({today_messages_count + 1}/5 сегодня)"
+            else:
+                # Для бесплатных: проверяем 1 раз в неделю
+                cursor.execute('''
+                    SELECT MAX(drawn_date) 
+                    FROM user_messages 
+                    WHERE user_id = %s
+                ''', (user_id,))
+                
+                last_message_result = cursor.fetchone()
+                if not last_message_result or not last_message_result[0]:
+                    return True, "Можно взять послание"
+                
+                last_message_date = last_message_result[0]
+                
+                # Преобразуем дату в объект date
+                if hasattr(last_message_date, 'date'):
+                    last_message_date_only = last_message_date.date()
+                else:
+                    last_message_date_only = last_message_date
+                
+                days_since_last_message = (today - last_message_date_only).days
+                
+                if days_since_last_message >= 7:
+                    return True, "Можно взять послание"
+                else:
+                    days_left = 7 - days_since_last_message
+                    return False, f"Следующее бесплатное послание будет доступно через {days_left} дней"
+                    
+        except Exception as e:
+            logging.error(f"❌ Error checking daily message: {e}")
+            return False, "Ошибка базы данных"
+        finally:
+            conn.close()
 
     def record_user_message(self, user_id: int, message_id: int) -> bool:
         """Записывает выданное послание пользователю"""
