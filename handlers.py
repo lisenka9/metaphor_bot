@@ -1822,17 +1822,22 @@ async def message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if stats:
             if stats['has_subscription']:
                 limit_text = f"❌ {reason}\n\n📊 Сегодня: {stats['today_count']}/5 посланий"
+                reply_markup = keyboard.get_main_menu_keyboard()
             else:
                 if stats['can_take']:
                     limit_text = "✅ Можно взять послание (1 раз в неделю)"
+                    reply_markup = keyboard.get_main_menu_keyboard()
                 else:
                     limit_text = f"❌ {reason}\n\n📅 Следующее послание через {stats['days_until_next']} дней"
+                    # ✅ Используем ТОЛЬКО кнопки "Приобрести подписку" и "Вернуться в меню"
+                    reply_markup = keyboard.get_message_status_keyboard()
         else:
             limit_text = f"❌ {reason}"
+            reply_markup = keyboard.get_main_menu_keyboard()
         
         await update.message.reply_text(
             limit_text,
-            reply_markup=keyboard.get_main_menu_keyboard()
+            reply_markup=reply_markup
         )
         return
     
@@ -1848,7 +1853,14 @@ async def message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id, image_url, message_text = message_data
     
     # Записываем факт получения послания
-    db.record_user_message(user.id, message_id)
+    success = db.record_user_message(user.id, message_id)
+    if not success:
+        logging.error(f"❌ Failed to record message for user {user.id}")
+        await update.message.reply_text(
+            "❌ Ошибка при сохранении послания. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
     
     message_caption = f'''🦋 Послание Дня
 
@@ -1864,15 +1876,16 @@ async def message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_photo(
             photo=image_url,
             caption=message_caption,
+            # ✅ Используем ТОЛЬКО кнопку "Вернуться в меню"
             reply_markup=keyboard.get_daily_message_keyboard(),
             parse_mode='Markdown'
         )
         
     except Exception as e:
         logging.error(f"❌ Error sending message image: {e}")
-        # Если картинка не загружается, отправляем текстовую версию
         await update.message.reply_text(
             f"{message_caption}\n\n📝 *Текст послания:* {message_text}",
+            # ✅ Используем ТОЛЬКО кнопку "Вернуться в меню"
             reply_markup=keyboard.get_daily_message_keyboard(),
             parse_mode='Markdown'
         )
@@ -2117,3 +2130,65 @@ async def init_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сброс лимита посланий дня (для администратора)"""
+    user = update.effective_user
+    
+    # Проверяем, является ли пользователь администратором
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем аргументы команды (если указан конкретный пользователь)
+        target_user_id = user.id  # по умолчанию сбрасываем себе
+        
+        if context.args:
+            try:
+                target_user_id = int(context.args[0])
+                logging.info(f"🔄 Admin {user.id} resetting message limit for user {target_user_id}")
+            except ValueError:
+                await update.message.reply_text("❌ Неверный формат ID пользователя")
+                return
+        
+        # Удаляем историю посланий пользователя
+        cursor.execute('DELETE FROM user_messages WHERE user_id = %s', (target_user_id,))
+        deleted_count = cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        if target_user_id == user.id:
+            await update.message.reply_text(f"✅ Ваш лимит посланий сброшен! Удалено {deleted_count} записей.")
+        else:
+            await update.message.reply_text(f"✅ Лимит посланий пользователя {target_user_id} сброшен! Удалено {deleted_count} записей.")
+        
+    except Exception as e:
+        logging.error(f"❌ Error resetting message limit: {e}")
+        await update.message.reply_text("❌ Ошибка при сбросе лимита посланий")
+
+async def reset_my_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сброс своего лимита посланий дня (для тестирования)"""
+    user = update.effective_user
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Удаляем историю посланий пользователя
+        cursor.execute('DELETE FROM user_messages WHERE user_id = %s', (user.id,))
+        deleted_count = cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        await update.message.reply_text(f"✅ Ваш лимит посланий сброшен! Удалено {deleted_count} записей. Теперь вы можете снова взять послание.")
+        
+    except Exception as e:
+        logging.error(f"❌ Error resetting message limit: {e}")
+        await update.message.reply_text("❌ Ошибка при сбросе лимита посланий")
+

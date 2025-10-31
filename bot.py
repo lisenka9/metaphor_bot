@@ -129,6 +129,8 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("message_status", handlers.message_status))
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
+            application.add_handler(CommandHandler("reset_message_limit", handlers.reset_message_limit))
+            application.add_handler(CommandHandler("reset_my_message_limit", handlers.reset_my_message_limit))
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
                 pattern="^subscribe_"
