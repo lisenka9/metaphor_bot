@@ -734,11 +734,21 @@ class DatabaseManager:
             # Проверяем активную подписку
             has_active_subscription = False
             if premium_until:
+                # Преобразуем premium_until в date для сравнения
                 if hasattr(premium_until, 'date'):
                     premium_date = premium_until.date()
+                elif isinstance(premium_until, str):
+                    # Если это строка, парсим её
+                    try:
+                        premium_date = datetime.strptime(premium_until[:10], '%Y-%m-%d').date()
+                    except:
+                        premium_date = today
                 else:
                     premium_date = premium_until
+                
                 has_active_subscription = is_premium and premium_date >= today
+            
+            logging.info(f"📊 User {user_id}: is_premium={is_premium}, premium_until={premium_until}, has_active_subscription={has_active_subscription}")
             
             if has_active_subscription:
                 # Для премиум: проверяем лимит 5 раз в день
@@ -749,6 +759,8 @@ class DatabaseManager:
                 ''', (user_id, today))
                 
                 today_messages_count = cursor.fetchone()[0]
+                logging.info(f"📊 Premium user {user_id}: today_messages_count={today_messages_count}")
+                
                 if today_messages_count >= 5:
                     return False, "Вы уже получили максимальное количество посланий сегодня (5)"
                 else:
@@ -763,6 +775,7 @@ class DatabaseManager:
                 
                 last_message_result = cursor.fetchone()
                 if not last_message_result or not last_message_result[0]:
+                    logging.info(f"📊 Free user {user_id}: no previous messages, can take")
                     return True, "Можно взять послание"
                 
                 last_message_date = last_message_result[0]
@@ -770,10 +783,17 @@ class DatabaseManager:
                 # Преобразуем дату в объект date
                 if hasattr(last_message_date, 'date'):
                     last_message_date_only = last_message_date.date()
+                elif isinstance(last_message_date, str):
+                    # Если это строка, парсим её
+                    try:
+                        last_message_date_only = datetime.strptime(last_message_date[:10], '%Y-%m-%d').date()
+                    except:
+                        last_message_date_only = today
                 else:
                     last_message_date_only = last_message_date
                 
                 days_since_last_message = (today - last_message_date_only).days
+                logging.info(f"📊 Free user {user_id}: last_message={last_message_date_only}, days_since={days_since_last_message}")
                 
                 if days_since_last_message >= 7:
                     return True, "Можно взять послание"

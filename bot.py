@@ -127,6 +127,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
             application.add_handler(CommandHandler("message", handlers.message_command))
             application.add_handler(CommandHandler("message_status", handlers.message_status))
+            application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
                 pattern="^subscribe_"

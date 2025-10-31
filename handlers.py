@@ -455,9 +455,6 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает послание дня при нажатии кнопки"""
     user = query.from_user
     
-    # ✅ Сразу убираем кнопку "Послание дня"
-    await query.edit_message_reply_markup(reply_markup=None)
-    
     # Проверяем лимит посланий
     can_take, reason = db.can_take_daily_message(user.id)
     
@@ -1967,7 +1964,7 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📨 Сегодня получено: {stats['today_count']}/5
 🔄 Осталось сегодня: {stats['remaining']}
 
-💫 Используйте /message чтобы получить послание!
+💫 Используйте кнопку 'Послание дня' в меню чтобы получить послание!
 """
         # Для премиум пользователей - только кнопка "Вернуться в меню"
         reply_markup = keyboard.get_main_menu_keyboard()
@@ -1979,9 +1976,10 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎯 Лимит: 1 послание в неделю
 ✅ Сейчас можно получить послание!
 
-💫 Используйте /message чтобы получить послание!
+💫 Используйте кнопку 'Послание дня' в меню чтобы получить послание!
 ⚡ Или оформите подписку для доступа к 5 посланиям в день!
 """
+            reply_markup = keyboard.get_main_menu_keyboard()
         else:
             status_text = f"""
 📊 Статус ваших посланий (Бесплатно)
@@ -1991,9 +1989,8 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⚡ Оформите подписку для доступа к 5 посланиям в день!
 """
-
-        # Для бесплатных пользователей - кнопки "Приобрести подписку" и "Вернуться в меню"
-        reply_markup = keyboard.get_message_status_keyboard()
+            # Для бесплатных пользователей, которые не могут взять послание - кнопки "Приобрести подписку" и "Вернуться в меню"
+            reply_markup = keyboard.get_message_status_keyboard()
 
     await update.message.reply_text(
         status_text,
@@ -2001,3 +1998,55 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+async def debug_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная команда для проверки лимитов посланий"""
+    user = update.effective_user
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию о пользователе
+        cursor.execute('''
+            SELECT user_id, is_premium, premium_until 
+            FROM users 
+            WHERE user_id = %s
+        ''', (user.id,))
+        user_data = cursor.fetchone()
+        
+        # Получаем историю посланий
+        cursor.execute('''
+            SELECT drawn_date 
+            FROM user_messages 
+            WHERE user_id = %s 
+            ORDER BY drawn_date DESC 
+            LIMIT 5
+        ''', (user.id,))
+        message_history = cursor.fetchall()
+        
+        # Проверяем лимит
+        can_take, reason = db.can_take_daily_message(user.id)
+        
+        debug_text = f"""
+🔍 Отладка лимитов посланий
+
+👤 Пользователь: {user.id}
+💎 Премиум: {user_data[1] if user_data else 'N/A'}
+📅 Premium until: {user_data[2] if user_data else 'N/A'}
+✅ Можно взять: {can_take}
+📝 Причина: {reason}
+
+📊 История посланий:
+"""
+        
+        for i, (drawn_date,) in enumerate(message_history, 1):
+            debug_text += f"{i}. {drawn_date}\n"
+        
+        if not message_history:
+            debug_text += "Нет истории посланий"
+        
+        await update.message.reply_text(debug_text)
+        conn.close()
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка отладки: {e}")
