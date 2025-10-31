@@ -130,7 +130,6 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
             application.add_handler(CommandHandler("reset_message_limit", handlers.reset_message_limit))
-            application.add_handler(CommandHandler("reset_my_message_limit", handlers.reset_my_message_limit))
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
                 pattern="^subscribe_"
@@ -157,7 +156,7 @@ def run_bot_with_restart():
             if attempt < max_retries - 1:
                 logger.info(f"🔄 Restarting in {retry_delay} seconds...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                retry_delay *= 2  
             else:
                 logger.error("💥 Max retries exceeded. Bot stopped.")
                 raise
