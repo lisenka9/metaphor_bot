@@ -125,3 +125,18 @@ def get_payment_success_keyboard():
         [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_card_display_keyboard():
+    """Клавиатура после показа карты дня"""
+    keyboard = [
+        [InlineKeyboardButton("❓ Вопросы к карте", callback_data="card_questions")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_card_questions_keyboard():
+    """Клавиатура после показа вопросов к карте"""
+    keyboard = [
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
