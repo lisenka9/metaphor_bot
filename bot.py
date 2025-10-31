@@ -1,4 +1,3 @@
-# bot.py
 import logging
 import os
 import time
@@ -10,26 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from config import BOT_TOKEN
 import handlers
 from database import db
-
-@app.route('/payment_callback', methods=['POST'])
-def payment_callback():
-    """Обрабатывает уведомления от ЮMoney"""
-    try:
-        data = request.form
-        
-        # Проверяем уведомление
-        label, is_success = payment_processor.verify_payment_notification(dict(data))
-        
-        if label and is_success:
-            # Активируем подписку
-            payment_processor.activate_subscription(label)
-            return jsonify({"status": "success"}), 200
-        else:
-            return jsonify({"status": "error", "message": "Invalid payment"}), 400
-            
-    except Exception as e:
-        logging.error(f"Error in payment callback: {e}")
-        return jsonify({"status": "error"}), 500
+from payment import payment_processor
 
 # Настройка логирования
 logging.basicConfig(
@@ -49,6 +29,32 @@ def home():
 def health_check():
     return "✅ Bot is alive!", 200
 
+@app.route('/payment_callback', methods=['POST'])
+def payment_callback():
+    """Обрабатывает уведомления от ЮMoney"""
+    try:
+        data = request.form
+        logger.info(f"📨 Received payment callback: {dict(data)}")
+        
+        # Проверяем уведомление
+        label, is_success = payment_processor.verify_payment_notification(dict(data))
+        
+        if label and is_success:
+            # Активируем подписку
+            if payment_processor.activate_subscription(label):
+                logger.info(f"✅ Subscription activated via callback: {label}")
+                return jsonify({"status": "success"}), 200
+            else:
+                logger.error(f"❌ Failed to activate subscription: {label}")
+                return jsonify({"status": "error", "message": "Subscription activation failed"}), 400
+        else:
+            logger.warning(f"⚠️ Invalid payment callback: {label}")
+            return jsonify({"status": "error", "message": "Invalid payment"}), 400
+            
+    except Exception as e:
+        logging.error(f"❌ Error in payment callback: {e}")
+        return jsonify({"status": "error"}), 500
+
 def start_flask():
     """Запускает Flask сервер"""
     port = int(os.environ.get("PORT", 10000))
@@ -66,7 +72,7 @@ def ping_self():
         except Exception as e:
             logger.error(f"❌ Self-ping failed: {e}")
         
-        # Ждем 10 минут (600 секунд) - чаще чем 14!
+        # Ждем 10 минут (600 секунд)
         time.sleep(600)
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
