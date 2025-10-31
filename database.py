@@ -81,6 +81,25 @@ class DatabaseManager:
                 )
             ''')
             
+            # Таблица для посланий (если ещё нет)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS daily_messages (
+                    message_id INTEGER PRIMARY KEY,
+                    image_url TEXT NOT NULL,
+                    message_text TEXT NOT NULL
+                )
+            ''')
+            
+            # Таблица для истории посланий пользователей
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_messages (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    message_id INTEGER REFERENCES daily_messages(message_id),
+                    drawn_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # Обновляем таблицу пользователей
             cursor.execute('''
                 ALTER TABLE users 
@@ -692,5 +711,164 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def can_take_daily_message(self, user_id: int) -> tuple:
+        """Проверяет, может ли пользователь взять послание дня"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Получаем информацию о пользователе и подписке
+            cursor.execute('''
+                SELECT u.is_premium, u.premium_until, 
+                       (SELECT MAX(drawn_date) FROM user_messages WHERE user_id = %s) as last_message_date
+                FROM users u 
+                WHERE u.user_id = %s
+            ''', (user_id, user_id))
+            
+            result = cursor.fetchone()
+            if not result:
+                return False, "Пользователь не найден"
+            
+            is_premium, premium_until, last_message_date = result
+            today = date.today()
+            
+            # Проверяем активную подписку
+            has_active_subscription = is_premium and premium_until and premium_until.date() >= today
+            
+            if not last_message_date:
+                return True, "Можно взять послание"
+            
+            if has_active_subscription:
+                # Для премиум: проверяем лимит 5 раз в день
+                cursor.execute('''
+                    SELECT COUNT(*) 
+                    FROM user_messages 
+                    WHERE user_id = %s AND DATE(drawn_date) = %s
+                ''', (user_id, today))
+                
+                today_messages_count = cursor.fetchone()[0]
+                if today_messages_count >= 5:
+                    return False, "Вы уже получили максимальное количество посланий сегодня (5)"
+                else:
+                    return True, f"Можно взять послание ({today_messages_count + 1}/5 сегодня)"
+            else:
+                # Для бесплатных: проверяем 1 раз в неделю
+                last_message_date_only = last_message_date.date() if hasattr(last_message_date, 'date') else last_message_date
+                days_since_last_message = (today - last_message_date_only).days
+                
+                if days_since_last_message >= 7:
+                    return True, "Можно взять послание"
+                else:
+                    days_left = 7 - days_since_last_message
+                    return False, f"Следующее бесплатное послание будет доступно через {days_left} дней"
+                
+        except Exception as e:
+            logging.error(f"❌ Error checking daily message: {e}")
+            return False, "Ошибка базы данных"
+        finally:
+            conn.close()
+
+    def record_user_message(self, user_id: int, message_id: int) -> bool:
+        """Записывает выданное послание пользователю"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Создаем таблицу для истории посланий, если её нет
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_messages (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    message_id INTEGER REFERENCES daily_messages(message_id),
+                    drawn_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Записываем в историю
+            cursor.execute('''
+                INSERT INTO user_messages (user_id, message_id) 
+                VALUES (%s, %s)
+            ''', (user_id, message_id))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            logging.error(f"❌ Error recording user message: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def get_user_message_stats(self, user_id: int):
+        """Получает статистику посланий пользователя"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Получаем информацию о подписке
+            cursor.execute('''
+                SELECT is_premium, premium_until 
+                FROM users 
+                WHERE user_id = %s
+            ''', (user_id,))
+            
+            user_data = cursor.fetchone()
+            if not user_data:
+                return None
+                
+            is_premium, premium_until = user_data
+            today = date.today()
+            has_active_subscription = is_premium and premium_until and premium_until.date() >= today
+            
+            # Получаем статистику посланий
+            if has_active_subscription:
+                # Для премиум: сегодняшние послания
+                cursor.execute('''
+                    SELECT COUNT(*) 
+                    FROM user_messages 
+                    WHERE user_id = %s AND DATE(drawn_date) = %s
+                ''', (user_id, today))
+                today_count = cursor.fetchone()[0]
+                limit = 5
+                remaining = max(0, limit - today_count)
+                return {
+                    'has_subscription': True,
+                    'today_count': today_count,
+                    'limit': limit,
+                    'remaining': remaining
+                }
+            else:
+                # Для бесплатных: последнее послание
+                cursor.execute('''
+                    SELECT MAX(drawn_date) 
+                    FROM user_messages 
+                    WHERE user_id = %s
+                ''', (user_id,))
+                
+                last_message_date = cursor.fetchone()[0]
+                if not last_message_date:
+                    return {
+                        'has_subscription': False,
+                        'last_message_date': None,
+                        'can_take': True
+                    }
+                
+                last_date = last_message_date.date() if hasattr(last_message_date, 'date') else last_message_date
+                days_since_last = (today - last_date).days
+                can_take = days_since_last >= 7
+                days_until_next = max(0, 7 - days_since_last) if not can_take else 0
+                
+                return {
+                    'has_subscription': False,
+                    'last_message_date': last_date,
+                    'can_take': can_take,
+                    'days_until_next': days_until_next
+                }
+                
+        except Exception as e:
+            logging.error(f"❌ Error getting message stats: {e}")
+            return None
+        finally:
+            conn.close()
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

@@ -73,6 +73,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
+/message - Послание дня
 /consult - Запись на консультацию
         """
         
@@ -104,6 +105,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить колоду
 /profile - Ваша статистика
 /help - Помощь
+/message - Послание дня
 /history - История ваших карт
         """
         await update.message.reply_text(full_text, parse_mode='Markdown')
@@ -437,6 +439,7 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить колоду
 /profile - Ваша статистика
 /help - Помощь
+/message - Послание дня
 /history - История ваших карт
 /consult - Запись на консультацию
 """
@@ -677,8 +680,9 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"❌ Error in show_daily_card: {e}")
         await loading_message.edit_text("❌ Произошла ошибка при получении карты")
 
+
 async def show_card_questions(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает вопросы для размышления над картой"""
+    """Показывает вопросы для размышления над картой и убирает кнопки под картинкой"""
     user_data = context.user_data
     last_card = user_data.get('last_card', {})
     
@@ -691,7 +695,7 @@ async def show_card_questions(query, context: ContextTypes.DEFAULT_TYPE):
     
     card_name = last_card.get('card_name', 'Карта')
     
-    questions_text = f"""🎴 {card_name}
+    questions_text = f"""
 
 👁 Посмотрите на карту, не торопитесь. Позвольте образу говорить с вами.
 
@@ -707,22 +711,27 @@ async def show_card_questions(query, context: ContextTypes.DEFAULT_TYPE):
 
 *Помните*: В работе с метафорическими картами нет «правильных» ответов. Важен Ваш уникальный, личный смысл, рождающийся в момент встречи с образом."""
     
-    # Если это callback query, редактируем предыдущее сообщение
-    if query.message.photo:
-        # Если предыдущее сообщение было с фото, отправляем новое сообщение с вопросами
+    # ✅ УДАЛЯЕМ кнопки под картинкой, редактируя предыдущее сообщение
+    try:
+        # Если предыдущее сообщение было с фото, убираем кнопки под ним
+        if query.message.photo:
+            await query.edit_message_reply_markup(reply_markup=None)
+        
+        # Отправляем новое сообщение с вопросами
         await query.message.reply_text(
             questions_text,
             reply_markup=keyboard.get_card_questions_keyboard(),
             parse_mode='Markdown'
         )
-    else:
-        # Иначе редактируем текущее сообщение
-        await query.edit_message_text(
+        
+    except Exception as e:
+        logging.error(f"❌ Error in show_card_questions: {e}")
+        # Если не удалось убрать кнопки, все равно отправляем вопросы
+        await query.message.reply_text(
             questions_text,
             reply_markup=keyboard.get_card_questions_keyboard(),
             parse_mode='Markdown'
         )
-
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
@@ -736,6 +745,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика и лимиты
 /history - Посмотреть историю всех ваших карт
 /consult - Запись на консультацию
+/message - Послание дня
 /help - Эта справка
 
 ❓ Как это работает?
@@ -1244,6 +1254,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
+/message - Послание дня
 /consult - Запись на консультацию
 """
     
@@ -1765,9 +1776,199 @@ async def show_subscribe_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 Выберите срок подписки:
 """
+
     
     await query.message.reply_text(
         subscription_text,
         reply_markup=keyboard.get_subscription_keyboard(),
         parse_mode='Markdown'
     )
+
+# В handlers.py - обновляем функции для посланий
+
+async def message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /message - Послание дня"""
+    user = update.effective_user
+    
+    # Проверяем лимит посланий
+    can_take, reason = db.can_take_daily_message(user.id)
+    
+    if not can_take:
+        # Показываем статистику и информацию о лимитах
+        stats = db.get_user_message_stats(user.id)
+        if stats:
+            if stats['has_subscription']:
+                limit_text = f"❌ {reason}\n\n📊 Сегодня: {stats['today_count']}/5 посланий"
+            else:
+                if stats['can_take']:
+                    limit_text = "✅ Можно взять послание (1 раз в неделю)"
+                else:
+                    limit_text = f"❌ {reason}\n\n📅 Следующее послание через {stats['days_until_next']} дней"
+        else:
+            limit_text = f"❌ {reason}"
+        
+        await update.message.reply_text(
+            limit_text,
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Получаем случайное послание
+    message_data = db.get_random_message()
+    if not message_data:
+        await update.message.reply_text(
+            "⚠️ Ошибка при получении послания. Пожалуйста, попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    message_id, image_url, message_text = message_data
+    
+    # Записываем факт получения послания
+    db.record_user_message(user.id, message_id)
+    
+    message_caption = f'''🦋 Послание Дня
+
+Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
+
+🔹 Как реагирует ваше тело?
+🔹 Какие эмоции поднимаются?
+🔹 Что важного это послание несет вам?
+🔹 Как это послание поможет вам на вашем жизненном пути?'''
+    
+    try:
+        # Отправляем послание
+        await update.message.reply_photo(
+            photo=image_url,
+            caption=message_caption,
+            reply_markup=keyboard.get_daily_message_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending message image: {e}")
+        # Если картинка не загружается, отправляем текстовую версию
+        await update.message.reply_text(
+            f"{message_caption}\n\n📝 *Текст послания:* {message_text}",
+            reply_markup=keyboard.get_daily_message_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает послание дня при нажатии кнопки"""
+    user = query.from_user
+    
+    # ✅ Сразу убираем кнопку "Послание дня"
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Проверяем лимит посланий
+    can_take, reason = db.can_take_daily_message(user.id)
+    
+    if not can_take:
+        # Показываем статистику и информацию о лимитах
+        stats = db.get_user_message_stats(user.id)
+        if stats:
+            if stats['has_subscription']:
+                limit_text = f"❌ {reason}\n\n📊 Сегодня: {stats['today_count']}/5 посланий"
+            else:
+                if stats['can_take']:
+                    limit_text = "✅ Можно взять послание (1 раз в неделю)"
+                else:
+                    limit_text = f"❌ {reason}\n\n📅 Следующее послание через {stats['days_until_next']} дней"
+        else:
+            limit_text = f"❌ {reason}"
+        
+        await query.message.reply_text(
+            limit_text,
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Получаем случайное послание
+    message_data = db.get_random_message()
+    if not message_data:
+        await query.message.reply_text(
+            "⚠️ Ошибка при получении послания. Пожалуйста, попробуйте позже.",
+            reply_markup=keyboard.get_daily_message_keyboard()
+        )
+        return
+    
+    message_id, image_url, message_text = message_data
+    
+    # Записываем факт получения послания
+    db.record_user_message(user.id, message_id)
+    
+    message_caption = f'''🦋 Послание Дня
+
+Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
+
+🔹 Как реагирует ваше тело?
+🔹 Какие эмоции поднимаются?
+🔹 Что важного это послание несет вам?
+🔹 Как это послание поможет вам на вашем жизненном пути?'''
+    
+    try:
+        # Отправляем новое сообщение с посланием
+        await query.message.reply_photo(
+            photo=image_url,
+            caption=message_caption,
+            reply_markup=keyboard.get_daily_message_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error sending message image: {e}")
+        await query.message.reply_text(
+            f"{message_caption}\n\n📝 *Текст послания:* {message_text}",
+            reply_markup=keyboard.get_daily_message_keyboard(),
+            parse_mode='Markdown'
+        )
+
+# Добавляем команду для проверки статуса посланий
+async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает статус посланий пользователя"""
+    user = update.effective_user
+    
+    stats = db.get_user_message_stats(user.id)
+    if not stats:
+        await update.message.reply_text("❌ Не удалось получить статистику посланий")
+        return
+    
+    if stats['has_subscription']:
+        status_text = f"""
+📊 Статус ваших посланий (Премиум)
+
+🎯 Лимит: 5 посланий в день
+📨 Сегодня получено: {stats['today_count']}/5
+🔄 Осталось сегодня: {stats['remaining']}
+
+💫 Используйте /message чтобы получить послание!
+"""
+    else:
+        if stats['can_take']:
+            status_text = """
+📊 Статус ваших посланий (Бесплатно)
+
+🎯 Лимит: 1 послание в неделю
+✅ Сейчас можно получить послание!
+
+💫 Используйте /message чтобы получить послание!
+⚡ Или оформите подписку для доступа к 5 посланиям в день!
+"""
+        else:
+            status_text = f"""
+📊 Статус ваших посланий (Бесплатно)
+
+🎯 Лимит: 1 послание в неделю
+⏳ Следующее послание через: {stats['days_until_next']} дней
+
+⚡ Оформите подписку для доступа к 5 посланиям в день!
+"""
+
+    await update.message.reply_text(
+        status_text,
+        reply_markup=keyboard.get_main_menu_keyboard(),
+        parse_mode='Markdown'
+    )
+
+    
