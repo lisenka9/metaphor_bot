@@ -7,6 +7,8 @@ import keyboard
 import csv
 import io
 from datetime import datetime
+from payment import payment_processor
+from config import SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES, SUBSCRIPTION_DURATIONS, YOOMONEY_RECEIVER
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -197,6 +199,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "buy":
         await show_buy_from_button(query, context)
+    
+    elif query.data == "subscribe":
+        await show_subscribe_from_button(query, context)
+    
+    elif query.data.startswith("subscribe_"):
+        await handle_subscription_selection(query, context)
+    
+    elif query.data.startswith("check_payment_"):
+        await handle_payment_check(query, context)
 
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
@@ -1556,4 +1567,188 @@ ID пользователя: {user_id}
 
 
     await update.message.reply_text(debug_info, parse_mode='Markdown')
+
+
+async def handle_subscription_selection(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор типа подписки"""
+    subscription_type = query.data.replace("subscribe_", "")
+    user_id = query.from_user.id
     
+    price = SUBSCRIPTION_PRICES[subscription_type]
+    duration = SUBSCRIPTION_NAMES[subscription_type]
+    
+    # Генерируем уникальную метку
+    payment_label = payment_processor.generate_payment_label(user_id, subscription_type)
+    
+    # Сохраняем в контексте
+    context.user_data['payment_label'] = payment_label
+    context.user_data['subscription_type'] = subscription_type
+    
+    # Создаем ссылку для оплаты
+    payment_url = payment_processor.create_payment_link(
+        amount=price,
+        label=payment_label,
+        receiver=YOOMONEY_RECEIVER,
+        targets=f"Подписка {duration} - Metaphor Bot"
+    )
+    
+    payment_text = f"""
+💎 Премиум подписка - {duration}
+
+Стоимость: {price}₽
+
+Нажмите кнопку "💳 Оплатить онлайн" для перехода к безопасной оплате.
+
+После оплаты система автоматически активирует вашу подписку в течение 1-2 минут.
+
+Если подписка не активировалась, нажмите "🔄 Проверить оплату".
+"""
+    
+    await query.message.reply_text(
+        payment_text,
+        reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url),
+        parse_mode='Markdown'
+    )
+    
+    # Запускаем мониторинг платежа
+    payment_processor.start_payment_monitoring(payment_label)
+
+async def handle_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет статус оплаты"""
+    subscription_type = query.data.replace("check_payment_", "")
+    user_id = query.from_user.id
+    
+    payment_label = context.user_data.get('payment_label')
+    
+    if not payment_label:
+        await query.message.reply_text(
+            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
+            reply_markup=keyboard.get_subscription_choice_keyboard()
+        )
+        return
+    
+    # Проверяем статус подписки пользователя
+    subscription = db.get_user_subscription(user_id)
+    
+    if subscription:
+        # Подписка уже активирована
+        success_text = f"""
+✅ Подписка активирована!
+
+Ваша премиум подписка успешно активирована.
+
+✨ Теперь вам доступны:
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Архипелаг ресурсов
+
+Наслаждайтесь полным доступом! 💫
+"""
+        await query.message.reply_text(
+            success_text,
+            reply_markup=keyboard.get_payment_success_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+        # Очищаем данные о платеже
+        if 'payment_label' in context.user_data:
+            del context.user_data['payment_label']
+            
+    else:
+        # Подписка еще не активирована
+        await query.message.reply_text(
+            "⏳ Платеж еще обрабатывается...\n\n"
+            "Пожалуйста, подождите 1-2 минуты и проверьте снова.\n"
+            "Если прошло больше времени, свяжитесь с @Skromova_Svetlana_psy",
+            reply_markup=keyboard.get_payment_keyboard(subscription_type, "")
+        )
+
+
+async def handle_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает команду /payment с deep links"""
+    user = update.effective_user
+    args = context.args
+    
+    if args and args[0].startswith('payment_'):
+        payment_label = args[0].replace('payment_', '')
+        
+        # Проверяем статус подписки
+        subscription = db.get_user_subscription(user.id)
+        
+        if subscription:
+            success_text = """
+✅ Оплата прошла успешно!
+
+Ваша премиум подписка активирована.
+
+✨ Теперь вам доступны все премиум-функции!
+"""
+            await update.message.reply_text(
+                success_text,
+                reply_markup=keyboard.get_payment_success_keyboard(),
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "⏳ Ваш платеж обрабатывается...",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+    else:
+        # Если /payment без параметров, показываем информацию о подписке
+        await subscribe_command(update, context)
+
+
+async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /subscribe"""
+    subscription_text = """
+💎 Премиум подписка
+
+Откройте полный доступ к возможностям бота:
+
+✨ **Что входит:**
+• 5 карт дня вместо 1
+• Послание дня (ежедневно)
+• Доступ к Архипелагу ресурсов
+
+🎯 **Тарифы:**
+• 1 месяц - 99₽
+• 3 месяца - 199₽ (экономия 33%)
+• 6 месяцев - 399₽ (экономия 33%)
+• 1 год - 799₽ (экономия 33%)
+
+Выберите срок подписки:
+"""
+
+    
+    await update.message.reply_text(
+        subscription_text,
+        reply_markup=keyboard.get_subscription_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_subscribe_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает подписку из кнопки меню"""
+    subscription_text = """
+💎 Премиум подписка
+
+Откройте полный доступ к возможностям бота:
+
+✨ **Что входит:**
+• 5 карт дня вместо 1
+• Послание дня (ежедневно)
+• Доступ к Архипелагу ресурсов
+
+🎯 **Тарифы:**
+• 1 месяц - 99₽
+• 3 месяца - 199₽ (экономия 33%)
+• 6 месяцев - 399₽ (экономия 33%)
+• 1 год - 799₽ (экономия 33%)
+
+Выберите срок подписки:
+"""
+    
+    await query.message.reply_text(
+        subscription_text,
+        reply_markup=keyboard.get_subscription_keyboard(),
+        parse_mode='Markdown'
+    )

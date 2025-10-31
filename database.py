@@ -54,6 +54,40 @@ class DatabaseManager:
                 )
             ''')
             
+            # Таблица подписок
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    subscription_type TEXT NOT NULL,
+                    start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    end_date TIMESTAMP NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    payment_id TEXT
+                )
+            ''')
+            
+            # Таблица платежей
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    amount INTEGER NOT NULL,
+                    currency TEXT DEFAULT 'RUB',
+                    subscription_type TEXT NOT NULL,
+                    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'pending',
+                    yoomoney_payment_id TEXT
+                )
+            ''')
+            
+            # Обновляем таблицу пользователей
+            cursor.execute('''
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS premium_until TIMESTAMP
+            ''')
+
             # Индекс для быстрого поиска
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_user_date 
@@ -65,6 +99,8 @@ class DatabaseManager:
             if cursor.fetchone()[0] == 0:
                 self._populate_sample_cards(cursor)
             
+
+
             conn.commit()
             logging.info("✅ Database tables initialized successfully")
             
@@ -562,6 +598,77 @@ class DatabaseManager:
             ''', message)
         
         logging.info("✅ Added daily messages to database")
+
+    def get_user_subscription(self, user_id: int):
+        """Получает активную подписку пользователя"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT subscription_type, end_date 
+                FROM subscriptions 
+                WHERE user_id = %s AND is_active = TRUE AND end_date > CURRENT_TIMESTAMP
+                ORDER BY end_date DESC 
+                LIMIT 1
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            
+            # Также проверяем поле premium_until в users
+            if not result:
+                cursor.execute('''
+                    SELECT premium_until 
+                    FROM users 
+                    WHERE user_id = %s AND premium_until > CURRENT_TIMESTAMP
+                ''', (user_id,))
+                
+                premium_result = cursor.fetchone()
+                if premium_result:
+                    return ("premium", premium_result[0])
+            
+            return result
+        finally:
+            conn.close()
+
+    def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
+        """Создает подписку для пользователя"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            from datetime import datetime, timedelta
+            
+            end_date = datetime.now() + timedelta(days=duration_days)
+            
+            # Деактивируем старые подписки
+            cursor.execute('''
+                UPDATE subscriptions 
+                SET is_active = FALSE 
+                WHERE user_id = %s
+            ''', (user_id,))
+            
+            # Создаем новую подписку
+            cursor.execute('''
+                INSERT INTO subscriptions (user_id, subscription_type, end_date)
+                VALUES (%s, %s, %s)
+            ''', (user_id, subscription_type, end_date))
+            
+            # Обновляем пользователя
+            cursor.execute('''
+                UPDATE users 
+                SET is_premium = TRUE, premium_until = %s, daily_cards_limit = 5
+                WHERE user_id = %s
+            ''', (end_date, user_id))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"Error creating subscription: {e}")
+            return False
+        finally:
+            conn.close()
 
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

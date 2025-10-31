@@ -97,6 +97,16 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("resources", handlers.resources_command))
             application.add_handler(CommandHandler("guide", handlers.guide_command))
             application.add_handler(CommandHandler("buy", handlers.buy_command))
+            application.add_handler(CommandHandler("payment", handlers.handle_payment_command))
+            application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_subscription_selection, 
+                pattern="^subscribe_"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_payment_check, 
+                pattern="^check_payment_"
+            ))
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 

@@ -81,15 +81,47 @@ def get_buy_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_subscription_keyboard():
+    """Клавиатура для выбора подписки"""
+    keyboard = [
+        [InlineKeyboardButton("1 месяц - 99₽", callback_data="subscribe_month")],
+        [InlineKeyboardButton("3 месяца - 199₽", callback_data="subscribe_3months")],
+        [InlineKeyboardButton("6 месяцев - 399₽", callback_data="subscribe_6months")],
+        [InlineKeyboardButton("1 год - 799₽", callback_data="subscribe_year")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_payment_keyboard(subscription_type: str, payment_url: str):
+    """Клавиатура только с кнопкой оплаты"""
+    keyboard = [
+        [InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)],
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_payment_{subscription_type}")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 def get_main_menu_keyboard():
-    """Клавиатура для главного меню"""
+    """Обновленная клавиатура для главного меню"""
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
-        [InlineKeyboardButton("🗺 Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить колоду", callback_data="buy")],
+        [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
         [InlineKeyboardButton("📖 История карт", callback_data="history")],
         [InlineKeyboardButton("💫 Консультация", callback_data="consult")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_subscription_choice_keyboard():
+    """Клавиатура для выбора подписки (альтернативное название)"""
+    return get_subscription_keyboard()  # Используем существующую функцию
+
+def get_payment_success_keyboard():
+    """Клавиатура после успешной оплаты"""
+    keyboard = [
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
