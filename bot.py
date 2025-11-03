@@ -68,14 +68,21 @@ def handle_payment_notification(event_data):
         payment_id = payment_object.get('id')
         metadata = payment_object.get('metadata', {})
         
+        # ✅ ПРАВИЛЬНОЕ ПОЛУЧЕНИЕ user_id
         user_id = metadata.get('user_id')
         subscription_type = metadata.get('subscription_type')
         internal_payment_id = metadata.get('payment_id')
         
         logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, user_id={user_id}")
         
+        # ✅ ПРОВЕРКА НАЛИЧИЯ user_id
+        if not user_id:
+            logger.error("❌ user_id is None in webhook!")
+            return jsonify({"status": "error", "message": "user_id is missing"}), 400
+        
         if payment_status == 'succeeded':
-            # Платеж успешен!
+            # ✅ ПРЕОБРАЗУЕМ user_id В ЧИСЛО
+            user_id = int(user_id)
             logger.info(f"✅ Payment succeeded for user {user_id}")
             
             # Активируем подписку

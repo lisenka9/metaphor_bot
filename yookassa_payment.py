@@ -33,9 +33,9 @@ class YooKassaPayment:
                 "capture": True,
                 "description": description,
                 "metadata": {
-                    "user_id": user_id,
+                    "user_id": int(user_id),  
                     "subscription_type": subscription_type,
-                    "payment_id": payment_id  # ✅ ВАЖНО: этот ID будет в вебхуке
+                    "payment_id": payment_id
                 }
             }
             

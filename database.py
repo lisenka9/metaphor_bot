@@ -67,7 +67,7 @@ class DatabaseManager:
                 )
             ''')
             
-            # Таблица платежей
+           # Таблица платежей 
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS payments (
                     id SERIAL PRIMARY KEY,
@@ -77,7 +77,8 @@ class DatabaseManager:
                     subscription_type TEXT NOT NULL,
                     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     status TEXT DEFAULT 'pending',
-                    yoomoney_payment_id TEXT
+                    yoomoney_payment_id TEXT,
+                    payment_id TEXT  
                 )
             ''')
             
