@@ -2094,11 +2094,10 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
     
     try:
         subscription_type = query.data.replace("subscribe_", "")
-        user_id = query.from_user.id
+        user_id = query.from_user.id  # ✅ Получаем user_id
         
         logging.info(f"🔄 Subscription selected: {subscription_type} by user {user_id}")
         
-        # ✅ ДОБАВЬТЕ ПРОВЕРКУ НАЛИЧИЯ КЛЮЧЕЙ
         if subscription_type not in SUBSCRIPTION_PRICES:
             await query.message.reply_text(
                 "❌ Ошибка: выбран неверный тип подписки.",
@@ -2121,9 +2120,20 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             )
             return
         
-        # Генерируем уникальный ID для отслеживания платежа
-        import uuid  # ✅ ДОБАВЬТЕ ИМПОРТ
-        payment_id = str(uuid.uuid4())
+        # ✅ СОЗДАЕМ ПЛАТЕЖ С ПЕРЕДАЧЕЙ user_id
+        payment_url, payment_id = payment_processor.create_payment(
+            amount=price,
+            description=f"Подписка {duration}",
+            user_id=user_id,  # ✅ ПЕРЕДАЕМ user_id
+            subscription_type=subscription_type
+        )
+        
+        if not payment_url:
+            await query.message.reply_text(
+                "❌ Ошибка при создании платежа. Попробуйте позже.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            return
         
         # Сохраняем в контексте
         context.user_data['payment_id'] = payment_id
@@ -2147,7 +2157,7 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             parse_mode='Markdown'
         )
         
-        logging.info(f"✅ Payment message sent for user {user_id}")
+        logging.info(f"✅ Payment message sent for user {user_id}, payment_id: {payment_id}")
         
     except Exception as e:
         logging.error(f"❌ Error in handle_subscription_selection: {e}")

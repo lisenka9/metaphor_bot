@@ -110,18 +110,19 @@ class YooKassaPayment:
                     logging.error(f"❌ YooKassa API check error: {response.status_code}")
                     return None
             
+            # ✅ ИСПРАВЛЕННАЯ ПРОВЕРКА ПЛАТЕЖЕЙ В БАЗЕ ДАННЫХ
             else:
-                # Ищем платеж в базе данных по payment_id
+                # Ищем платеж в базе данных по yoomoney_payment_id
                 conn = db.get_connection()
                 cursor = conn.cursor()
                 
                 cursor.execute('''
                     SELECT status 
                     FROM payments 
-                    WHERE payment_id = %s OR yoomoney_payment_id = %s
+                    WHERE yoomoney_payment_id = %s
                     ORDER BY payment_date DESC 
                     LIMIT 1
-                ''', (payment_id, payment_id))
+                ''', (payment_id,))  # ✅ Ищем по yoomoney_payment_id
                 
                 result = cursor.fetchone()
                 conn.close()
