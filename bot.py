@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from config import BOT_TOKEN
 import handlers
 from database import db
-from payment import payment_processor
+from yookassa_payment import payment_processor  # ✅ ИСПРАВЛЕНО ИМПОРТ
 
 # Настройка логирования
 logging.basicConfig(
@@ -31,25 +31,19 @@ def health_check():
 
 @app.route('/payment_callback', methods=['POST'])
 def payment_callback():
-    """Обрабатывает уведомления от ЮMoney"""
+    """Обрабатывает уведомления от ЮKassa"""
     try:
-        data = request.form
-        logger.info(f"📨 Received payment callback: {dict(data)}")
+        data = request.get_json()  # ✅ ИСПРАВЛЕНО для JSON данных
+        logger.info(f"📨 Received payment callback: {data}")
         
-        # Проверяем уведомление
-        label, is_success = payment_processor.verify_payment_notification(dict(data))
+        if not data:
+            return jsonify({"status": "error", "message": "No data received"}), 400
         
-        if label and is_success:
-            # Активируем подписку
-            if payment_processor.activate_subscription(label):
-                logger.info(f"✅ Subscription activated via callback: {label}")
-                return jsonify({"status": "success"}), 200
-            else:
-                logger.error(f"❌ Failed to activate subscription: {label}")
-                return jsonify({"status": "error", "message": "Subscription activation failed"}), 400
-        else:
-            logger.warning(f"⚠️ Invalid payment callback: {label}")
-            return jsonify({"status": "error", "message": "Invalid payment"}), 400
+        # Для ЮKassa webhooks нужно обрабатывать уведомления
+        # Временная заглушка - основная логика в мониторинге платежей
+        logger.info(f"🔔 YooKassa webhook received: {data}")
+        
+        return jsonify({"status": "success"}), 200
             
     except Exception as e:
         logging.error(f"❌ Error in payment callback: {e}")
@@ -93,6 +87,13 @@ def run_bot_with_restart():
                 logger.error("BOT_TOKEN not found in environment variables!")
                 return
             
+            # Проверяем наличие ключей ЮKassa
+            from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY
+            if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+                logger.warning("⚠️ YooKassa keys not found - payments will not work!")
+            else:
+                logger.info("✅ YooKassa keys loaded")
+            
             # Инициализируем базу данных
             logger.info("Инициализация базы данных...")
             db.init_database()
@@ -123,13 +124,17 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("resources", handlers.resources_command))
             application.add_handler(CommandHandler("guide", handlers.guide_command))
             application.add_handler(CommandHandler("buy", handlers.buy_command))
-            application.add_handler(CommandHandler("payment", handlers.handle_payment_command))
             application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
             application.add_handler(CommandHandler("message", handlers.message_command))
             application.add_handler(CommandHandler("message_status", handlers.message_status))
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
-            application.add_handler(CommandHandler("reset_message_limit", handlers.reset_message_limit))
+            
+            # ✅ УБИРАЕМ старые команды которые не существуют
+            # application.add_handler(CommandHandler("payment", handlers.handle_payment_command))
+            # application.add_handler(CommandHandler("reset_message_limit", handlers.reset_message_limit))
+            
+            # Добавляем обработчики callback queries
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_payment_check, 
                 pattern="^check_payment_"
@@ -140,6 +145,7 @@ def run_bot_with_restart():
             ))
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
+            # Обработчик текстовых сообщений для формы консультации
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
                                          handlers.handle_consult_form))
             
