@@ -128,23 +128,23 @@ class DatabaseManager:
             raise
         finally:
             conn.close()
-            
+
     def add_payment_id_column(self):
-    """Добавляет колонку payment_id в таблицу payments"""
-    conn = self.get_connection()
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute('''
-            ALTER TABLE payments 
-            ADD COLUMN IF NOT EXISTS payment_id TEXT
-        ''')
-        conn.commit()
-        logging.info("✅ Added payment_id column to payments table")
-    except Exception as e:
-        logging.error(f"❌ Error adding payment_id column: {e}")
-    finally:
-        conn.close()
+        """Добавляет колонку payment_id в таблицу payments"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                ALTER TABLE payments 
+                ADD COLUMN IF NOT EXISTS payment_id TEXT
+            ''')
+            conn.commit()
+            logging.info("✅ Added payment_id column to payments table")
+        except Exception as e:
+            logging.error(f"❌ Error adding payment_id column: {e}")
+        finally:
+            conn.close()
 
     def _populate_sample_cards(self, cursor):
         """Добавляет тестовые карты в базу"""
