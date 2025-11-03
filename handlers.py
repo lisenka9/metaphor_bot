@@ -2081,7 +2081,7 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
         logging.error(f"❌ Error resetting message limit: {e}")
         await update.message.reply_text("❌ Ошибка при сбросе лимита посланий")
 
-async def handle_subscription_selection(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор типа подписки"""
     try:
         subscription_type = query.data.replace("subscribe_", "")

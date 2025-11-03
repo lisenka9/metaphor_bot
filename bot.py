@@ -130,18 +130,13 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
             
-            # ✅ УБИРАЕМ старые команды которые не существуют
-            # application.add_handler(CommandHandler("payment", handlers.handle_payment_command))
-            # application.add_handler(CommandHandler("reset_message_limit", handlers.reset_message_limit))
-            
-            # Добавляем обработчики callback queries
-            application.add_handler(CallbackQueryHandler(
-                handlers.handle_payment_check, 
-                pattern="^check_payment_"
-            ))
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
                 pattern="^subscribe_"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_payment_check, 
+                pattern="^check_payment_"
             ))
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
