@@ -192,8 +192,9 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
+            # ✅ ПОЛУЧАЕМ ВСЮ НЕОБХОДИМУЮ ИНФОРМАЦИЮ О ПОЛЬЗОВАТЕЛЕ
             cursor.execute('''
-                SELECT last_daily_card_date, daily_cards_limit 
+                SELECT last_daily_card_date, daily_cards_limit, is_premium, premium_until 
                 FROM users WHERE user_id = %s
             ''', (user_id,))
             
@@ -201,8 +202,25 @@ class DatabaseManager:
             if not result:
                 return False, "Пользователь не найден"
             
-            last_date, limit = result
+            last_date, limit, is_premium, premium_until = result
             today = date.today()
+            
+            # ✅ ПРОВЕРЯЕМ АКТИВНУЮ ПОДПИСКУ
+            has_active_subscription = False
+            if premium_until:
+                if hasattr(premium_until, 'date'):
+                    premium_date = premium_until.date()
+                elif isinstance(premium_until, str):
+                    try:
+                        premium_date = datetime.strptime(premium_until[:10], '%Y-%m-%d').date()
+                    except:
+                        premium_date = today
+                else:
+                    premium_date = premium_until
+                
+                has_active_subscription = is_premium and premium_date >= today
+            
+            logging.info(f"📊 User {user_id}: limit={limit}, is_premium={is_premium}, premium_until={premium_until}, has_active={has_active_subscription}")
             
             if not last_date:
                 return True, "Можно взять карту"
@@ -210,8 +228,24 @@ class DatabaseManager:
             if last_date < today:
                 return True, "Можно взять карту"
             else:
-                return False, "Вы уже брали карту сегодня"
-                
+                # ✅ ДЛЯ ПРЕМИУМ ПОЛЬЗОВАТЕЛЕЙ ПРОВЕРЯЕМ КОЛИЧЕСТВО КАРТ СЕГОДНЯ
+                if has_active_subscription and limit > 1:
+                    cursor.execute('''
+                        SELECT COUNT(*) 
+                        FROM user_cards 
+                        WHERE user_id = %s AND DATE(drawn_date) = %s
+                    ''', (user_id, today))
+                    
+                    today_cards_count = cursor.fetchone()[0]
+                    logging.info(f"📊 Premium user {user_id}: today_cards_count={today_cards_count}, limit={limit}")
+                    
+                    if today_cards_count < limit:
+                        return True, f"Можно взять карту ({today_cards_count + 1}/{limit} сегодня)"
+                    else:
+                        return False, f"Вы уже получили максимальное количество карт сегодня ({limit})"
+                else:
+                    return False, "Вы уже брали карту сегодня"
+                    
         except Exception as e:
             logging.error(f"❌ Error checking daily card: {e}")
             return False, "Ошибка базы данных"
@@ -659,6 +693,7 @@ class DatabaseManager:
         
         try:
             from datetime import datetime, timedelta
+            from config import DAILY_CARD_LIMIT_PREMIUM
             
             end_date = datetime.now() + timedelta(days=duration_days)
             
@@ -675,18 +710,23 @@ class DatabaseManager:
                 VALUES (%s, %s, %s)
             ''', (user_id, subscription_type, end_date))
             
-            # Обновляем пользователя
+            # ✅ ОБНОВЛЯЕМ ЛИМИТ КАРТ ДЛЯ ПРЕМИУМ ПОЛЬЗОВАТЕЛЕЙ
             cursor.execute('''
                 UPDATE users 
-                SET is_premium = TRUE, premium_until = %s, daily_cards_limit = 5
+                SET is_premium = TRUE, 
+                    premium_until = %s, 
+                    daily_cards_limit = %s  -- ✅ УСТАНАВЛИВАЕМ ПРЕМИУМ ЛИМИТ
                 WHERE user_id = %s
-            ''', (end_date, user_id))
+            ''', (end_date, DAILY_CARD_LIMIT_PREMIUM, user_id))
             
             conn.commit()
+            
+            logging.info(f"✅ Subscription created for user {user_id}: {subscription_type}, limit: {DAILY_CARD_LIMIT_PREMIUM}")
             return True
+            
         except Exception as e:
             conn.rollback()
-            logging.error(f"Error creating subscription: {e}")
+            logging.error(f"❌ Error creating subscription: {e}")
             return False
         finally:
             conn.close()

@@ -2311,3 +2311,84 @@ async def update_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def check_subscription_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает текущий статус подписки и лимиты"""
+    user = update.effective_user
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT u.daily_cards_limit, u.is_premium, u.premium_until,
+                   COUNT(uc.id) as today_cards,
+                   (SELECT COUNT(*) FROM user_cards WHERE user_id = %s AND DATE(drawn_date) = CURRENT_DATE) as today_count
+            FROM users u
+            LEFT JOIN user_cards uc ON u.user_id = uc.user_id AND DATE(uc.drawn_date) = CURRENT_DATE
+            WHERE u.user_id = %s
+            GROUP BY u.user_id, u.daily_cards_limit, u.is_premium, u.premium_until
+        ''', (user.id, user.id))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            limit, is_premium, premium_until, today_cards, today_count = result
+            
+            status_text = f"""
+📊 Статус вашей подписки:
+
+🎯 Лимит карт в день: {limit}
+💎 Премиум статус: {'✅ Активен' if is_premium else '❌ Неактивен'}
+📅 Подписка до: {premium_until.strftime('%d.%m.%Y') if premium_until else 'Неактивна'}
+📨 Карт получено сегодня: {today_count or 0}/{limit}
+
+"""
+            
+            if is_premium and limit == 1:
+                status_text += "\n⚠️ *Внимание:* У вас премиум подписка, но лимит карт не обновлен!\nИспользуйте /fix_limit для исправления."
+            
+            await update.message.reply_text(status_text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ Не удалось получить информацию о подписке")
+            
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def fix_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Исправляет лимит карт для премиум пользователей"""
+    user = update.effective_user
+    
+    try:
+        from config import DAILY_CARD_LIMIT_PREMIUM
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли активная подписка
+        cursor.execute('''
+            SELECT is_premium, premium_until 
+            FROM users 
+            WHERE user_id = %s AND is_premium = TRUE AND premium_until >= CURRENT_DATE
+        ''', (user.id,))
+        
+        result = cursor.fetchone()
+        
+        if result:
+            # Обновляем лимит
+            cursor.execute('''
+                UPDATE users 
+                SET daily_cards_limit = %s 
+                WHERE user_id = %s
+            ''', (DAILY_CARD_LIMIT_PREMIUM, user.id))
+            
+            conn.commit()
+            await update.message.reply_text(f"✅ Лимит карт обновлен! Теперь вам доступно {DAILY_CARD_LIMIT_PREMIUM} карт в день.")
+        else:
+            await update.message.reply_text("❌ У вас нет активной премиум подписки")
+            
+        conn.close()
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
