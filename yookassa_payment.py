@@ -35,7 +35,7 @@ class YooKassaPayment:
                 "metadata": {
                     "user_id": user_id,
                     "subscription_type": subscription_type,
-                    "payment_id": payment_id
+                    "payment_id": payment_id  # ✅ ВАЖНО: этот ID будет в вебхуке
                 }
             }
             
@@ -110,25 +110,24 @@ class YooKassaPayment:
                     logging.error(f"❌ YooKassa API check error: {response.status_code}")
                     return None
             
-            # ✅ ДОБАВЛЕНА ПРОВЕРКА ПЛАТЕЖЕЙ В БАЗЕ ДАННЫХ
             else:
-                # Ищем платеж в базе данных по user_id и subscription_type
+                # Ищем платеж в базе данных по payment_id
                 conn = db.get_connection()
                 cursor = conn.cursor()
                 
                 cursor.execute('''
-                    SELECT yoomoney_payment_id, status 
+                    SELECT status 
                     FROM payments 
-                    WHERE user_id = %s AND status = 'success'
+                    WHERE payment_id = %s OR yoomoney_payment_id = %s
                     ORDER BY payment_date DESC 
                     LIMIT 1
-                ''', (payment_info['user_id'],))
+                ''', (payment_id, payment_id))
                 
                 result = cursor.fetchone()
                 conn.close()
                 
                 if result:
-                    yoomoney_payment_id, status = result
+                    status = result[0]
                     if status == 'success':
                         return True
                 
@@ -137,7 +136,6 @@ class YooKassaPayment:
         except Exception as e:
             logging.error(f"❌ Error checking payment status: {e}")
             return None
-    
 
     def find_user_payment(self, user_id: int):
         """Ищет платежи пользователя в базе данных"""

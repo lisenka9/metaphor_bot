@@ -10,6 +10,7 @@ from config import BOT_TOKEN
 import handlers
 from database import db
 from yookassa_payment import payment_processor  
+import logging
 
 # Настройка логирования
 logging.basicConfig(
@@ -33,21 +34,121 @@ def health_check():
 def payment_callback():
     """Обрабатывает уведомления от ЮKassa"""
     try:
-        data = request.get_json()  # ✅ ИСПРАВЛЕНО для JSON данных
-        logger.info(f"📨 Received payment callback: {data}")
+        # Получаем JSON данные
+        event_json = request.get_json()
+        logger.info(f"📨 Received YooKassa webhook: {event_json}")
         
-        if not data:
+        if not event_json:
+            logger.error("❌ Empty webhook data received")
             return jsonify({"status": "error", "message": "No data received"}), 400
         
-        # Для ЮKassa webhooks нужно обрабатывать уведомления
-        # Временная заглушка - основная логика в мониторинге платежей
-        logger.info(f"🔔 YooKassa webhook received: {data}")
-        
-        return jsonify({"status": "success"}), 200
+        # Проверяем тип события
+        event_type = event_json.get('type')
+        if event_type == 'notification':
+            # Обрабатываем уведомление о платеже
+            return handle_payment_notification(event_json)
+        elif event_type == 'payment.waiting_for_capture':
+            # Платеж ожидает подтверждения
+            logger.info("⏳ Payment waiting for capture")
+            return jsonify({"status": "success"}), 200
+        else:
+            logger.warning(f"⚠️ Unknown event type: {event_type}")
+            return jsonify({"status": "success"}), 200
             
     except Exception as e:
-        logging.error(f"❌ Error in payment callback: {e}")
+        logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
+
+def handle_payment_notification(event_data):
+    """Обрабатывает уведомление о платеже"""
+    try:
+        # Получаем объект платежа
+        payment_object = event_data.get('object', {})
+        payment_status = payment_object.get('status')
+        payment_id = payment_object.get('id')
+        metadata = payment_object.get('metadata', {})
+        
+        user_id = metadata.get('user_id')
+        subscription_type = metadata.get('subscription_type')
+        internal_payment_id = metadata.get('payment_id')
+        
+        logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, user_id={user_id}")
+        
+        if payment_status == 'succeeded':
+            # Платеж успешен!
+            logger.info(f"✅ Payment succeeded for user {user_id}")
+            
+            # Активируем подписку
+            success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, internal_payment_id)
+            
+            if success:
+                logger.info(f"🎉 Subscription activated for user {user_id}")
+                return jsonify({"status": "success"}), 200
+            else:
+                logger.error(f"❌ Failed to activate subscription for user {user_id}")
+                return jsonify({"status": "error", "message": "Subscription activation failed"}), 500
+                
+        elif payment_status in ['canceled', 'failed']:
+            logger.info(f"❌ Payment failed for user {user_id}")
+            return jsonify({"status": "success"}), 200
+        else:
+            logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
+            return jsonify({"status": "success"}), 200
+            
+    except Exception as e:
+        logger.error(f"❌ Error handling payment notification: {e}")
+        return jsonify({"status": "error"}), 500
+
+def activate_subscription_from_webhook(user_id, subscription_type, yookassa_payment_id, internal_payment_id):
+    """Активирует подписку из вебхука"""
+    try:
+        from database import db
+        from config import SUBSCRIPTION_DURATIONS
+        
+        # Активируем подписку в базе данных
+        success = db.create_subscription(
+            user_id, 
+            subscription_type, 
+            SUBSCRIPTION_DURATIONS[subscription_type]
+        )
+        
+        if success:
+            # Сохраняем информацию о платеже
+            save_payment_to_db(user_id, subscription_type, yookassa_payment_id, internal_payment_id)
+            return True
+        return False
+        
+    except Exception as e:
+        logger.error(f"❌ Error activating subscription from webhook: {e}")
+        return False
+
+def save_payment_to_db(user_id, subscription_type, yookassa_payment_id, internal_payment_id):
+    """Сохраняет информацию о платеже в базу данных"""
+    try:
+        from database import db
+        from config import SUBSCRIPTION_PRICES
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO payments (user_id, amount, subscription_type, status, yoomoney_payment_id, payment_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (
+            user_id,
+            SUBSCRIPTION_PRICES[subscription_type],
+            subscription_type,
+            'success',
+            yookassa_payment_id,
+            internal_payment_id
+        ))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"✅ Payment saved to database for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving payment to DB: {e}")
 
 def start_flask():
     """Запускает Flask сервер"""
