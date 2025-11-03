@@ -683,7 +683,7 @@ def create_subscription(self, user_id: int, subscription_type: str, duration_day
         finally:
             conn.close()
 
-    def can_take_daily_message(self, user_id: int) -> tuple:
+    def can_take_daily_message(self, user_id: int) -> tuple: 
         """Проверяет, может ли пользователь взять послание дня"""
         conn = self.get_connection()
         cursor = conn.cursor()
