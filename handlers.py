@@ -9,6 +9,7 @@ import io
 from datetime import datetime
 from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
+import uuid
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -206,7 +207,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_subscribe_from_button(query, context)
     
     elif query.data.startswith("subscribe_"):
-        await handle_subscription_selection(query, context)
+        await handle_subscription_selection(update, context)
     
     elif query.data.startswith("check_payment_"):
         await handle_payment_check(query, context)
@@ -2083,11 +2084,22 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор типа подписки"""
+    query = update.callback_query
+    await query.answer()
+    
     try:
         subscription_type = query.data.replace("subscribe_", "")
         user_id = query.from_user.id
         
         logging.info(f"🔄 Subscription selected: {subscription_type} by user {user_id}")
+        
+        # ✅ ДОБАВЬТЕ ПРОВЕРКУ НАЛИЧИЯ КЛЮЧЕЙ
+        if subscription_type not in SUBSCRIPTION_PRICES:
+            await query.message.reply_text(
+                "❌ Ошибка: выбран неверный тип подписки.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            return
         
         price = SUBSCRIPTION_PRICES[subscription_type]
         duration = SUBSCRIPTION_NAMES[subscription_type]
@@ -2105,6 +2117,7 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             return
         
         # Генерируем уникальный ID для отслеживания платежа
+        import uuid  # ✅ ДОБАВЬТЕ ИМПОРТ
         payment_id = str(uuid.uuid4())
         
         # Сохраняем в контексте
@@ -2137,9 +2150,12 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
         )
-        
-async def handle_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+
+async def handle_payment_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты"""
+    query = update.callback_query
+    await query.answer()
+    
     user_id = query.from_user.id
     
     payment_id = context.user_data.get('payment_id')

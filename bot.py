@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from config import BOT_TOKEN
 import handlers
 from database import db
-from yookassa_payment import payment_processor  # ✅ ИСПРАВЛЕНО ИМПОРТ
+from yookassa_payment import payment_processor  
 
 # Настройка логирования
 logging.basicConfig(
