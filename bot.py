@@ -131,12 +131,12 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
             application.add_handler(CommandHandler("reset_message_limit", handlers.reset_message_limit))
             application.add_handler(CallbackQueryHandler(
-                handlers.handle_subscription_selection, 
-                pattern="^subscribe_"
-            ))
-            application.add_handler(CallbackQueryHandler(
                 handlers.handle_payment_check, 
                 pattern="^check_payment_"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_subscription_selection, 
+                pattern="^subscribe_"
             ))
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 

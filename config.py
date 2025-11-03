@@ -11,14 +11,17 @@ ADMIN_IDS = [int(id.strip()) for id in os.environ.get("ADMIN_IDS", "").split(","
 DAILY_CARD_LIMIT_FREE = 1
 DAILY_CARD_LIMIT_PREMIUM = 5
 
-# Настройки ЮMoney
-YOOMONEY_CLIENT_ID = os.environ.get("YOOMONEY_CLIENT_ID", "")
-YOOMONEY_REDIRECT_URI = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "") + "/payment_callback"
-YOOMONEY_SCOPE = "payment-p2p"
-YOOMONEY_SECRET = os.environ.get("YOOMONEY_SECRET", "")
+# Настройки ЮKassa
+YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")
+YOOKASSA_SECRET_KEY = os.environ.get("YOOKASSA_SECRET_KEY", "")
 
-# Реквизиты
-YOOMONEY_RECEIVER = os.environ.get("YOOMONEY_RECEIVER")
+# Ссылки для оплаты
+PAYMENT_LINKS = {
+    "month": "https://yookassa.ru/my/i/aQY7xxKX30Fj/l",
+    "3months": "https://yookassa.ru/my/i/aQY8WAd6bEpS/l", 
+    "6months": "https://yookassa.ru/my/i/aQY8oBNxveyr/l",
+    "year": "https://yookassa.ru/my/i/aQY86Y-FkTVZ/l"
+}
 
 # Цены подписок
 SUBSCRIPTION_PRICES = {

@@ -92,15 +92,6 @@ def get_subscription_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_payment_keyboard(subscription_type: str, payment_url: str):
-    """Клавиатура только с кнопкой оплаты"""
-    keyboard = [
-        [InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)],
-        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_payment_{subscription_type}")],
-        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
 def get_main_menu_keyboard():
     """Обновленная клавиатура для главного меню"""
     keyboard = [
@@ -147,6 +138,24 @@ def get_message_status_keyboard():
     """Клавиатура для статуса посланий (для бесплатных пользователей)"""
     keyboard = [
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_payment_keyboard(subscription_type: str, payment_url: str, payment_id: str):
+    """Клавиатура для оплаты"""
+    keyboard = [
+        [InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)],
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_payment_{payment_id}")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_payment_check_keyboard(subscription_type: str, payment_id: str):
+    """Клавиатура для проверки оплаты"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_payment_{payment_id}")],
+        [InlineKeyboardButton("💎 Выбрать другой тариф", callback_data="subscribe")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)

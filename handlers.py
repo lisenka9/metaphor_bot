@@ -7,8 +7,8 @@ import keyboard
 import csv
 import io
 from datetime import datetime
-from payment import payment_processor
-from config import SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES, SUBSCRIPTION_DURATIONS, YOOMONEY_RECEIVER
+from yookassa_payment import payment_processor
+from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -1629,102 +1629,6 @@ ID пользователя: {user_id}
 
     await update.message.reply_text(debug_info, parse_mode='Markdown')
 
-
-async def handle_subscription_selection(query, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает выбор типа подписки"""
-    subscription_type = query.data.replace("subscribe_", "")
-    user_id = query.from_user.id
-    
-    price = SUBSCRIPTION_PRICES[subscription_type]
-    duration = SUBSCRIPTION_NAMES[subscription_type]
-    
-    # Генерируем уникальную метку
-    payment_label = payment_processor.generate_payment_label(user_id, subscription_type)
-    
-    # Сохраняем в контексте
-    context.user_data['payment_label'] = payment_label
-    context.user_data['subscription_type'] = subscription_type
-    
-    # Создаем ссылку для оплаты
-    payment_url = payment_processor.create_payment_link(
-        amount=price,
-        label=payment_label,
-        receiver=YOOMONEY_RECEIVER,
-        targets=f"Подписка {duration} - Metaphor Bot"
-    )
-    
-    payment_text = f"""
-💎 Премиум подписка - {duration}
-
-Стоимость: {price}₽
-
-Нажмите кнопку "💳 Оплатить онлайн" для перехода к безопасной оплате.
-
-После оплаты система автоматически активирует вашу подписку в течение 1-2 минут.
-
-Если подписка не активировалась, нажмите "🔄 Проверить оплату".
-"""
-    
-    await query.message.reply_text(
-        payment_text,
-        reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url),
-        parse_mode='Markdown'
-    )
-    
-    # Запускаем мониторинг платежа
-    payment_processor.start_payment_monitoring(payment_label)
-
-async def handle_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
-    """Проверяет статус оплаты"""
-    subscription_type = query.data.replace("check_payment_", "")
-    user_id = query.from_user.id
-    
-    payment_label = context.user_data.get('payment_label')
-    
-    if not payment_label:
-        await query.message.reply_text(
-            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
-            reply_markup=keyboard.get_subscription_choice_keyboard()
-        )
-        return
-    
-    # Проверяем статус подписки пользователя
-    subscription = db.get_user_subscription(user_id)
-    
-    if subscription:
-        # Подписка уже активирована
-        success_text = f"""
-✅ Подписка активирована!
-
-Ваша премиум подписка успешно активирована.
-
-✨ Теперь вам доступны:
-• 5 карт дня вместо 1
-• Ежедневное послание дня  
-• Архипелаг ресурсов
-
-Наслаждайтесь полным доступом! 💫
-"""
-        await query.message.reply_text(
-            success_text,
-            reply_markup=keyboard.get_payment_success_keyboard(),
-            parse_mode='Markdown'
-        )
-        
-        # Очищаем данные о платеже
-        if 'payment_label' in context.user_data:
-            del context.user_data['payment_label']
-            
-    else:
-        # Подписка еще не активирована
-        await query.message.reply_text(
-            "⏳ Платеж еще обрабатывается...\n\n"
-            "Пожалуйста, подождите 1-2 минуты и проверьте снова.\n"
-            "Если прошло больше времени, свяжитесь с @Skromova_Svetlana_psy",
-            reply_markup=keyboard.get_payment_keyboard(subscription_type, "")
-        )
-
-
 async def handle_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает команду /payment с deep links"""
     user = update.effective_user
@@ -2177,5 +2081,161 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
         logging.error(f"❌ Error resetting message limit: {e}")
         await update.message.reply_text("❌ Ошибка при сбросе лимита посланий")
 
+async def handle_subscription_selection(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор типа подписки"""
+    subscription_type = query.data.replace("subscribe_", "")
+    user_id = query.from_user.id
+    
+    price = SUBSCRIPTION_PRICES[subscription_type]
+    duration = SUBSCRIPTION_NAMES[subscription_type]
+    
+    # Получаем ссылку для оплаты
+    payment_url = PAYMENT_LINKS.get(subscription_type)
+    
+    if not payment_url:
+        await query.message.reply_text(
+            "❌ Ошибка: ссылка для оплаты не найдена. Свяжитесь с администратором.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Генерируем уникальный ID для отслеживания платежа
+    payment_id = str(uuid.uuid4())
+    
+    # Сохраняем в контексте
+    context.user_data['payment_id'] = payment_id
+    context.user_data['subscription_type'] = subscription_type
+    
+    payment_text = f"""
+💎 Премиум подписка - {duration}
 
+Стоимость: {price}₽
 
+Нажмите кнопку "💳 Оплатить онлайн" для перехода к оплате.
+
+После успешной оплаты подписка активируется автоматически в течение 1-2 минут.
+
+Если подписка не активировалась, нажмите "🔄 Проверить оплату".
+"""
+    
+    await query.message.reply_text(
+        payment_text,
+        reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url, payment_id),
+        parse_mode='Markdown'
+    )
+    
+    # Запускаем мониторинг платежа
+    payment_processor.start_payment_monitoring(payment_id)
+
+async def handle_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет статус оплаты"""
+    user_id = query.from_user.id
+    
+    payment_id = context.user_data.get('payment_id')
+    subscription_type = context.user_data.get('subscription_type')
+    
+    if not payment_id:
+        await query.message.reply_text(
+            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
+            reply_markup=keyboard.get_subscription_choice_keyboard()
+        )
+        return
+    
+    # Проверяем статус подписки пользователя
+    subscription = db.get_user_subscription(user_id)
+    
+    if subscription:
+        # Подписка уже активирована
+        success_text = f"""
+✅ Подписка активирована!
+
+Ваша премиум подписка успешно активирована.
+
+✨ Теперь вам доступны:
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Архипелаг ресурсов
+
+Наслаждайтесь полным доступом! 💫
+"""
+        await query.message.reply_text(
+            success_text,
+            reply_markup=keyboard.get_payment_success_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+        # Очищаем данные о платеже
+        if 'payment_id' in context.user_data:
+            del context.user_data['payment_id']
+            
+    else:
+        # Проверяем статус платежа через API
+        payment_status = payment_processor.check_payment_status(payment_id)
+        
+        if payment_status is True:
+            # Платеж подтвержден, активируем подписку
+            if payment_processor.activate_subscription(payment_id):
+                success_text = f"""
+✅ Оплата подтверждена!
+
+Ваша премиум подписка активирована.
+
+✨ Теперь вам доступны все премиум-функции!
+"""
+                await query.message.reply_text(
+                    success_text,
+                    reply_markup=keyboard.get_payment_success_keyboard(),
+                    parse_mode='Markdown'
+                )
+                
+                # Очищаем данные о платеже
+                if 'payment_id' in context.user_data:
+                    del context.user_data['payment_id']
+            else:
+                await query.message.reply_text(
+                    "❌ Ошибка при активации подписки. Свяжитесь с администратором.",
+                    reply_markup=keyboard.get_main_menu_keyboard()
+                )
+                
+        elif payment_status is False:
+            await query.message.reply_text(
+                "❌ Платеж не прошел или был отменен. Попробуйте оплатить снова.",
+                reply_markup=keyboard.get_subscription_choice_keyboard()
+            )
+        else:
+            # Платеж еще обрабатывается
+            await query.message.reply_text(
+                "⏳ Платеж еще обрабатывается...\n\n"
+                "Пожалуйста, подождите 1-2 минуты и проверьте снова.",
+                reply_markup=keyboard.get_payment_check_keyboard(subscription_type, payment_id)
+            )
+
+async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает deep link после успешной оплаты"""
+    user = update.effective_user
+    args = context.args
+    
+    if args and args[0] == 'payment_success':
+        # Проверяем, есть ли у пользователя активная подписка
+        subscription = db.get_user_subscription(user.id)
+        
+        if subscription:
+            success_text = """
+✅ Оплата прошла успешно!
+
+Ваша премиум подписка активирована.
+
+✨ Теперь вам доступны все премиум-функции!
+"""
+            await update.message.reply_text(
+                success_text,
+                reply_markup=keyboard.get_payment_success_keyboard(),
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "⏳ Ваш платеж обрабатывается...\n\n"
+                "Подписка будет активирована в течение 1-2 минут. "
+                "Если прошло больше времени, используйте команду /subscribe для проверки статуса.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )

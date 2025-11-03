@@ -643,7 +643,8 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
+    # Убедитесь, что есть метод create_subscription
+def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
         """Создает подписку для пользователя"""
         conn = self.get_connection()
         cursor = conn.cursor()
