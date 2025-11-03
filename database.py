@@ -118,8 +118,6 @@ class DatabaseManager:
             if cursor.fetchone()[0] == 0:
                 self._populate_sample_cards(cursor)
             
-
-
             conn.commit()
             logging.info("✅ Database tables initialized successfully")
             
@@ -332,7 +330,6 @@ class DatabaseManager:
         finally:
             conn.close()
 
-
     def update_existing_users_limits(self):
         """Обновляет лимиты существующих пользователей"""
         conn = self.get_connection()
@@ -379,7 +376,6 @@ class DatabaseManager:
             return None
         finally:
             conn.close()
-
 
     def add_missing_cards(self):
         """Добавляет отсутствующие карты в базу"""
@@ -476,8 +472,6 @@ class DatabaseManager:
                 (86, "86", "https://ibb.co/8n5d6bLC", "Карта 86"),
                 (87, "87", "https://ibb.co/xqr6QynP", "Карта 87"),
                 (88, "88", "https://ibb.co/wZZcDHNF", "Карта 88"),
-
-
                 (89, "1", "https://ibb.co/9kNFQCZr", "Карта 1"),
                 (90, "2", "https://ibb.co/qM5FTdLy", "Карта 2"),
                 (91, "3", "https://ibb.co/VWTgcJFT", "Карта 3"),
@@ -566,7 +560,6 @@ class DatabaseManager:
                 (174, "86", "https://ibb.co/9H9jV1tq", "Карта 86"),
                 (175, "87", "https://ibb.co/DDvF5nWq", "Карта 87"),
                 (176, "88", "https://ibb.co/4wNXYS52", "Карта 88")
-
             ]
             
             added_count = 0
@@ -591,13 +584,11 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    
     def _populate_daily_messages(self, cursor):
         """Добавляет послания дня в базу"""
         daily_messages = [
             (1, "https://ibb.co/wZd8BTHM", "Послание 1"),
             (2, "https://ibb.co/PGWbXCyP", "Послание 2")
-            
         ]
         for message_id, image_url, message_text in daily_messages:
             cursor.execute('''
@@ -643,8 +634,7 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    # Убедитесь, что есть метод create_subscription
-def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
+    def create_subscription(self, user_id: int, subscription_type: str, duration_days: int):
         """Создает подписку для пользователя"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -825,7 +815,6 @@ def create_subscription(self, user_id: int, subscription_type: str, duration_day
         finally:
             conn.close()
 
-    # Исправляем метод get_random_message
     def get_random_message(self):
         """Получает случайное послание дня"""
         conn = self.get_connection()
@@ -942,5 +931,6 @@ def create_subscription(self, user_id: int, subscription_type: str, duration_day
             return None
         finally:
             conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()
