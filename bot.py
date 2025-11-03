@@ -501,6 +501,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("update_db", handlers.update_database))
             application.add_handler(CommandHandler("mystatus", handlers.check_subscription_status))
             application.add_handler(CommandHandler("fix_limit", handlers.fix_limit))
+            application.add_handler(CommandHandler("resetsimple", handlers.reset_simple))
             
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
