@@ -2083,50 +2083,61 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_subscription_selection(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор типа подписки"""
-    subscription_type = query.data.replace("subscribe_", "")
-    user_id = query.from_user.id
-    
-    price = SUBSCRIPTION_PRICES[subscription_type]
-    duration = SUBSCRIPTION_NAMES[subscription_type]
-    
-    # Получаем ссылку для оплаты
-    payment_url = PAYMENT_LINKS.get(subscription_type)
-    
-    if not payment_url:
-        await query.message.reply_text(
-            "❌ Ошибка: ссылка для оплаты не найдена. Свяжитесь с администратором.",
-            reply_markup=keyboard.get_main_menu_keyboard()
-        )
-        return
-    
-    # Генерируем уникальный ID для отслеживания платежа
-    payment_id = str(uuid.uuid4())
-    
-    # Сохраняем в контексте
-    context.user_data['payment_id'] = payment_id
-    context.user_data['subscription_type'] = subscription_type
-    
-    payment_text = f"""
+    try:
+        subscription_type = query.data.replace("subscribe_", "")
+        user_id = query.from_user.id
+        
+        logging.info(f"🔄 Subscription selected: {subscription_type} by user {user_id}")
+        
+        price = SUBSCRIPTION_PRICES[subscription_type]
+        duration = SUBSCRIPTION_NAMES[subscription_type]
+        
+        # Получаем ссылку для оплаты
+        payment_url = PAYMENT_LINKS.get(subscription_type)
+        
+        logging.info(f"🔗 Payment URL: {payment_url}")
+        
+        if not payment_url:
+            await query.message.reply_text(
+                "❌ Ошибка: ссылка для оплаты не найдена. Свяжитесь с администратором.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            return
+        
+        # Генерируем уникальный ID для отслеживания платежа
+        payment_id = str(uuid.uuid4())
+        
+        # Сохраняем в контексте
+        context.user_data['payment_id'] = payment_id
+        context.user_data['subscription_type'] = subscription_type
+        
+        payment_text = f"""
 💎 Премиум подписка - {duration}
 
 Стоимость: {price}₽
 
-Нажмите кнопку "💳 Оплатить онлайн" для перехода к оплате.
+Нажмите кнопку "💳 Оплатить онлайн" для перехода к безопасной оплате.
 
 После успешной оплаты подписка активируется автоматически в течение 1-2 минут.
 
 Если подписка не активировалась, нажмите "🔄 Проверить оплату".
 """
-    
-    await query.message.reply_text(
-        payment_text,
-        reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url, payment_id),
-        parse_mode='Markdown'
-    )
-    
-    # Запускаем мониторинг платежа
-    payment_processor.start_payment_monitoring(payment_id)
-
+        
+        await query.message.reply_text(
+            payment_text,
+            reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url, payment_id),
+            parse_mode='Markdown'
+        )
+        
+        logging.info(f"✅ Payment message sent for user {user_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in handle_subscription_selection: {e}")
+        await query.message.reply_text(
+            "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        
 async def handle_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты"""
     user_id = query.from_user.id
