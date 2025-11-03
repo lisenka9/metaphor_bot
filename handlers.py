@@ -803,23 +803,48 @@ async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сбрасывает лимиты карт для администратора (только для админов)"""
     user = update.effective_user
     
-    # ✅ ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ АДМИНИСТРАТОР
     if user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
     try:
+        from datetime import date
+        import logging
+        
+        logging.info(f"🔄 Resetme command by admin {user.id}")
+        
         conn = db.get_connection()
         cursor = conn.cursor()
         
+        # ✅ ПРОВЕРЯЕМ СТРУКТУРУ ТАБЛИЦЫ
+        cursor.execute("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'user_cards' 
+            AND table_schema = 'public'
+        """)
+        columns = cursor.fetchall()
+        logging.info(f"📋 user_cards columns: {columns}")
+        
         # ✅ ПОЛНОСТЬЮ СБРАСЫВАЕМ ИСТОРИЮ КАРТ ЗА СЕГОДНЯ
         today = date.today()
+        logging.info(f"📅 Today date: {today}")
+        
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_cards 
+            WHERE user_id = %s AND DATE(drawn_date) = %s
+        ''', (user.id, today))
+        
+        cards_before = cursor.fetchone()[0]
+        logging.info(f"📊 Cards before reset: {cards_before}")
+        
         cursor.execute('''
             DELETE FROM user_cards 
             WHERE user_id = %s AND DATE(drawn_date) = %s
         ''', (user.id, today))
         
         deleted_cards = cursor.rowcount
+        logging.info(f"🗑️ Deleted cards: {deleted_cards}")
         
         # ✅ СБРАСЫВАЕМ ДАТУ ПОСЛЕДНЕЙ КАРТЫ
         cursor.execute('''
@@ -827,6 +852,9 @@ async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
             SET last_daily_card_date = NULL 
             WHERE user_id = %s
         ''', (user.id,))
+        
+        updated_users = cursor.rowcount
+        logging.info(f"👤 Updated users: {updated_users}")
         
         conn.commit()
         conn.close()
@@ -838,9 +866,9 @@ async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
     except Exception as e:
-        logging.error(f"❌ Error resetting limit: {e}")
-        await update.message.reply_text("❌ Ошибка при сбросе лимита")
-        
+        logging.error(f"❌ Error resetting limit: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ Ошибка при сбросе лимита: {str(e)}")
+               
 async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Временная команда для отладки базы данных"""
     user = update.effective_user
