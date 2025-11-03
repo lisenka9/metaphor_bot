@@ -800,23 +800,47 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def reset_my_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сброс своего лимита карт (для тестирования)"""
+    """Сбрасывает лимиты карт для администратора (только для админов)"""
     user = update.effective_user
+    
+    # ✅ ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ АДМИНИСТРАТОР
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
     
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        # ИСПРАВЛЕНО для PostgreSQL
-        cursor.execute('UPDATE users SET last_daily_card_date = NULL WHERE user_id = %s', (user.id,))
+        
+        # ✅ ПОЛНОСТЬЮ СБРАСЫВАЕМ ИСТОРИЮ КАРТ ЗА СЕГОДНЯ
+        today = date.today()
+        cursor.execute('''
+            DELETE FROM user_cards 
+            WHERE user_id = %s AND DATE(drawn_date) = %s
+        ''', (user.id, today))
+        
+        deleted_cards = cursor.rowcount
+        
+        # ✅ СБРАСЫВАЕМ ДАТУ ПОСЛЕДНЕЙ КАРТЫ
+        cursor.execute('''
+            UPDATE users 
+            SET last_daily_card_date = NULL 
+            WHERE user_id = %s
+        ''', (user.id,))
+        
         conn.commit()
         conn.close()
         
-        await update.message.reply_text("✅ Ваш лимит сброшен! Можете снова взять карту дня.")
+        await update.message.reply_text(
+            f"✅ Ваши лимиты полностью сброшены!\n"
+            f"🗑️ Удалено карт за сегодня: {deleted_cards}\n"
+            f"🎯 Теперь вы можете получить до 5 карт (премиум лимит)"
+        )
         
     except Exception as e:
         logging.error(f"❌ Error resetting limit: {e}")
         await update.message.reply_text("❌ Ошибка при сбросе лимита")
-
+        
 async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Временная команда для отладки базы данных"""
     user = update.effective_user
