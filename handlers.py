@@ -2295,3 +2295,19 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
                 "Если прошло больше времени, используйте команду /subscribe для проверки статуса.",
                 reply_markup=keyboard.get_main_menu_keyboard()
             )
+
+async def update_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновляет структуру базы данных"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        # Добавляем недостающие колонки
+        db.add_payment_id_column()
+        await update.message.reply_text("✅ База данных обновлена! Добавлена колонка payment_id")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")

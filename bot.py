@@ -88,8 +88,8 @@ def handle_payment_notification(event_data):
                 if success:
                     logger.info(f"🎉 Subscription activated for user {user_id}")
                     
-                    # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ В ТЕЛЕГРАМ
-                    send_payment_success_notification(user_id, subscription_type, amount_value)
+                    import asyncio
+                    asyncio.create_task(send_payment_success_notification(user_id, subscription_type, amount_value))
                     
                 return jsonify({"status": "success"}), 200
                 
@@ -292,7 +292,7 @@ def save_unknown_payment_for_review(payment_object):
     except Exception as e:
         logger.error(f"❌ Error saving unknown payment: {e}")
 
-def send_payment_success_notification(user_id: int, subscription_type: str, amount: str):
+async def send_payment_success_notification(user_id: int, subscription_type: str, amount: str):
     """Отправляет уведомление пользователю об успешной оплате"""
     try:
         from telegram import Bot
@@ -322,7 +322,7 @@ def send_payment_success_notification(user_id: int, subscription_type: str, amou
 Наслаждайтесь полным доступом! 💫
 """
         
-        bot.send_message(
+        await bot.send_message(
             chat_id=user_id,
             text=message_text,
             parse_mode='Markdown'
@@ -498,6 +498,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("message_status", handlers.message_status))
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
+            application.add_handler(CommandHandler("update_db", handlers.update_database))
             
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
