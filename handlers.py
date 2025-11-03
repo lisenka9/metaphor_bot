@@ -2094,10 +2094,16 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
     
     try:
         subscription_type = query.data.replace("subscribe_", "")
-        user_id = query.from_user.id  # ✅ Получаем user_id
+        user_id = query.from_user.id
         
         logging.info(f"🔄 Subscription selected: {subscription_type} by user {user_id}")
         
+        # ✅ СОХРАНЯЕМ ДЕЙСТВИЕ ПОЛЬЗОВАТЕЛЯ ДЛЯ ИДЕНТИФИКАЦИИ
+        save_user_action(user_id, 'subscription_selection', {
+            'subscription_type': subscription_type,
+            'price': SUBSCRIPTION_PRICES.get(subscription_type),
+            'timestamp': datetime.now().isoformat()
+        })
         if subscription_type not in SUBSCRIPTION_PRICES:
             await query.message.reply_text(
                 "❌ Ошибка: выбран неверный тип подписки.",
@@ -2161,10 +2167,23 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
         
     except Exception as e:
         logging.error(f"❌ Error in handle_subscription_selection: {e}")
-        await query.message.reply_text(
-            "❌ Произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже.",
-            reply_markup=keyboard.get_main_menu_keyboard()
-        )
+
+def save_user_action(user_id: int, action_type: str, action_data: dict):
+    """Сохраняет действие пользователя для идентификации"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO user_actions (user_id, action_type, action_data)
+            VALUES (%s, %s, %s)
+        ''', (user_id, action_type, json.dumps(action_data)))
+        
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        logging.error(f"❌ Error saving user action: {e}")
 
 async def handle_payment_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты"""
