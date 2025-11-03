@@ -162,9 +162,25 @@ def run_bot_with_restart():
                 logger.error("💥 Max retries exceeded. Bot stopped.")
                 raise
 
+def start_payment_monitoring():
+    """Запускает автоматический мониторинг платежей"""
+    while True:
+        try:
+            payment_processor.check_all_pending_payments()
+        except Exception as e:
+            logging.error(f"❌ Error in payment monitoring: {e}")
+        
+        # Проверяем каждые 30 секунд
+        time.sleep(30)
+
 def main():
     """Основная функция запуска"""
     
+    # Запускаем мониторинг платежей в отдельном потоке
+    payment_thread = threading.Thread(target=start_payment_monitoring)
+    payment_thread.daemon = True
+    payment_thread.start()
+
     # Запускаем Flask в отдельном потоке
     flask_thread = threading.Thread(target=start_flask)
     flask_thread.daemon = True

@@ -77,44 +77,124 @@ class YooKassaPayment:
     def check_payment_status(self, payment_id: str):
         """Проверяет статус платежа через API ЮKassa"""
         try:
-            if payment_id not in self.pending_payments:
-                return False
-            
-            payment_info = self.pending_payments[payment_id]
-            yookassa_payment_id = payment_info['yookassa_payment_id']
-            
-            headers = {
-                "Content-Type": "application/json"
-            }
-            
-            response = requests.get(
-                f"{self.base_url}/payments/{yookassa_payment_id}",
-                headers=headers,
-                auth=self.auth,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                payment_data = response.json()
-                status = payment_data['status']
+            # Если payment_id есть в ожидающих - проверяем через API
+            if payment_id in self.pending_payments:
+                payment_info = self.pending_payments[payment_id]
+                yookassa_payment_id = payment_info['yookassa_payment_id']
                 
-                # Обновляем статус в локальном хранилище
-                self.pending_payments[payment_id]['status'] = status
+                headers = {
+                    "Content-Type": "application/json"
+                }
                 
-                if status == 'succeeded':
-                    return True
-                elif status in ['canceled', 'failed']:
-                    return False
+                response = requests.get(
+                    f"{self.base_url}/payments/{yookassa_payment_id}",
+                    headers=headers,
+                    auth=self.auth,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    payment_data = response.json()
+                    status = payment_data['status']
+                    
+                    # Обновляем статус в локальном хранилище
+                    self.pending_payments[payment_id]['status'] = status
+                    
+                    if status == 'succeeded':
+                        return True
+                    elif status in ['canceled', 'failed']:
+                        return False
+                    else:
+                        return None  # Платеж еще в процессе
                 else:
-                    return None  # Платеж еще в процессе
+                    logging.error(f"❌ YooKassa API check error: {response.status_code}")
+                    return None
+            
+            # ✅ ДОБАВЛЕНА ПРОВЕРКА ПЛАТЕЖЕЙ В БАЗЕ ДАННЫХ
             else:
-                logging.error(f"❌ YooKassa API check error: {response.status_code}")
-                return None
+                # Ищем платеж в базе данных по user_id и subscription_type
+                conn = db.get_connection()
+                cursor = conn.cursor()
                 
+                cursor.execute('''
+                    SELECT yoomoney_payment_id, status 
+                    FROM payments 
+                    WHERE user_id = %s AND status = 'success'
+                    ORDER BY payment_date DESC 
+                    LIMIT 1
+                ''', (payment_info['user_id'],))
+                
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result:
+                    yoomoney_payment_id, status = result
+                    if status == 'success':
+                        return True
+                
+                return False
+                    
         except Exception as e:
             logging.error(f"❌ Error checking payment status: {e}")
             return None
     
+    def check_all_pending_payments(self):
+        """Автоматически проверяет все ожидающие платежи"""
+        completed_payments = []
+        
+        for payment_id, payment_info in list(self.pending_payments.items()):
+            try:
+                status = self.check_payment_status(payment_id)
+                
+                if status is True:
+                    # Платеж успешен - активируем подписку
+                    if self.activate_subscription(payment_id):
+                        logging.info(f"✅ Auto-activated subscription for payment {payment_id}")
+                        completed_payments.append(payment_id)
+                elif status is False:
+                    # Платеж не прошел - удаляем
+                    logging.info(f"❌ Payment failed: {payment_id}")
+                    completed_payments.append(payment_id)
+                    
+            except Exception as e:
+                logging.error(f"❌ Error checking payment {payment_id}: {e}")
+        
+        # Удаляем завершенные платежи
+        for payment_id in completed_payments:
+            if payment_id in self.pending_payments:
+                del self.pending_payments[payment_id]
+    
+    def find_user_payment(self, user_id: int):
+        """Ищет платежи пользователя в базе данных"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT yoomoney_payment_id, status, subscription_type, payment_date
+                FROM payments 
+                WHERE user_id = %s 
+                ORDER BY payment_date DESC 
+                LIMIT 1
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                yoomoney_payment_id, status, subscription_type, payment_date = result
+                return {
+                    'status': status,
+                    'subscription_type': subscription_type,
+                    'payment_date': payment_date
+                }
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"❌ Error finding user payment: {e}")
+            return None
+
     def activate_subscription(self, payment_id: str):
         """Активирует подписку после успешной оплаты"""
         if payment_id not in self.pending_payments:
