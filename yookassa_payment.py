@@ -138,32 +138,7 @@ class YooKassaPayment:
             logging.error(f"❌ Error checking payment status: {e}")
             return None
     
-    def check_all_pending_payments(self):
-        """Автоматически проверяет все ожидающие платежи"""
-        completed_payments = []
-        
-        for payment_id, payment_info in list(self.pending_payments.items()):
-            try:
-                status = self.check_payment_status(payment_id)
-                
-                if status is True:
-                    # Платеж успешен - активируем подписку
-                    if self.activate_subscription(payment_id):
-                        logging.info(f"✅ Auto-activated subscription for payment {payment_id}")
-                        completed_payments.append(payment_id)
-                elif status is False:
-                    # Платеж не прошел - удаляем
-                    logging.info(f"❌ Payment failed: {payment_id}")
-                    completed_payments.append(payment_id)
-                    
-            except Exception as e:
-                logging.error(f"❌ Error checking payment {payment_id}: {e}")
-        
-        # Удаляем завершенные платежи
-        for payment_id in completed_payments:
-            if payment_id in self.pending_payments:
-                del self.pending_payments[payment_id]
-    
+
     def find_user_payment(self, user_id: int):
         """Ищет платежи пользователя в базе данных"""
         try:
@@ -194,6 +169,32 @@ class YooKassaPayment:
         except Exception as e:
             logging.error(f"❌ Error finding user payment: {e}")
             return None
+
+    def check_all_pending_payments(self):
+        """Автоматически проверяет все ожидающие платежи"""
+        completed_payments = []
+        
+        for payment_id, payment_info in list(self.pending_payments.items()):
+            try:
+                status = self.check_payment_status(payment_id)
+                
+                if status is True:
+                    # Платеж успешен - активируем подписку
+                    if self.activate_subscription(payment_id):
+                        logging.info(f"✅ Auto-activated subscription for payment {payment_id}")
+                        completed_payments.append(payment_id)
+                elif status is False:
+                    # Платеж не прошел - удаляем
+                    logging.info(f"❌ Payment failed: {payment_id}")
+                    completed_payments.append(payment_id)
+                    
+            except Exception as e:
+                logging.error(f"❌ Error checking payment {payment_id}: {e}")
+        
+        # Удаляем завершенные платежи
+        for payment_id in completed_payments:
+            if payment_id in self.pending_payments:
+                del self.pending_payments[payment_id]
 
     def activate_subscription(self, payment_id: str):
         """Активирует подписку после успешной оплаты"""

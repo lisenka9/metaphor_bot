@@ -75,6 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /help - Помощь
 /history - История ваших карт
 /message - Послание дня
+/subscribe - Приобрести подписку
 /consult - Запись на консультацию
         """
         
@@ -107,6 +108,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика
 /help - Помощь
 /message - Послание дня
+/subscribe - Приобрести подписку
 /history - История ваших карт
         """
         await update.message.reply_text(full_text, parse_mode='Markdown')
@@ -441,6 +443,7 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика
 /help - Помощь
 /message - Послание дня
+/subscribe - Приобрести подписку
 /history - История ваших карт
 /consult - Запись на консультацию
 """
@@ -778,6 +781,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /history - Посмотреть историю всех ваших карт
 /consult - Запись на консультацию
 /message - Послание дня
+/subscribe - Приобрести подписку
 /help - Эта справка
 
 ❓ Как это работает?
@@ -1287,6 +1291,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /help - Помощь
 /history - История ваших карт
 /message - Послание дня
+/subscribe - Приобрести подписку
 /consult - Запись на консультацию
 """
     
@@ -2151,8 +2156,11 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             reply_markup=keyboard.get_main_menu_keyboard()
         )
 
-async def handle_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_payment_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты"""
+    query = update.callback_query
+    await query.answer()
+    
     user_id = query.from_user.id
     
     payment_id = context.user_data.get('payment_id')
