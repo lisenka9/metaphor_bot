@@ -513,14 +513,15 @@ def run_bot_with_restart():
             ))
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
-            # Обработчик текстовых сообщений для формы консультации
-            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, 
-                                         handlers.handle_consult_form))
             
-
             application.add_handler(MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 handlers.handle_random_messages
+            ))
+
+            application.add_handler(MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                handlers.handle_consult_form
             ))
             
             logger.info("🚀 Запуск бота в режиме Polling...")
