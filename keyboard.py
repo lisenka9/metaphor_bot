@@ -61,8 +61,59 @@ def get_help_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_resources_keyboard():
-    """Клавиатура для архипелага ресурсов"""
+    """Клавиатура для Архипелага ресурсов"""
     keyboard = [
+        [InlineKeyboardButton("🌊 Морской Прилив: Отпускаю Ограничения - Впускаю Возможности", callback_data="resource_tide")],
+        [InlineKeyboardButton("🔄 Техника 2", callback_data="resource_tech2")],
+        [InlineKeyboardButton("🌀 Техника 3", callback_data="resource_tech3")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_step1_keyboard():
+    """Клавиатура для Шага 1 техники Морской Прилив"""
+    keyboard = [
+        [InlineKeyboardButton("🎴 Выбрать карту-ограничение", callback_data="tide_step1_card")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_step1_reflection_keyboard():
+    """Клавиатура после выбора карты-ограничения"""
+    keyboard = [
+        [InlineKeyboardButton("❓ Вопросы для Саморефлексии", callback_data="tide_step1_questions")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_step1_questions_keyboard():
+    """Клавиатура после вопросов Шага 1"""
+    keyboard = [
+        [InlineKeyboardButton("➡️ Продолжить", callback_data="tide_step2")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_step2_keyboard():
+    """Клавиатура для Шага 2 техники Морской Прилив"""
+    keyboard = [
+        [InlineKeyboardButton("🎴 Выбрать карту-возможность", callback_data="tide_step2_card")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_step2_reflection_keyboard():
+    """Клавиатура после выбора карты-возможности"""
+    keyboard = [
+        [InlineKeyboardButton("❓ Вопросы для Саморефлексии", callback_data="tide_step2_questions")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_final_keyboard():
+    """Финальная клавиатура техники Морской Прилив"""
+    keyboard = [
+        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)

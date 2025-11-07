@@ -516,6 +516,36 @@ def run_bot_with_restart():
                 handlers.handle_payment_check, 
                 pattern="^check_payment_"
             ))
+            
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_resource_technique, 
+                pattern="^resource_"
+            ))
+
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step1_card, 
+                pattern="^tide_step1_card$"
+            ))
+
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step1_questions, 
+                pattern="^tide_step1_questions$"
+            ))
+
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step2, 
+                pattern="^tide_step2$"
+            ))
+
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step2_card, 
+                pattern="^tide_step2_card$"
+            ))
+
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step2_questions, 
+                pattern="^tide_step2_questions$"
+            ))
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
             

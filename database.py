@@ -1016,5 +1016,44 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_random_restriction_card(self):
+        """Получает случайную карту-ограничение (1-88)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT card_id, card_name, image_url, description_text 
+                FROM cards 
+                WHERE card_id BETWEEN 1 AND 88
+                ORDER BY RANDOM() 
+                LIMIT 1
+            ''')
+            return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"❌ Error getting restriction card: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def get_random_opportunity_card(self):
+        """Получает случайную карту-возможность (89-176)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT card_id, card_name, image_url, description_text 
+                FROM cards 
+                WHERE card_id BETWEEN 89 AND 176
+                ORDER BY RANDOM() 
+                LIMIT 1
+            ''')
+            return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"❌ Error getting opportunity card: {e}")
+            return None
+        finally:
+            conn.close()
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

@@ -1484,20 +1484,6 @@ async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYP
             parse_mode='Markdown'
         )
 
-async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /resources"""
-    resources_text = """
-🗺️ Архипелаг ресурсов
-
-Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
-"""
-    
-    await update.message.reply_text(
-        resources_text,
-        reply_markup=keyboard.get_resources_keyboard(),
-        parse_mode='Markdown'
-    )
-
 async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /guide"""
     try:
@@ -2549,4 +2535,237 @@ async def update_cards_descriptions(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logging.error(f"❌ Error updating cards: {e}")
         await update.message.reply_text(f"❌ Ошибка при обновлении карт: {str(e)}")
+
+
+async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /resources - Архипелаг ресурсов"""
+    resources_text = """
+🗺️ Архипелаг ресурсов
+
+Выберите технику, которой хотите воспользоваться:
+"""
+    
+    await update.message.reply_text(
+        resources_text,
+        reply_markup=keyboard.get_resources_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает Архипелаг ресурсов из кнопки меню"""
+    resources_text = """
+🗺️ Архипелаг ресурсов
+
+Выберите технику, которой хотите воспользоваться:
+"""
+    
+    await query.message.reply_text(
+        resources_text,
+        reply_markup=keyboard.get_resources_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор техники в Архипелаге ресурсов"""
+    technique = query.data
+    
+    if technique == "resource_tide":
+        await show_tide_technique(query, context)
+    elif technique in ["resource_tech2", "resource_tech3"]:
+        await query.message.reply_text(
+            "⏳ Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!",
+            reply_markup=keyboard.get_resources_keyboard()
+        )
+
+async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает технику Морской Прилив"""
+    tide_text = """
+🌊 *Морской Прилив: Отпускаю Ограничения - Впускаю Возможности*
+
+💡 *Цель Техники*
+Эта техника подходит для работы с ограничениями, которые мешают впустить в жизнь новое. Техника поможет осознать, от чего нужно освободиться, и что ресурсное впустить в свою жизнь.
+
+*Колода:* «Настроение как море»
+
+• *Карты с РАМКОЙ:* Ограничения.
+• *Карты БЕЗ РАМКИ:* Возможности, Ресурсы. 
+
+⚓️ *Шаг 1: Освобождение от Ограничений (Что я Отпускаю?)*
+
+📝 *Запрос (Фокус):*
+Мысленно задайте вопрос картам:
+
+*«Что мне пора отпустить в моей жизни, что стало ненужным грузом и сдерживает мое развитие?»*
+"""
+    
+    await query.message.reply_text(
+        tide_text,
+        reply_markup=keyboard.get_tide_step1_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_tide_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор карты-ограничения в Шаге 1"""
+    # Получаем случайную карту-ограничение
+    card = db.get_random_restriction_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты. Попробуйте позже.",
+            reply_markup=keyboard.get_tide_step1_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту в контексте для вопросов
+    context.user_data['tide_step1_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту-ограничение
+        await query.message.reply_photo(
+            photo=image_url,
+            caption=f"🎴 *Карта-ограничение #{card_id}*",
+            reply_markup=keyboard.get_tide_step1_reflection_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending restriction card: {e}")
+        await query.message.reply_text(
+            f"🎴 *Карта-ограничение #{card_id}*\n\n(изображение временно недоступно)",
+            reply_markup=keyboard.get_tide_step1_reflection_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def handle_tide_step1_questions(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает вопросы для саморефлексии Шага 1"""
+    questions_text = """
+❓ *Вопросы для Саморефлексии*
+
+• Что в этом морском пейзаже привлекает ваше внимание?
+
+• Какое чувство вызывает у вас это изображение? Что оно символизирует?
+
+• Как то что изображено на карте мешает вам или ограничивает?
+
+• К какой сфере жизни, человеку или ситуации относится это ограничение, которое вы видите на карте?
+
+• Что вы недовысказали или недоделали, что не дает отпустить это ограничение?
+
+• Как изменится ваша жизнь, если этого ограничения не будет?
+
+• Какой первый шаг к освобождению вы можете сделать прямо сейчас?
+
+• Какое именно ограничение/груз вы решаете отпустить сейчас?
+"""
+    
+    await query.message.reply_text(
+        questions_text,
+        reply_markup=keyboard.get_tide_step1_questions_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_tide_step2(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает Шаг 2 техники Морской Прилив"""
+    step2_text = """
+☀️ *Шаг 2: Впускаю Ресурс (Что я Принимаю?)*
+
+Теперь, когда вы осознали и отпустили предыдущее ограничение, пора подумать о том, что ресурсное и вдохновляющее вы можете впустить в освободившееся пространство.
+
+📝 *Запрос (Фокус):*
+*«Какой ресурс, новую возможность или силу я могу впустить в свою жизнь, освободившись от старого груза?»*
+"""
+    
+    await query.message.reply_text(
+        step2_text,
+        reply_markup=keyboard.get_tide_step2_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_tide_step2_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор карты-возможности в Шаге 2"""
+    # Получаем случайную карту-возможность
+    card = db.get_random_opportunity_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты. Попробуйте позже.",
+            reply_markup=keyboard.get_tide_step2_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту в контексте для вопросов
+    context.user_data['tide_step2_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту-возможность
+        await query.message.reply_photo(
+            photo=image_url,
+            caption=f"🎴 *Карта-возможность #{card_id}*",
+            reply_markup=keyboard.get_tide_step2_reflection_keyboard(),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending opportunity card: {e}")
+        await query.message.reply_text(
+            f"🎴 *Карта-возможность #{card_id}*\n\n(изображение временно недоступно)",
+            reply_markup=keyboard.get_tide_step2_reflection_keyboard(),
+            parse_mode='Markdown'
+        )
+
+async def handle_tide_step2_questions(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает вопросы для саморефлексии Шага 2"""
+    questions_text = """
+❓ *Вопросы для Саморефлексии*
+
+• Что в этом морском пейзаже привлекает ваше внимание?
+
+• Какое чувство вызывает у вас это изображение? Что оно символизирует?
+
+• Как то что изображено на карте может наполнить вас ресурсами и открыть новые возможности?
+
+• Что на этой карте моря кажется вам самым ресурсным?
+
+• Какое конкретное действие, связанное с образом на карте, вы готовы начать делать, чтобы впустить этот ресурс в свою жизнь?
+
+• Что новое и ресурсное вы принимаете и впускаете в свою жизнь, начиная с этого момента?
+"""
+    
+    # ✅ ПРОВЕРЯЕМ ПОДПИСКУ ДЛЯ КНОПКИ "АРХИПЕЛАГ РЕСУРСОВ"
+    user_id = query.from_user.id
+    subscription = db.get_user_subscription(user_id)
+    has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
+    
+    if has_active_subscription:
+        await query.message.reply_text(
+            questions_text,
+            reply_markup=keyboard.get_tide_final_keyboard(),
+            parse_mode='Markdown'
+        )
+    else:
+        # Для бесплатных пользователей - только кнопка "Вернуться в меню"
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard_free = [
+            [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard_free)
+        
+        await query.message.reply_text(
+            questions_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
 
