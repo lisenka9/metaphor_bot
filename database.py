@@ -654,15 +654,15 @@ class DatabaseManager:
             result = cursor.fetchone()
             if result:
                 description = result[0]
+                return description
+            else:
+                return "❌ Не удалось найти описание последней карты. Сначала получите карту дня!"
                 
-            return "❌ Не удалось найти описание последней карты. Сначала получите карту дня!"
-            
         except Exception as e:
             logging.error(f"❌ Error getting last user card: {e}")
             return "❌ Ошибка при получении описания карты"
         finally:
             conn.close()
-
     
     def get_user_subscription(self, user_id: int):
         """Получает активную подписку пользователя"""

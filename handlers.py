@@ -580,7 +580,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает профиль из кнопки меню"""
-    user = query.from_user
+    user = update.effective_user
     
     stats = db.get_user_stats(user.id)
     
