@@ -453,7 +453,7 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает послание дня при нажатии кнопки"""
+    """Показывает послание дня (описание последней карты) при нажатии кнопки"""
     user = query.from_user
     
     # Проверяем лимит посланий
@@ -483,47 +483,27 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Получаем случайное послание
-    message_data = db.get_random_message()
-    if not message_data:
+    # ✅ ПОЛУЧАЕМ ОПИСАНИЕ ПОСЛЕДНЕЙ КАРТЫ ПОЛЬЗОВАТЕЛЯ
+    card_description = db.get_last_user_card_description(user.id)
+    
+    if not card_description:
         await query.message.reply_text(
-            "⚠️ Ошибка при получении послания. Пожалуйста, попробуйте позже.",
-            reply_markup=keyboard.get_daily_message_keyboard()
+            "❌ Сначала получите карту дня, чтобы увидеть её послание!",
+            reply_markup=keyboard.get_main_menu_keyboard()
         )
         return
     
-    message_id, image_url, message_text = message_data
-    
-    # Записываем факт получения послания
-    success = db.record_user_message(user.id, message_id)
+    # ✅ ЗАПИСЫВАЕМ ФАКТ ПОЛУЧЕНИЯ ПОСЛАНИЯ (используем card_id как message_id)
+    success = db.record_user_message(user.id, 1)  # Используем фиксированный ID
     if not success:
         logging.error(f"❌ Failed to record message for user {user.id}")
     
-    message_caption = f'''🦋 Послание Дня
-
-Прочитайте его и почувствуйте, какой отклик оно находит внутри вас:
-
-🔹 Как реагирует ваше тело?
-🔹 Какие эмоции поднимаются?
-🔹 Что важного это послание несет вам?
-🔹 Как это послание поможет вам на вашем жизненном пути?'''
-    
-    try:
-        # Отправляем новое сообщение с посланием
-        await query.message.reply_photo(
-            photo=image_url,
-            caption=message_caption,
-            reply_markup=keyboard.get_daily_message_keyboard(),
-            parse_mode='Markdown'
-        )
-        
-    except Exception as e:
-        logging.error(f"❌ Error sending message image: {e}")
-        await query.message.reply_text(
-            f"{message_caption}\n\n📝 *Текст послания:* {message_text}",
-            reply_markup=keyboard.get_daily_message_keyboard(),
-            parse_mode='Markdown'
-        )
+    # ✅ ОТПРАВЛЯЕМ ТОЛЬКО ТЕКСТ ОПИСАНИЯ БЕЗ КАРТИНКИ
+    await query.message.reply_text(
+        card_description,
+        reply_markup=keyboard.get_daily_message_keyboard(),
+        parse_mode='Markdown'
+    )
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /profile"""
