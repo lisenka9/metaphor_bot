@@ -471,6 +471,13 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+def escape_markdown_problems(text: str) -> str:
+    """Экранирует только проблемные символы, ломающие Markdown"""
+    # Экранируем двоеточия и тире, которые ломают разметку
+    text = text.replace(':**', '\\:**')  # двоеточие после **
+    text = text.replace(' — ', ' \\— ')  # длинное тире
+    return text
+
 async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает послание дня (описание последней карты) при нажатии кнопки"""
     user = query.from_user
@@ -535,8 +542,9 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
             logging.error(f"❌ Failed to record message for user {user.id}")
     
     # ✅ ОТПРАВЛЯЕМ ТОЛЬКО ТЕКСТ ОПИСАНИЯ БЕЗ КАРТИНКИ И С КНОПКОЙ "ВЕРНУТЬСЯ В МЕНЮ"
+    safe_description = escape_markdown_problems(card_description)
     await query.message.reply_text(
-        card_description,
+        safe_description,
         reply_markup=keyboard.get_daily_message_keyboard(),
         parse_mode='Markdown'
     )
@@ -2861,4 +2869,3 @@ async def force_update_cards(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logging.error(f"❌ Error force updating cards: {e}")
         await update.message.reply_text(f"❌ Ошибка при обновлении карт: {str(e)}")
 
-        
