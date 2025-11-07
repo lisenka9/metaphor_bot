@@ -197,6 +197,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "resources":
         await show_resources_from_button(query, context)
     
+    elif query.data.startswith("resource_"):
+        await handle_resource_technique(update, context)
+        
+    elif query.data == "tide_step1_card":
+        await handle_tide_step1_card(query, context)
+        
+    elif query.data == "tide_step1_questions":
+        await handle_tide_step1_questions(query, context)
+        
+    elif query.data == "tide_step2":
+        await handle_tide_step2(query, context)
+        
+    elif query.data == "tide_step2_card":
+        await handle_tide_step2_card(query, context)
+        
+    elif query.data == "tide_step2_questions":
+        await handle_tide_step2_questions(query, context)
+
     elif query.data == "guide":
         await show_guide_from_button(query, context)
     
