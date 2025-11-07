@@ -148,6 +148,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на кнопки"""
     query = update.callback_query
     await query.answer()
+    logging.info(f"🔧 DEBUG: button_handler called with: {query.data}")
     
     # ✅ Защита от множественных нажатий
     user_id = query.from_user.id
