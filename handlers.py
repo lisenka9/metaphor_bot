@@ -580,7 +580,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает профиль из кнопки меню"""
-    user = update.effective_user
+    user = query.from_user
     
     stats = db.get_user_stats(user.id)
     
@@ -2840,3 +2840,25 @@ async def handle_tide_step2_questions(query, context: ContextTypes.DEFAULT_TYPE)
         )
 
 
+async def force_update_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принудительно обновляет ВСЕ карты (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        # Принудительно обновляем все карты
+        updated_count = db.force_update_all_cards()
+        
+        await update.message.reply_text(
+            f"✅ Все карты принудительно обновлены!\n"
+            f"🃏 Обновлено карт: {updated_count}/176"
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error force updating cards: {e}")
+        await update.message.reply_text(f"❌ Ошибка при обновлении карт: {str(e)}")
+
+        
