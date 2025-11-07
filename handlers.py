@@ -6,7 +6,7 @@ import logging
 import keyboard
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, date
 from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
 import uuid
@@ -2572,6 +2572,7 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор техники в Архипелаге ресурсов"""
+    await query.edit_message_reply_markup(reply_markup=None)
     technique = query.data
     
     if technique == "resource_tide":
@@ -2584,6 +2585,7 @@ async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает технику Морской Прилив"""
+    await query.edit_message_reply_markup(reply_markup=None)
     tide_text = """
 🌊 *Морской Прилив: Отпускаю Ограничения - Впускаю Возможности*
 
@@ -2611,6 +2613,7 @@ async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_tide_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор карты-ограничения в Шаге 1"""
+    await query.edit_message_reply_markup(reply_markup=None)
     # Получаем случайную карту-ограничение
     card = db.get_random_restriction_card()
     
@@ -2642,12 +2645,13 @@ async def handle_tide_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"❌ Error sending restriction card: {e}")
         await query.message.reply_text(
-            f"🎴 *Карта-ограничение #{card_id}*\n\n(изображение временно недоступно)",
+            f"🎴 *Карта-ограничение*\n\n(изображение временно недоступно)",
             reply_markup=keyboard.get_tide_step1_reflection_keyboard(),
             parse_mode='Markdown'
         )
 
 async def handle_tide_step1_questions(query, context: ContextTypes.DEFAULT_TYPE):
+    await query.edit_message_reply_markup(reply_markup=None)
     """Показывает вопросы для саморефлексии Шага 1"""
     questions_text = """
 ❓ *Вопросы для Саморефлексии*
@@ -2677,6 +2681,7 @@ async def handle_tide_step1_questions(query, context: ContextTypes.DEFAULT_TYPE)
 
 async def handle_tide_step2(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает Шаг 2 техники Морской Прилив"""
+    await query.edit_message_reply_markup(reply_markup=None)
     step2_text = """
 ☀️ *Шаг 2: Впускаю Ресурс (Что я Принимаю?)*
 
@@ -2694,6 +2699,7 @@ async def handle_tide_step2(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_tide_step2_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор карты-возможности в Шаге 2"""
+    await query.edit_message_reply_markup(reply_markup=None)
     # Получаем случайную карту-возможность
     card = db.get_random_opportunity_card()
     
@@ -2718,20 +2724,21 @@ async def handle_tide_step2_card(query, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем карту-возможность
         await query.message.reply_photo(
             photo=image_url,
-            caption=f"🎴 *Карта-возможность #{card_id}*",
+            caption=f"🎴 *Карта-возможность*",
             reply_markup=keyboard.get_tide_step2_reflection_keyboard(),
             parse_mode='Markdown'
         )
     except Exception as e:
         logging.error(f"❌ Error sending opportunity card: {e}")
         await query.message.reply_text(
-            f"🎴 *Карта-возможность #{card_id}*\n\n(изображение временно недоступно)",
+            f"🎴 *Карта-возможность*\n\n(изображение временно недоступно)",
             reply_markup=keyboard.get_tide_step2_reflection_keyboard(),
             parse_mode='Markdown'
         )
 
 async def handle_tide_step2_questions(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает вопросы для саморефлексии Шага 2"""
+    await query.edit_message_reply_markup(reply_markup=None)
     questions_text = """
 ❓ *Вопросы для Саморефлексии*
 
