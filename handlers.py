@@ -2550,6 +2550,3 @@ async def update_cards_descriptions(update: Update, context: ContextTypes.DEFAUL
         logging.error(f"❌ Error updating cards: {e}")
         await update.message.reply_text(f"❌ Ошибка при обновлении карт: {str(e)}")
 
-# Добавьте в bot.py:
-application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
-
