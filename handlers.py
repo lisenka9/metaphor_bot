@@ -2576,29 +2576,60 @@ async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает Архипелаг ресурсов из кнопки меню"""
-    user = update.effective_user
-    subscription = db.get_user_subscription(user.id)
-    has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
+    logging.info(f"🔧 DEBUG: show_resources_from_button started for user {query.from_user.id}")
     
-    if not has_active_subscription:
-        await query.message.reply_text(
-            "❌ *Архипелаг ресурсов доступен только пользователям с премиум подпиской!*\n\n"
-            "Используйте кнопку ниже чтобы оформить подписку и получить доступ ко всем ресурсам!",
-            reply_markup=keyboard.get_message_status_keyboard(),
-            parse_mode='Markdown'
-        )
-        return
-    resources_text = """
+    try:
+        user = update.effective_user
+        
+        # ✅ ПРОВЕРЯЕМ ПОДПИСКУ ПОЛЬЗОВАТЕЛЯ
+        subscription = db.get_user_subscription(user.id)
+        logging.info(f"🔧 DEBUG: Subscription data: {subscription}")
+        
+        has_active_subscription = False
+        if subscription and subscription[1]:
+            subscription_end = subscription[1]
+            if hasattr(subscription_end, 'date'):
+                subscription_date = subscription_end.date()
+            elif isinstance(subscription_end, str):
+                try:
+                    subscription_date = datetime.strptime(subscription_end[:10], '%Y-%m-%d').date()
+                except:
+                    subscription_date = date.today()
+            else:
+                subscription_date = subscription_end
+            
+            has_active_subscription = subscription_date >= date.today()
+        
+        logging.info(f"🔧 DEBUG: Has active subscription: {has_active_subscription}")
+        
+        if not has_active_subscription:
+            await query.message.reply_text(
+                "❌ *Архипелаг ресурсов доступен только пользователям с премиум подпиской!*\n\n"
+                "Используйте кнопку ниже чтобы оформить подписку и получить доступ ко всем ресурсам!",
+                reply_markup=keyboard.get_message_status_keyboard(),
+                parse_mode='Markdown'
+            )
+            return
+        
+        resources_text = """
 🗺️ Архипелаг ресурсов
 
 Выберите технику, которой хотите воспользоваться:
 """
-    
-    await query.message.reply_text(
-        resources_text,
-        reply_markup=keyboard.get_resources_keyboard(),
-        parse_mode='Markdown'
-    )
+        
+        await query.message.reply_text(
+            resources_text,
+            reply_markup=keyboard.get_resources_keyboard(),
+            parse_mode='Markdown'
+        )
+        logging.info(f"🔧 DEBUG: Resources menu sent to user {user.id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in show_resources_from_button: {e}")
+        await query.message.reply_text(
+            "❌ Произошла ошибка при загрузке ресурсов. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
 
 async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор техники в Архипелаге ресурсов"""
