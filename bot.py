@@ -508,6 +508,8 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
             application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
             
+            application.add_handler(CallbackQueryHandler(handlers.button_handler))
+
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
                 pattern="^subscribe_"
@@ -517,8 +519,31 @@ def run_bot_with_restart():
                 pattern="^check_payment_"
             ))
 
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_resource_technique, 
+                pattern="^resource_"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step1_card, 
+                pattern="^tide_step1_card$"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step1_questions, 
+                pattern="^tide_step1_questions$"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step2, 
+                pattern="^tide_step2$"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step2_card, 
+                pattern="^tide_step2_card$"
+            ))
+            application.add_handler(CallbackQueryHandler(
+                handlers.handle_tide_step2_questions, 
+                pattern="^tide_step2_questions$"
+            ))
             
-            application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
             
             application.add_handler(MessageHandler(
