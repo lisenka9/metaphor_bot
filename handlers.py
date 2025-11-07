@@ -2579,7 +2579,7 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"🔧 DEBUG: show_resources_from_button started for user {query.from_user.id}")
     
     try:
-        user = update.effective_user
+        user = query.from_user
         
         # ✅ ПРОВЕРЯЕМ ПОДПИСКУ ПОЛЬЗОВАТЕЛЯ
         subscription = db.get_user_subscription(user.id)
