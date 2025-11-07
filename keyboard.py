@@ -96,7 +96,6 @@ def get_main_menu_keyboard():
     """Обновленная клавиатура для главного меню"""
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
-        [InlineKeyboardButton("🦋 Послание дня", callback_data="get_daily_message")],
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить колоду онлайн", callback_data="buy")],

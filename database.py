@@ -653,30 +653,22 @@ class DatabaseManager:
             
             result = cursor.fetchone()
             if result:
-                return result[0]  # Возвращаем описание карты
-            return None
+                description = result[0]
+                # ✅ ПРОВЕРЯЕМ, ЧТО ОПИСАНИЕ НЕ ПУСТОЕ И НЕ "ПОСЛАНИЕ X"
+                if description and not description.startswith("ПОСЛАНИЕ") and len(description) > 10:
+                    return description
+                else:
+                    logging.warning(f"⚠️ Empty or placeholder description for user {user_id}: {description}")
+                    return "🔱 **ПОСЛАНИЕ ДНЯ**\n\nК сожалению, описание для этой карты ещё не готово. Пожалуйста, попробуйте другую карту."
+            return "❌ Не удалось найти описание последней карты. Сначала получите карту дня!"
             
         except Exception as e:
             logging.error(f"❌ Error getting last user card: {e}")
-            return None
+            return "❌ Ошибка при получении описания карты"
         finally:
             conn.close()
 
-    def _populate_daily_messages(self, cursor):
-        """Добавляет послания дня в базу"""
-        daily_messages = [
-            (1, "https://ibb.co/wZd8BTHM", "Послание 1"),
-            (2, "https://ibb.co/PGWbXCyP", "Послание 2")
-        ]
-        for message_id, image_url, message_text in daily_messages:
-            cursor.execute('''
-                INSERT INTO daily_messages (message_id, image_url, message_text)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (message_id) DO NOTHING
-            ''', (message_id, image_url, message_text))
-        
-        logging.info(f"✅ Added {len(daily_messages)} sample messages to database")
-
+    
     def get_user_subscription(self, user_id: int):
         """Получает активную подписку пользователя"""
         conn = self.get_connection()
@@ -899,51 +891,7 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def get_random_message(self):
-        """Получает случайное послание дня"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        try:
-            # Создаем таблицу для посланий, если её нет
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS daily_messages (
-                    message_id SERIAL PRIMARY KEY,
-                    image_url TEXT NOT NULL,
-                    message_text TEXT NOT NULL
-                )
-            ''')
-            
-            # Проверяем, есть ли послания, если нет - добавляем тестовые
-            cursor.execute('SELECT COUNT(*) FROM daily_messages')
-            count = cursor.fetchone()[0]
-            
-            if count == 0:
-                logging.info("🔄 No messages found, populating sample messages")
-                self._populate_daily_messages(cursor)
-                conn.commit()
-            
-            cursor.execute('''
-                SELECT message_id, image_url, message_text 
-                FROM daily_messages 
-                ORDER BY RANDOM() 
-                LIMIT 1
-            ''')
-            result = cursor.fetchone()
-            
-            if result:
-                logging.info(f"✅ Retrieved random message: ID {result[0]}")
-                return result
-            else:
-                logging.error("❌ No messages available even after population")
-                return None
-                
-        except Exception as e:
-            logging.error(f"❌ Error getting random message: {e}")
-            return None
-        finally:
-            conn.close()
-
+    
     def get_user_message_stats(self, user_id: int):
         """Получает статистику посланий пользователя"""
         conn = self.get_connection()

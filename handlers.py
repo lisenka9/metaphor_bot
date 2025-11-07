@@ -456,6 +456,9 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает послание дня (описание последней карты) при нажатии кнопки"""
     user = query.from_user
     
+    # ✅ СРАЗУ УБИРАЕМ КНОПКИ ПРИ НАЖАТИИ
+    await query.edit_message_reply_markup(reply_markup=None)
+    
     # Проверяем лимит посланий
     can_take, reason = db.can_take_daily_message(user.id)
     
@@ -493,12 +496,26 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # ✅ ЗАПИСЫВАЕМ ФАКТ ПОЛУЧЕНИЯ ПОСЛАНИЯ (используем card_id как message_id)
-    success = db.record_user_message(user.id, 1)  # Используем фиксированный ID
-    if not success:
-        logging.error(f"❌ Failed to record message for user {user.id}")
+    # ✅ ЗАПИСЫВАЕМ ФАКТ ПОЛУЧЕНИЯ ПОСЛАНИЯ
+    # Используем ID последней карты как message_id
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT card_id FROM user_cards 
+        WHERE user_id = %s 
+        ORDER BY drawn_date DESC 
+        LIMIT 1
+    ''', (user.id,))
+    last_card_result = cursor.fetchone()
+    conn.close()
     
-    # ✅ ОТПРАВЛЯЕМ ТОЛЬКО ТЕКСТ ОПИСАНИЯ БЕЗ КАРТИНКИ
+    if last_card_result:
+        last_card_id = last_card_result[0]
+        success = db.record_user_message(user.id, last_card_id)
+        if not success:
+            logging.error(f"❌ Failed to record message for user {user.id}")
+    
+    # ✅ ОТПРАВЛЯЕМ ТОЛЬКО ТЕКСТ ОПИСАНИЯ БЕЗ КАРТИНКИ И С КНОПКОЙ "ВЕРНУТЬСЯ В МЕНЮ"
     await query.message.reply_text(
         card_description,
         reply_markup=keyboard.get_daily_message_keyboard(),
@@ -2511,4 +2528,28 @@ async def view_today_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         logging.error(f"❌ Error viewing today messages: {e}")
         await update.message.reply_text(f"❌ Ошибка: {e}")
 
+
+async def update_cards_descriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновляет описания карт в базе данных (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        # Принудительно добавляем карты с новыми описаниями
+        added_count = db.add_missing_cards()
+        
+        await update.message.reply_text(
+            f"✅ Описания карт обновлены!\n"
+            f"🃏 Добавлено/обновлено карт: {added_count}"
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating cards: {e}")
+        await update.message.reply_text(f"❌ Ошибка при обновлении карт: {str(e)}")
+
+# Добавьте в bot.py:
+application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
 
