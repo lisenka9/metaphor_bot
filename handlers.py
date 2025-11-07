@@ -1567,20 +1567,6 @@ async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает ресурсы из кнопки меню"""
-    resources_text = """
-🗺️ Архипелаг ресурсов
-
-Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!
-"""
-    
-    await query.message.reply_text(
-        resources_text,
-        reply_markup=keyboard.get_resources_keyboard(),
-        parse_mode='Markdown'
-    )
-
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /buy"""
     buy_text = """
