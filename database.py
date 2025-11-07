@@ -1097,7 +1097,7 @@ class DatabaseManager:
             cursor.execute('''
                 SELECT card_id, card_name, image_url, description_text 
                 FROM cards 
-                WHERE card_id BETWEEN 1 AND 88
+                WHERE card_id BETWEEN 1 AND 10
                 ORDER BY RANDOM() 
                 LIMIT 1
             ''')
@@ -1117,7 +1117,7 @@ class DatabaseManager:
             cursor.execute('''
                 SELECT card_id, card_name, image_url, description_text 
                 FROM cards 
-                WHERE card_id BETWEEN 89 AND 176
+                WHERE card_id BETWEEN 89 AND 98
                 ORDER BY RANDOM() 
                 LIMIT 1
             ''')
