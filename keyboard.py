@@ -129,6 +129,7 @@ def get_card_display_keyboard(card_type: str = None):
 def get_card_questions_keyboard():
     """Клавиатура после показа вопросов к карте"""
     keyboard = [
+        [InlineKeyboardButton("🦋 Послание дня", callback_data="get_daily_message")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)

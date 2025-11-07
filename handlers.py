@@ -74,7 +74,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
-/message - Послание дня
 /subscribe - Приобрести подписку
 /consult - Запись на консультацию
         """
@@ -107,7 +106,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить колоду онлайн (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
-/message - Послание дня
 /subscribe - Приобрести подписку
 /history - История ваших карт
         """
@@ -442,7 +440,6 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить колоду онлайн (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
-/message - Послание дня
 /subscribe - Приобрести подписку
 /history - История ваших карт
 /consult - Запись на консультацию
@@ -780,7 +777,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика и лимиты
 /history - Посмотреть историю всех ваших карт
 /consult - Запись на консультацию
-/message - Послание дня
 /subscribe - Приобрести подписку
 /help - Эта справка
 
@@ -1369,7 +1365,6 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
-/message - Послание дня
 /subscribe - Приобрести подписку
 /consult - Запись на консультацию
 """
@@ -2519,7 +2514,6 @@ async def handle_random_messages(update: Update, context: ContextTypes.DEFAULT_T
 /profile - Ваша статистика
 /help - Помощь
 /history - История ваших карт
-/message - Послание дня
 /subscribe - Приобрести подписку
 /consult - Запись на консультацию
 
