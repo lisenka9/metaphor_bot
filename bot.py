@@ -494,7 +494,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("guide", handlers.guide_command))
             application.add_handler(CommandHandler("buy", handlers.buy_command))
             application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
-            application.add_handler(CommandHandler("message", handlers.message_command))
+            application.add_handler(CommandHandler("message", handlers.show_daily_message))
             application.add_handler(CommandHandler("message_status", handlers.message_status))
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
