@@ -553,6 +553,9 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     limit, is_premium, total_cards, reg_date, subscription_end = stats
     
+    subscription = db.get_user_subscription(user.id)
+    has_resources_access = subscription and subscription[1] and subscription[1].date() >= date.today()
+
     # Формируем текст о подписке
     if subscription_end:
         subscription_text = f"✅ Активна до: {subscription_end}"
@@ -563,8 +566,9 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 👤 Ваш профиль
 
 📊 Всего карт получено: {total_cards}
-🎯 Лимит карт в день: {limit}
 💎 Подписка: {subscription_text}
+🎯 Лимит карт в день: {limit}
+🗺️ Доступ к ресурсам: {'✅ Есть' if has_resources_access else '❌ Нет'}
 📅 Дата регистрации: {reg_date}
     """
     
@@ -2544,6 +2548,17 @@ async def update_cards_descriptions(update: Update, context: ContextTypes.DEFAUL
 
 async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /resources - Архипелаг ресурсов"""
+    subscription = db.get_user_subscription(user.id)
+    has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
+    
+    if not has_active_subscription:
+        await update.message.reply_text(
+            "❌ *Архипелаг ресурсов доступен только пользователям с премиум подпиской!*\n\n"
+            "Используйте /subscribe чтобы оформить подписку и получить доступ ко всем ресурсам!",
+            reply_markup=keyboard.get_message_status_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
     resources_text = """
 🗺️ Архипелаг ресурсов
 
@@ -2558,6 +2573,17 @@ async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает Архипелаг ресурсов из кнопки меню"""
+    subscription = db.get_user_subscription(user.id)
+    has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
+    
+    if not has_active_subscription:
+        await query.message.reply_text(
+            "❌ *Архипелаг ресурсов доступен только пользователям с премиум подпиской!*\n\n"
+            "Используйте кнопку ниже чтобы оформить подписку и получить доступ ко всем ресурсам!",
+            reply_markup=keyboard.get_message_status_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
     resources_text = """
 🗺️ Архипелаг ресурсов
 
@@ -2611,6 +2637,7 @@ async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_tide_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор карты-ограничения в Шаге 1"""
+    await query.edit_message_reply_markup(reply_markup=None)
     # Получаем случайную карту-ограничение
     card = db.get_random_restriction_card()
     
