@@ -2572,7 +2572,6 @@ async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор техники в Архипелаге ресурсов"""
-    await query.edit_message_reply_markup(reply_markup=None)
     technique = query.data
     
     if technique == "resource_tide":
@@ -2585,7 +2584,6 @@ async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает технику Морской Прилив"""
-    await query.edit_message_reply_markup(reply_markup=None)
     tide_text = """
 🌊 *Морской Прилив: Отпускаю Ограничения - Впускаю Возможности*
 
