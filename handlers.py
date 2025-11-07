@@ -2345,3 +2345,170 @@ async def handle_random_messages(update: Update, context: ContextTypes.DEFAULT_T
             reply_markup=keyboard.get_main_menu_keyboard(),
             parse_mode='Markdown'
         )
+
+async def reset_my_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сбрасывает послания дня для администратора (только для админов)"""
+    user = update.effective_user
+    
+    # ✅ ПРОВЕРКА ПРАВ АДМИНИСТРАТОРА
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        # Сбрасываем послания текущего пользователя
+        deleted_count = db.reset_user_messages(user.id)
+        
+        await update.message.reply_text(
+            f"✅ Ваши послания дня сброшены!\n"
+            f"🗑️ Удалено посланий за сегодня: {deleted_count}\n"
+            f"🦋 Теперь вы можете получить новое послание дня"
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error resetting messages: {e}")
+        await update.message.reply_text(f"❌ Ошибка при сбросе посланий: {str(e)}")
+
+async def reset_user_messages_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сбрасывает послания дня для указанного пользователя (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    # ✅ ПРОВЕРКА АРГУМЕНТОВ
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Укажите ID пользователя\n"
+            "Пример: /resetusermessages 123456789"
+        )
+        return
+    
+    try:
+        target_user_id = int(context.args[0])
+        
+        # Сбрасываем послания указанного пользователя
+        deleted_count = db.reset_user_messages(target_user_id)
+        
+        await update.message.reply_text(
+            f"✅ Послания пользователя {target_user_id} сброшены!\n"
+            f"🗑️ Удалено посланий за сегодня: {deleted_count}"
+        )
+        
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат ID пользователя")
+    except Exception as e:
+        logging.error(f"❌ Error resetting user messages: {e}")
+        await update.message.reply_text(f"❌ Ошибка при сбросе посланий: {str(e)}")
+
+async def reset_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сбрасывает ВСЕ послания за сегодня (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        # ✅ ПОДТВЕРЖДЕНИЕ ОПАСНОЙ ОПЕРАЦИИ
+        if context.args and context.args[0] == 'confirm':
+            # Сбрасываем ВСЕ послания за сегодня
+            deleted_count = db.reset_all_messages_today()
+            
+            await update.message.reply_text(
+                f"⚠️ *ВСЕ послания за сегодня сброшены!*\n"
+                f"🗑️ Удалено посланий: {deleted_count}\n"
+                f"📅 Дата: {date.today().strftime('%d.%m.%Y')}",
+                parse_mode='Markdown'
+            )
+        else:
+            # Запрос подтверждения
+            await update.message.reply_text(
+                "⚠️ *ВНИМАНИЕ: Опасная операция!*\n\n"
+                "Эта команда сбросит ВСЕ послания дня для ВСЕХ пользователей за сегодня.\n\n"
+                "Для подтверждения введите:\n"
+                "`/resetallmessages confirm`",
+                parse_mode='Markdown'
+            )
+            
+    except Exception as e:
+        logging.error(f"❌ Error resetting all messages: {e}")
+        await update.message.reply_text(f"❌ Ошибка при сбросе всех посланий: {str(e)}")
+
+async def view_today_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает послания, полученные пользователем сегодня (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    target_user_id = user.id  # по умолчанию смотрим свои послания
+    
+    if context.args:
+        try:
+            target_user_id = int(context.args[0])
+        except ValueError:
+            await update.message.reply_text("❌ Неверный формат ID пользователя")
+            return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # ✅ ПОЛУЧАЕМ СЕГОДНЯШНИЕ ПОСЛАНИЯ ПОЛЬЗОВАТЕЛЯ
+        today = date.today()
+        cursor.execute('''
+            SELECT um.drawn_date, dm.message_text
+            FROM user_messages um
+            LEFT JOIN daily_messages dm ON um.message_id = dm.message_id
+            WHERE um.user_id = %s AND DATE(um.drawn_date) = %s
+            ORDER BY um.drawn_date
+        ''', (target_user_id, today))
+        
+        today_messages = cursor.fetchall()
+        
+        # ✅ ПОЛУЧАЕМ ИНФОРМАЦИЮ О ПОЛЬЗОВАТЕЛЕ
+        cursor.execute('''
+            SELECT username, first_name, is_premium
+            FROM users 
+            WHERE user_id = %s
+        ''', (target_user_id,))
+        
+        user_info = cursor.fetchone()
+        conn.close()
+        
+        if not user_info:
+            await update.message.reply_text("❌ Пользователь не найден")
+            return
+        
+        username, first_name, is_premium = user_info
+        user_display = f"@{username}" if username else first_name or f"ID {target_user_id}"
+        
+        messages_text = f"""
+📊 Послания пользователя {user_display} за сегодня:
+
+💎 Премиум: {'✅ Да' if is_premium else '❌ Нет'}
+📅 Дата: {today.strftime('%d.%m.%Y')}
+
+"""
+        
+        if today_messages:
+            messages_text += f"📋 Получено посланий: {len(today_messages)}\n\n"
+            for i, (drawn_date, message_text) in enumerate(today_messages, 1):
+                time_str = drawn_date.strftime('%H:%M') if hasattr(drawn_date, 'strftime') else drawn_date[11:16]
+                messages_text += f"{i}. {time_str}"
+                if message_text:
+                    messages_text += f" - {message_text[:30]}..."
+                messages_text += "\n"
+        else:
+            messages_text += "✅ Сегодня еще не получено ни одного послания"
+        
+        await update.message.reply_text(messages_text, parse_mode='Markdown')
+        
+    except Exception as e:
+        logging.error(f"❌ Error viewing today messages: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+

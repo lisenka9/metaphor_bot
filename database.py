@@ -1016,5 +1016,57 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def reset_user_messages(self, user_id: int):
+        """Сбрасывает историю посланий пользователя за сегодня"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            today = date.today()
+            
+            # Удаляем послания за сегодня
+            cursor.execute('''
+                DELETE FROM user_messages 
+                WHERE user_id = %s AND DATE(drawn_date) = %s
+            ''', (user_id, today))
+            
+            deleted_count = cursor.rowcount
+            
+            conn.commit()
+            return deleted_count
+            
+        except Exception as e:
+            logging.error(f"❌ Error resetting user messages: {e}")
+            conn.rollback()
+            return 0
+        finally:
+            conn.close()
+
+    def reset_all_messages_today(self):
+        """Сбрасывает все послания за сегодня (для администратора)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            today = date.today()
+            
+            # Удаляем все послания за сегодня
+            cursor.execute('''
+                DELETE FROM user_messages 
+                WHERE DATE(drawn_date) = %s
+            ''', (today,))
+            
+            deleted_count = cursor.rowcount
+            
+            conn.commit()
+            return deleted_count
+            
+        except Exception as e:
+            logging.error(f"❌ Error resetting all messages: {e}")
+            conn.rollback()
+            return 0
+        finally:
+            conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()
