@@ -2611,7 +2611,6 @@ async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_tide_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор карты-ограничения в Шаге 1"""
-    await query.edit_message_reply_markup(reply_markup=None)
     # Получаем случайную карту-ограничение
     card = db.get_random_restriction_card()
     
@@ -2636,7 +2635,7 @@ async def handle_tide_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем карту-ограничение
         await query.message.reply_photo(
             photo=image_url,
-            caption=f"🎴 *Карта-ограничение #{card_id}*",
+            caption=f"🎴 *Карта-ограничение*",
             reply_markup=keyboard.get_tide_step1_reflection_keyboard(),
             parse_mode='Markdown'
         )
