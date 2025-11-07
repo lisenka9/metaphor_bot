@@ -518,6 +518,8 @@ def run_bot_with_restart():
             ))
 
             
+
+            
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
             

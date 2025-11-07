@@ -199,7 +199,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_resources_from_button(query, context)
     
     elif query.data.startswith("resource_"):
-        await handle_resource_technique(update, context)
+        await handle_resource_technique(query, context)
         
     elif query.data == "tide_step1_card":
         await handle_tide_step1_card(query, context)
