@@ -600,8 +600,9 @@ async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 👤 Ваш профиль
 
 📊 Всего карт получено: {total_cards}
-🎯 Лимит карт в день: {limit}
 💎 Подписка: {subscription_text}
+🎯 Лимит карт в день: {limit}
+🗺️ Доступ к ресурсам: {'✅ Есть' if has_resources_access else '❌ Нет'}
 📅 Дата регистрации: {reg_date}
     """
     
@@ -2246,6 +2247,7 @@ async def check_subscription_status(update: Update, context: ContextTypes.DEFAUL
 📊 Статус вашей подписки:
 
 🎯 Лимит карт в день: {limit}
+🗺️ Доступ к ресурсам: {'✅ Есть' if has_resources_access else '❌ Нет'}
 💎 Премиум статус: {'✅ Активен' if is_premium else '❌ Неактивен'}
 📅 Подписка до: {premium_until.strftime('%d.%m.%Y') if premium_until else 'Неактивна'}
 📨 Карт получено сегодня: {today_count or 0}/{limit}
@@ -2548,6 +2550,7 @@ async def update_cards_descriptions(update: Update, context: ContextTypes.DEFAUL
 
 async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /resources - Архипелаг ресурсов"""
+    user = update.effective_user
     subscription = db.get_user_subscription(user.id)
     has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
     
@@ -2573,6 +2576,7 @@ async def resources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_resources_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает Архипелаг ресурсов из кнопки меню"""
+    user = update.effective_user
     subscription = db.get_user_subscription(user.id)
     has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
     
