@@ -63,7 +63,7 @@ def get_help_keyboard():
 def get_resources_keyboard():
     """Клавиатура для Архипелага ресурсов"""
     keyboard = [
-        [InlineKeyboardButton("🌊 Морской Прилив: Отпускаю Ограничения - Впускаю Возможности", callback_data="resource_tide")],
+        [InlineKeyboardButton("🌊 Волна Новых Возможностей", callback_data="resource_tide")],
         [InlineKeyboardButton("🔄 Техника 2", callback_data="resource_tech2")],
         [InlineKeyboardButton("🌀 Техника 3", callback_data="resource_tech3")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
