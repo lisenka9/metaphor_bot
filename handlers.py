@@ -2652,6 +2652,8 @@ async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
     
     if technique == "resource_tide":
         await show_tide_technique(query, context)
+    elif technique == "resource_tech2":
+        await handle_storm_calm_technique(query, context)  
     elif technique in ["resource_tech3"]:
         await query.message.reply_text(
             "⏳ Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!",
