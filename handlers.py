@@ -216,6 +216,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "tide_step2_questions":
         await handle_tide_step2_questions(query, context)
 
+    elif query.data == "complete_tide_practice":
+        await complete_tide_practice(query, context)
+
     elif query.data == "guide":
         await show_guide_from_button(query, context)
     
@@ -2741,6 +2744,7 @@ async def handle_tide_step2(query, context: ContextTypes.DEFAULT_TYPE):
 Теперь, когда вы осознали и отпустили свое ограничение, пора подумать о том, что ресурсное и вдохновляющее вы можете впустить в освободившееся пространство.
 
 📝 Мысленно задайте вопрос картам:
+
 *«Какой ресурс, новую возможность или силу я могу впустить в свою жизнь, освободившись от старого груза?»*
 """
     
@@ -2808,31 +2812,33 @@ async def handle_tide_step2_questions(query, context: ContextTypes.DEFAULT_TYPE)
 • Что новое и ресурсное вы принимаете и впускаете в свою жизнь, начиная с этого момента?
 """
     
-    # ✅ ПРОВЕРЯЕМ ПОДПИСКУ ДЛЯ КНОПКИ "АРХИПЕЛАГ РЕСУРСОВ"
-    user_id = query.from_user.id
-    subscription = db.get_user_subscription(user_id)
-    has_active_subscription = subscription and subscription[1] and subscription[1].date() >= date.today()
-    
-    if has_active_subscription:
-        await query.message.reply_text(
-            questions_text,
-            reply_markup=keyboard.get_tide_final_keyboard(),
-            parse_mode='Markdown'
-        )
-    else:
-        # Для бесплатных пользователей - только кнопка "Вернуться в меню"
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        keyboard_free = [
-            [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard_free)
-        
-        await query.message.reply_text(
-            questions_text,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
+    await query.message.reply_text(
+        questions_text,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Завершить практику", callback_data="complete_tide_practice")]
+        ]),
+        parse_mode='Markdown'
+    )
 
+async def complete_tide_practice(query, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает практику Морской Прилив"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    completion_text = """
+Спасибо, что прикоснулись к своим внутренним ограничениям и увидели свои возможности ✨
+
+Умение отпускать ненужные освобождает место для нового ☀️
+
+🌊 В море можно отпустить всю свою боль и тяжесть и почувствовать освобождение.
+
+💫 Вернуться к этой технике можно в любой момент, когда захочется лучше понять себя.
+"""
+    
+    await query.message.reply_text(
+        completion_text,
+        reply_markup=keyboard.get_tide_completion_keyboard(),
+        parse_mode='Markdown'
+    )
 
 async def force_update_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Принудительно обновляет ВСЕ карты (только для админов)"""

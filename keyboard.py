@@ -113,6 +113,13 @@ def get_tide_step2_reflection_keyboard():
 def get_tide_final_keyboard():
     """Финальная клавиатура техники Морской Прилив"""
     keyboard = [
+        [InlineKeyboardButton("✅ Завершить практику", callback_data="complete_tide_practice")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tide_completion_keyboard():
+    """Клавиатура после завершения практики Морской Прилив"""
+    keyboard = [
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
@@ -210,3 +217,5 @@ def get_payment_check_keyboard(subscription_type: str, payment_id: str):
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
