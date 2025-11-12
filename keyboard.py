@@ -65,7 +65,7 @@ def get_resources_keyboard():
     keyboard = [
         [InlineKeyboardButton("🌊 Волна Новых Возможностей", callback_data="resource_tide")],
         [InlineKeyboardButton("🌪️ Шторм и Штиль: найди свой внутренний ритм", callback_data="resource_tech2")],
-        [InlineKeyboardButton("🌀 Техника 3", callback_data="resource_tech3")],
+        [InlineKeyboardButton("🌀 Три Волны Осознанности", callback_data="resource_tech3")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -244,6 +244,70 @@ def get_storm_calm_step3_keyboard():
 
 def get_storm_calm_completion_keyboard():
     """Клавиатура после завершения практики"""
+    keyboard = [
+        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_intro_keyboard():
+    """Клавиатура для введения в технику Три Волны"""
+    keyboard = [
+        [InlineKeyboardButton("🌊 Первая Волна — «Что я чувствую?»", callback_data="three_waves_step1")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_step1_keyboard():
+    """Клавиатура для первой волны"""
+    keyboard = [
+        [InlineKeyboardButton("🎴 Показать карту", callback_data="three_waves_step1_card")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_step2_keyboard():
+    """Клавиатура после первой карты"""
+    keyboard = [
+        [InlineKeyboardButton("🌊 Вторая Волна — «Почему я это чувствую?»", callback_data="three_waves_step2")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_step2_card_keyboard():
+    """Клавиатура для второй волны"""
+    keyboard = [
+        [InlineKeyboardButton("🎴 Показать карту", callback_data="three_waves_step2_card")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_step3_keyboard():
+    """Клавиатура после второй карты"""
+    keyboard = [
+        [InlineKeyboardButton("🌊 Третья Волна — «Как я могу с этим быть?»", callback_data="three_waves_step3")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_step3_card_keyboard():
+    """Клавиатура для третьей волны"""
+    keyboard = [
+        [InlineKeyboardButton("🎴 Показать карту", callback_data="three_waves_step3_card")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_completion_keyboard():
+    """Клавиатура после третьей карты"""
+    keyboard = [
+        [InlineKeyboardButton("🌅 Завершить практику", callback_data="three_waves_complete")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_three_waves_final_keyboard():
+    """Финальная клавиатура после завершения"""
     keyboard = [
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]

@@ -230,6 +230,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif query.data == "storm_calm_complete":
         await handle_storm_calm_complete(query, context)
+    
+    elif query.data == "three_waves_step1":
+        await handle_three_waves_step1(query, context)
+
+    elif query.data == "three_waves_step1_card":
+        await handle_three_waves_step1_card(query, context)
+
+    elif query.data == "three_waves_step2":
+        await handle_three_waves_step2(query, context)
+
+    elif query.data == "three_waves_step2_card":
+        await handle_three_waves_step2_card(query, context)
+
+    elif query.data == "three_waves_step3":
+        await handle_three_waves_step3(query, context)
+
+    elif query.data == "three_waves_step3_card":
+        await handle_three_waves_step3_card(query, context)
+        
+    elif query.data == "three_waves_complete":
+        await handle_three_waves_complete(query, context)
 
     elif query.data == "guide":
         await show_guide_from_button(query, context)
@@ -2654,11 +2675,8 @@ async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
         await show_tide_technique(query, context)
     elif technique == "resource_tech2":
         await handle_storm_calm_technique(query, context)  
-    elif technique in ["resource_tech3"]:
-        await query.message.reply_text(
-            "⏳ Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!",
-            reply_markup=keyboard.get_resources_keyboard()
-        )
+    elif technique == "resource_tech3" :
+        await handle_three_waves_technique(query, context)
 
 async def show_tide_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает технику Морской Прилив"""
@@ -3024,4 +3042,254 @@ async def handle_storm_calm_complete(query, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard.get_storm_calm_completion_keyboard(),
         parse_mode='Markdown'
     )       
+
+async def handle_three_waves_technique(query, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает технику Три Волны Осознанности"""
+    technique_text = """
+*«Три Волны Осознанности»*
+
+Иногда эмоции приходят волнами.
+Первая — поднимает то, что мы чувствуем.
+Вторая — показывает, почему это возникло.
+А третья — помогает найти способ быть с этим по-новому.
+
+Давай попробуем вместе пройти через три волны осознанности.
+"""
+    
+    await query.message.reply_text(
+        technique_text,
+        reply_markup=keyboard.get_three_waves_intro_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_step1(query, context: ContextTypes.DEFAULT_TYPE):
+    """Первая волна - что я чувствую"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    step1_text = """
+*🌊 Первая Волна — «Что я чувствую?»*
+
+Мысленно задай вопрос:
+*«Что я чувствую прямо сейчас?»*
+
+Пусть первая карта покажет твою эмоцию, то, что поднимается на поверхности твоего внутреннего моря.
+"""
+    
+    await query.message.reply_text(
+        step1_text,
+        reply_markup=keyboard.get_three_waves_step1_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту для первой волны"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Получаем случайную карту-возможность (89-176)
+    card = db.get_random_opportunity_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты. Попробуйте позже.",
+            reply_markup=keyboard.get_three_waves_step1_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту в контексте
+    context.user_data['three_waves_step1_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту
+        await query.message.reply_photo(
+            photo=image_url,
+            caption="🎴 *Первая Волна — Что я чувствую?*",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending step1 card: {e}")
+        await query.message.reply_text(
+            "🎴 *Первая Волна — Что я чувствую?*\n\n(изображение временно недоступно)",
+            parse_mode='Markdown'
+        )
+    
+    # Отправляем вопросы для рефлексии
+    reflection_text = """
+*Посмотри на изображение.*
+
+Что первым делом привлекло твое внимание?
+Какое это чувство — мягкое, тревожное, холодное, тёплое?
+Если бы это море могло говорить, что бы оно сказало о тебе?
+"""
+    
+    await query.message.reply_text(
+        reflection_text,
+        reply_markup=keyboard.get_three_waves_step2_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_step2(query, context: ContextTypes.DEFAULT_TYPE):
+    """Вторая волна - почему я это чувствую"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    step2_text = """
+*🌊 Вторая Волна — «Почему я это чувствую?»*
+
+Теперь заглянем глубже.
+Мысленно спроси:
+*«Почему это чувство пришло ко мне?»*
+
+Пусть вторая карта покажет глубинную причину твоего состояния.
+"""
+    
+    await query.message.reply_text(
+        step2_text,
+        reply_markup=keyboard.get_three_waves_step2_card_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_step2_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту для второй волны"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Получаем случайную карту-ограничение (1-88)
+    card = db.get_random_restriction_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты. Попробуйте позже.",
+            reply_markup=keyboard.get_three_waves_step2_card_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту в контексте
+    context.user_data['three_waves_step2_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту
+        await query.message.reply_photo(
+            photo=image_url,
+            caption="🎴 *Вторая Волна — Почему я это чувствую?*",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending step2 card: {e}")
+        await query.message.reply_text(
+            "🎴 *Вторая Волна — Почему я это чувствую?*\n\n(изображение временно недоступно)",
+            parse_mode='Markdown'
+        )
+    
+    # Отправляем вопросы для рефлексии
+    reflection_text = """
+Что в этом образе похоже на твою жизнь сейчас?
+Есть ли под этой эмоцией что-то ещё — боль, усталость, ожидание, страх?
+Что это чувство хочет тебе сказать?
+"""
+    
+    await query.message.reply_text(
+        reflection_text,
+        reply_markup=keyboard.get_three_waves_step3_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_step3(query, context: ContextTypes.DEFAULT_TYPE):
+    """Третья волна - как я могу с этим быть"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    step3_text = """
+*🌊 Третья Волна — «Как я могу с этим быть?»*
+
+И теперь — последняя волна.
+Мысленно спроси:
+*«Как я могу быть с этой эмоцией так, чтобы она помогала, а не мешала?»*
+
+Пусть третья карта подскажет, как превратить внутренний шторм в осознанное движение.
+"""
+    
+    await query.message.reply_text(
+        step3_text,
+        reply_markup=keyboard.get_three_waves_step3_card_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_step3_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту для третьей волны"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Получаем случайную карту-возможность (89-176)
+    card = db.get_random_opportunity_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты. Попробуйте позже.",
+            reply_markup=keyboard.get_three_waves_step3_card_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту в контексте
+    context.user_data['three_waves_step3_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту
+        await query.message.reply_photo(
+            photo=image_url,
+            caption="🎴 *Третья Волна — Как я могу с этим быть?*",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending step3 card: {e}")
+        await query.message.reply_text(
+            "🎴 *Третья Волна — Как я могу с этим быть?*\n\n(изображение временно недоступно)",
+            parse_mode='Markdown'
+        )
+    
+    # Отправляем вопросы для рефлексии
+    reflection_text = """
+Что в этом образе напоминает принятие или спокойствие?
+Как ты можешь поддержать себя сейчас?
+Какое действие или внутреннее движение поможет тебе сохранить равновесие?
+"""
+    
+    await query.message.reply_text(
+        reflection_text,
+        reply_markup=keyboard.get_three_waves_completion_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_three_waves_complete(query, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает технику Три Волны Осознанности"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    completion_text = """
+Эти три волны — как зеркало твоей души.
+Они показывают, как ты чувствуешь, почему это происходит и куда направить энергию.
+
+Попробуй подышать глубже и поблагодарить своё внутреннее море за честность.
+"""
+    
+    await query.message.reply_text(
+        completion_text,
+        reply_markup=keyboard.get_three_waves_final_keyboard(),
+        parse_mode='Markdown'
+    )
 
