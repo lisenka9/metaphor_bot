@@ -218,6 +218,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "complete_tide_practice":
         await complete_tide_practice(query, context)
+    
+    elif query.data == "resource_tech2":
+        await handle_storm_calm_technique(query, context)
+        
+    elif query.data == "storm_calm_step1_card":
+        await handle_storm_calm_step1_card(query, context)
+        
+    elif query.data == "storm_calm_step2_lighthouse":
+        await handle_storm_calm_step2_lighthouse(query, context)
+        
+    elif query.data == "storm_calm_complete":
+        await handle_storm_calm_complete(query, context)
 
     elif query.data == "guide":
         await show_guide_from_button(query, context)
@@ -2815,7 +2827,7 @@ async def handle_tide_step2_questions(query, context: ContextTypes.DEFAULT_TYPE)
     await query.message.reply_text(
         questions_text,
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Завершить практику", callback_data="complete_tide_practice")]
+            [InlineKeyboardButton("🌅 Завершить практику", callback_data="complete_tide_practice")]
         ]),
         parse_mode='Markdown'
     )
@@ -2861,4 +2873,153 @@ async def force_update_cards(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logging.error(f"❌ Error force updating cards: {e}")
         await update.message.reply_text(f"❌ Ошибка при обновлении карт: {str(e)}")
 
-        
+
+async def handle_storm_calm_technique(query, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает технику Шторм и Штиль"""
+    technique_text = """
+*Шторм и Штиль: найди свой внутренний ритм*
+
+💡 *Цель Техники*
+Мягко исследовать текущее эмоциональное состояние (без оценки «хорошо/плохо»), осознать его динамику и найти внутренний ресурс, который помогает оставаться в согласии с самим собой.
+
+🌊
+Иногда в душе бушует шторм, иногда — тихий штиль.
+Эта техника поможет почувствовать свой внутренний ритм — не изменить состояние, а услышать, о чём оно.
+
+Сделайте вдох и позвольте себе просто быть.
+
+Нажмите кнопку ниже, чтобы вытянуть карту, отражающую ваше текущее состояние.
+"""
+    
+    await query.message.reply_text(
+        technique_text,
+        reply_markup=keyboard.get_storm_calm_step1_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_storm_calm_step1_card(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту состояния для техники Шторм и Штиль"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Получаем случайную карту из всего диапазона (1-176)
+    card = db.get_random_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты. Попробуйте позже.",
+            reply_markup=keyboard.get_storm_calm_step1_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту состояния в контексте
+    context.user_data['storm_calm_state_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту состояния
+        await query.message.reply_photo(
+            photo=image_url,
+            caption="🎴 *Это карта твоего сегодняшнего моря.*",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending state card: {e}")
+        await query.message.reply_text(
+            "🎴 *Это карта твоего сегодняшнего моря.*\n\n(изображение временно недоступно)",
+            parse_mode='Markdown'
+        )
+    
+    # Отправляем вопросы для рефлексии
+    reflection_text = """
+*Посмотри на неё без анализа — просто наблюдай.*
+
+❓ *Задай себе:*
+• Что происходит в этом море — движение или покой?
+• Какое это чувство по энергии — шторм, туман, затишье, усталость, ожидание?
+• Что это состояние хочет мне сказать?
+"""
+    
+    await query.message.reply_text(
+        reflection_text,
+        reply_markup=keyboard.get_storm_calm_step2_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_storm_calm_step2_lighthouse(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту-маяк (ресурс)"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Получаем случайную карту-возможность (89-176)
+    card = db.get_random_opportunity_card()
+    
+    if not card:
+        await query.message.reply_text(
+            "❌ Ошибка при получении карты-маяка. Попробуйте позже.",
+            reply_markup=keyboard.get_storm_calm_step2_keyboard()
+        )
+        return
+    
+    card_id, card_name, image_url, description = card
+    
+    # Сохраняем карту-маяк в контексте
+    context.user_data['storm_calm_lighthouse_card'] = {
+        'card_id': card_id,
+        'card_name': card_name,
+        'image_url': image_url,
+        'description': description
+    }
+    
+    try:
+        # Отправляем карту-маяк
+        await query.message.reply_photo(
+            photo=image_url,
+            caption="🕯 *Это твой внутренний Маяк — то, что помогает тебе быть в согласии с собой.*",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logging.error(f"❌ Error sending lighthouse card: {e}")
+        await query.message.reply_text(
+            "🕯 *Это твой внутренний Маяк — то, что помогает тебе быть в согласии с собой.*\n\n(изображение временно недоступно)",
+            parse_mode='Markdown'
+        )
+    
+    # Отправляем вопросы для рефлексии по маяку
+    lighthouse_text = """
+❓ *Подумай:*
+• Что на этом образе похоже на поддержку, надежду или смысл?
+• Какой импульс я чувствую, глядя на эту карту?
+• Что я могу сделать сегодня, чтобы следовать этому свету — мягко, без усилий?
+"""
+    
+    await query.message.reply_text(
+        lighthouse_text,
+        reply_markup=keyboard.get_storm_calm_step3_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_storm_calm_complete(query, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает технику Шторм и Штиль"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    completion_text = """
+Спасибо, что прикоснулись к своему морю 🌊
+
+Иногда ритм жизни похож на волну — то прибой, то отлив.
+
+Важно не бороться с морем, а учиться слышать его дыхание.
+
+💫 Вернуться к этой технике можно в любой момент, когда захочется лучше понять себя.
+"""
+    
+    await query.message.reply_text(
+        completion_text,
+        reply_markup=keyboard.get_storm_calm_completion_keyboard(),
+        parse_mode='Markdown'
+    )       
+

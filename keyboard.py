@@ -64,7 +64,7 @@ def get_resources_keyboard():
     """Клавиатура для Архипелага ресурсов"""
     keyboard = [
         [InlineKeyboardButton("🌊 Волна Новых Возможностей", callback_data="resource_tide")],
-        [InlineKeyboardButton("🔄 Техника 2", callback_data="resource_tech2")],
+        [InlineKeyboardButton("🌪️ Шторм и Штиль: найди свой внутренний ритм", callback_data="resource_tech2")],
         [InlineKeyboardButton("🌀 Техника 3", callback_data="resource_tech3")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
@@ -113,7 +113,7 @@ def get_tide_step2_reflection_keyboard():
 def get_tide_final_keyboard():
     """Финальная клавиатура техники Морской Прилив"""
     keyboard = [
-        [InlineKeyboardButton("✅ Завершить практику", callback_data="complete_tide_practice")]
+        [InlineKeyboardButton("🌅 Завершить практику", callback_data="complete_tide_practice")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -218,4 +218,34 @@ def get_payment_check_keyboard(subscription_type: str, payment_id: str):
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_storm_calm_step1_keyboard():
+    """Клавиатура для первого шага техники Шторм и Штиль"""
+    keyboard = [
+        [InlineKeyboardButton("🌊 Вытянуть карту состояния", callback_data="storm_calm_step1_card")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
+def get_storm_calm_step2_keyboard():
+    """Клавиатура после карты состояния"""
+    keyboard = [
+        [InlineKeyboardButton("🕯 Посмотреть Маяк (Ресурс)", callback_data="storm_calm_step2_lighthouse")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_storm_calm_step3_keyboard():
+    """Клавиатура после карты-маяка"""
+    keyboard = [
+        [InlineKeyboardButton("🌅 Завершить практику", callback_data="storm_calm_complete")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_storm_calm_completion_keyboard():
+    """Клавиатура после завершения практики"""
+    keyboard = [
+        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
