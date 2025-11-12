@@ -2652,7 +2652,7 @@ async def handle_resource_technique(query, context: ContextTypes.DEFAULT_TYPE):
     
     if technique == "resource_tide":
         await show_tide_technique(query, context)
-    elif technique in ["resource_tech2", "resource_tech3"]:
+    elif technique in ["resource_tech3"]:
         await query.message.reply_text(
             "⏳ Извините, мы работаем над этой командой. В скором времени Вы сможете ею воспользоваться!",
             reply_markup=keyboard.get_resources_keyboard()
