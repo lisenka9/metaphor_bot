@@ -156,7 +156,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if 'last_button_click' in context.user_data:
         last_click = context.user_data['last_button_click']
-        if current_time - last_click < 3:  # 3 секунды между нажатиями
+        if current_time - last_click < 1:  # 1 секунды между нажатиями
             logging.info(f"⚡ Fast click protection for user {user_id}")
             return
     
@@ -625,6 +625,9 @@ async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
         return
     
     limit, is_premium, total_cards, reg_date, subscription_end = stats
+    
+    subscription = db.get_user_subscription(user.id)
+    has_resources_access = subscription and subscription[1] and subscription[1].date() >= date.today()
     
     # Формируем текст о подписке
     if subscription_end:
