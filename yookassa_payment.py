@@ -82,61 +82,80 @@ class YooKassaPayment:
                 payment_info = self.pending_payments[payment_id]
                 yookassa_payment_id = payment_info['yookassa_payment_id']
                 
-                headers = {
-                    "Content-Type": "application/json"
-                }
-                
-                response = requests.get(
-                    f"{self.base_url}/payments/{yookassa_payment_id}",
-                    headers=headers,
-                    auth=self.auth,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    payment_data = response.json()
-                    status = payment_data['status']
+                if payment_info.get('product_type') == 'deck':
+                    # Для колоды проверяем в таблице deck_purchases
+                    conn = db.get_connection()
+                    cursor = conn.cursor()
                     
-                    # Обновляем статус в локальном хранилище
-                    self.pending_payments[payment_id]['status'] = status
+                    cursor.execute('''
+                        SELECT status FROM deck_purchases 
+                        WHERE payment_id = %s OR user_id = %s
+                        ORDER BY purchase_date DESC LIMIT 1
+                    ''', (payment_info.get('yookassa_payment_id'), payment_info.get('user_id')))
                     
-                    if status == 'succeeded':
+                    result = cursor.fetchone()
+                    conn.close()
+                    
+                    if result and result[0] == 'completed':
                         return True
-                    elif status in ['canceled', 'failed']:
-                        return False
-                    else:
-                        return None  # Платеж еще в процессе
+                    return False
                 else:
-                    logging.error(f"❌ YooKassa API check error: {response.status_code}")
-                    return None
-            
-            # ✅ ИСПРАВЛЕННАЯ ПРОВЕРКА ПЛАТЕЖЕЙ В БАЗЕ ДАННЫХ
-            else:
-                # Ищем платеж в базе данных по yoomoney_payment_id
-                conn = db.get_connection()
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT status 
-                    FROM payments 
-                    WHERE yoomoney_payment_id = %s
-                    ORDER BY payment_date DESC 
-                    LIMIT 1
-                ''', (payment_id,))  # ✅ Ищем по yoomoney_payment_id
-                
-                result = cursor.fetchone()
-                conn.close()
-                
-                if result:
-                    status = result[0]
-                    if status == 'success':
-                        return True
-                
-                return False
+
+                    headers = {
+                        "Content-Type": "application/json"
+                    }
                     
-        except Exception as e:
-            logging.error(f"❌ Error checking payment status: {e}")
-            return None
+                    response = requests.get(
+                        f"{self.base_url}/payments/{yookassa_payment_id}",
+                        headers=headers,
+                        auth=self.auth,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        payment_data = response.json()
+                        status = payment_data['status']
+                        
+                        # Обновляем статус в локальном хранилище
+                        self.pending_payments[payment_id]['status'] = status
+                        
+                        if status == 'succeeded':
+                            return True
+                        elif status in ['canceled', 'failed']:
+                            return False
+                        else:
+                            return None  # Платеж еще в процессе
+                    else:
+                        logging.error(f"❌ YooKassa API check error: {response.status_code}")
+                        return None
+                
+                # ✅ ИСПРАВЛЕННАЯ ПРОВЕРКА ПЛАТЕЖЕЙ В БАЗЕ ДАННЫХ
+                else:
+                    # Ищем платеж в базе данных по yoomoney_payment_id
+                    conn = db.get_connection()
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        SELECT status 
+                        FROM payments 
+                        WHERE yoomoney_payment_id = %s
+                        ORDER BY payment_date DESC 
+                        LIMIT 1
+                    ''', (payment_id,))  # ✅ Ищем по yoomoney_payment_id
+                    
+                    result = cursor.fetchone()
+                    conn.close()
+                    
+                    if result:
+                        status = result[0]
+                        if status == 'success':
+                            return True
+                    
+                    return False
+                        
+            except Exception as e:
+                logging.error(f"❌ Error checking payment status: {e}")
+                return None
 
     def find_user_payment(self, user_id: int):
         """Ищет платежи пользователя в базе данных"""

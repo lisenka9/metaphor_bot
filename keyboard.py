@@ -147,6 +147,7 @@ def get_main_menu_keyboard():
     """Обновленная клавиатура для главного меню"""
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
+        [InlineKeyboardButton("🦋 Послание дня", callback_data="messages_command")]
         [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить цифровую колоду", callback_data="buy")],
@@ -338,4 +339,19 @@ def get_deck_payment_check_keyboard(payment_id: str):
         [InlineKeyboardButton("🛒 Попробовать снова", callback_data="buy_deck")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_messages_info_keyboard(has_subscription: bool = False):
+    """Клавиатура для информации о посланиях"""
+    if has_subscription:
+        keyboard = [
+            [InlineKeyboardButton("🎴 Получить карту дня", callback_data="show_daily_intro")],
+            [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton("🎴 Получить карту дня", callback_data="show_daily_intro")],
+            [InlineKeyboardButton("💎 Оформить подписку", callback_data="subscribe")],
+            [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+        ]
     return InlineKeyboardMarkup(keyboard)

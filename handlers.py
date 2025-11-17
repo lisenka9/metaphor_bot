@@ -173,6 +173,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif query.data == "get_daily_message":
         await show_daily_message(query, context)
+    
+     elif query.data == "messages_command":
+        await messages_command(update, context)
         
     elif query.data == "card_questions":  
         await show_card_questions(query, context)
@@ -258,9 +261,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "buy":
         await show_buy_from_button(query, context)
         
-    elif query.data == "buy_deck":
-        await handle_buy_deck(query, context)
-
     elif query.data == "buy_deck":
         await handle_buy_deck(query, context)
 
@@ -3630,6 +3630,22 @@ async def send_deck_files(update, context: ContextTypes.DEFAULT_TYPE, user_id: i
         else:
             await update.message.reply_text(error_msg)
 
+async def handle_start_with_deck_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает deep link после успешной оплаты колоды"""
+    user = update.effective_user
+    args = context.args
+    
+    if args and args[0] == 'deck_purchase_success':
+        # Проверяем, есть ли у пользователя покупка колоды
+        if db.has_purchased_deck(user.id):
+            await send_deck_files(update, context, user.id)
+        else:
+            await update.message.reply_text(
+                "⏳ Ваш платеж обрабатывается...\n\n"
+                "Файлы будут отправлены в течение 1-2 минут. "
+                "Если прошло больше времени, используйте команду /buy для проверки статуса.",
+                reply_markup=keyboard.get_buy_keyboard()
+            )
 
 async def upload_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда для загрузки файлов и получения file_id"""
@@ -3652,4 +3668,80 @@ async def upload_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(instruction_text, parse_mode='Markdown')
 
+async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /messages - информация о посланиях дня"""
+    user = update.effective_user
+    
+    # Получаем статистику пользователя для персонализации
+    stats = db.get_user_message_stats(user.id)
+    
+    if stats:
+        if stats['has_subscription']:
+            # Для премиум пользователей
+            message_text = f"""
+💫 *О посланиях дня*
+
+✨ *Для вас как для премиум-пользователя:*
+• 🎯 До 5 посланий в день
+• 📊 Сегодня использовано: {stats['today_count']}/5
+• 🆓 Доступно всегда после получения карты дня
+
+💡 *Как это работает:*
+1. Сначала получите карту дня (/daily)
+2. Затем нажмите кнопку «🦋 Послание дня»
+3. Получите глубокое толкование вашей карты
+
+
+"""
+        else:
+            # Для бесплатных пользователей
+            if stats['can_take']:
+                status_text = "✅ *Сейчас доступно* - можно получить послание!"
+            else:
+                status_text = f"⏳ *Следующее послание через*: {stats['days_until_next']} дней"
+            
+            message_text = f"""
+💫 *О посланиях дня*
+
+{status_text}
+
+📅 *Базовый режим:* 1 послание в неделю
+
+💎 *Премиум режим:* 5 посланий в день  
+
+💡 *Как получить послание:*
+1. Используйте /daily для карты дня
+2. Нажмите «🦋 Послание дня»
+3. Получите послание для вашего дня
+
+✨ *Хотите больше?* Оформите подписку для полного доступа!
+"""
+    else:
+        # Общая информация для новых пользователей
+        message_text = """
+💫 *О посланиях дня*
+
+📚 *Что такое послание дня?*
+Это глубокое толкование вашей карты дня, которое помогает:
+• Понять скрытые смыслы образа
+• Увидеть подсказки для текущей ситуации
+• Найти ресурсы для развития
+
+🎯 *Доступность:*
+• 🆓 *Бесплатно:* 1 послание в неделю
+• 💎 *С подпиской:* 5 посланий в день
+
+💡 *Как работает:*
+1. Сначала получите карту дня (/daily)
+2. Затем нажмите «🦋 Послание дня»
+3. Получите послание для вашего дня
+
+✨ Послание дня — это ключ к пониманию вашего внутреннего состояния и подсказкам Вселенной!
+"""
+    
+    await update.message.reply_text(
+        message_text,
+        reply_markup=keyboard.get_messages_info_keyboard(stats['has_subscription'] if stats else False),
+        parse_mode='Markdown'
+    )
 

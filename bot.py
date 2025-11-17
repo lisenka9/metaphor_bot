@@ -71,16 +71,104 @@ def handle_payment_notification(event_data):
         logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
         
         user_id = metadata.get('user_id')
+        product_type = metadata.get('product_type', 'subscription')  # По умолчанию подписка
         
         # ✅ ЕСЛИ user_id НЕТ, ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
         if not user_id:
             user_id = find_user_by_payment_data(payment_object)
         
-        if user_id:
-            subscription_type = determine_subscription_type(amount_value)
+        if user_id and payment_status == 'succeeded':
+            user_id = int(user_id)
             
-            if payment_status == 'succeeded':
-                user_id = int(user_id)
+            if product_type == 'deck':
+                # ✅ ОБРАБОТКА ПОКУПКИ КОЛОДЫ
+                logger.info(f"✅ Deck purchase succeeded for user {user_id}")
+                
+                # Записываем покупку в базу
+                success = db.record_deck_purchase(user_id, payment_id)
+                
+                if success:
+                    logger.info(f"🎉 Deck purchase recorded for user {user_id}")
+                    
+                    # Отправляем файлы колоды СИНХРОННО (без asyncio)
+                    try:
+                        from telegram import Bot
+                        from config import BOT_TOKEN
+                        
+                        bot = Bot(token=BOT_TOKEN)
+                        
+                        # Отправляем сообщение об успехе
+                        success_text = """
+✅ *Оплата прошла успешно!*
+
+Ваша цифровая колода «Настроение как море» готова к скачиванию.
+
+📦 *Файлы отправляются...*
+"""
+                        bot.send_message(
+                            chat_id=user_id,
+                            text=success_text,
+                            parse_mode='Markdown'
+                        )
+                        
+                        # Отправляем файлы (замените на ваши реальные file_id)
+                        try:
+                            # ZIP файл
+                            bot.send_document(
+                                chat_id=user_id,
+                                document="BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
+                                filename="Ограничения.zip",
+                                caption="📦 Архив с картами (ZIP формат)"
+                            )
+                        except Exception as e:
+                            logger.error(f"❌ Error sending ZIP: {e}")
+                        
+                        try:
+                            # RAR файл
+                            bot.send_document(
+                                chat_id=user_id,
+                                document="BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA", 
+                                filename="Возможности.rar",
+                                caption="📦 Архив с картами (RAR формат)"
+                            )
+                        except Exception as e:
+                            logger.error(f"❌ Error sending RAR: {e}")
+                        
+                        try:
+                            # PDF файл
+                            bot.send_document(
+                                chat_id=user_id,
+                                document="BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ",
+                                filename="Колода_Настроение_как_море_методическое_пособие.pdf",
+                                caption="📚 Методическое пособие с посланиями"
+                            )
+                        except Exception as e:
+                            logger.error(f"❌ Error sending PDF: {e}")
+                        
+                        # Финальное сообщение
+                        final_text = """
+🎉 *Поздравляем с приобретением колоды!*
+
+Теперь у вас есть полный доступ ко всем картам и методическим материалам.
+
+💫 Приятного использования!
+"""
+                        bot.send_message(
+                            chat_id=user_id,
+                            text=final_text,
+                            parse_mode='Markdown'
+                        )
+                        
+                        logger.info(f"✅ Deck files sent to user {user_id}")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Error sending deck files: {e}")
+                    
+                return jsonify({"status": "success"}), 200
+                
+            else:
+                # ✅ ОБРАБОТКА ПОДПИСКИ (старый код)
+                subscription_type = determine_subscription_type(amount_value)
                 logger.info(f"✅ Payment succeeded for user {user_id}, type: {subscription_type}")
                 
                 success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
@@ -88,21 +176,52 @@ def handle_payment_notification(event_data):
                 if success:
                     logger.info(f"🎉 Subscription activated for user {user_id}")
                     
-                    import asyncio
-                    asyncio.create_task(send_payment_success_notification(user_id, subscription_type, amount_value))
+                    # Отправляем уведомление СИНХРОННО
+                    try:
+                        from telegram import Bot
+                        from config import BOT_TOKEN
+                        
+                        bot = Bot(token=BOT_TOKEN)
+                        
+                        subscription_names = {
+                            "month": "1 месяц",
+                            "3months": "3 месяца", 
+                            "6months": "6 месяцев",
+                            "year": "1 год"
+                        }
+                        
+                        message_text = f"""
+✅ *Оплата прошла успешно!*
+
+💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 месяц')}" активирована.
+
+💰 Сумма: {amount_value}₽
+
+✨ Теперь вам доступны:
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Архипелаг ресурсов
+
+Наслаждайтесь полным доступом! 💫
+"""
+                        
+                        bot.send_message(
+                            chat_id=user_id,
+                            text=message_text,
+                            parse_mode='Markdown'
+                        )
+                        logger.info(f"✅ Success notification sent to user {user_id}")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Error sending success notification: {e}")
                     
                 return jsonify({"status": "success"}), 200
                 
-            elif payment_status in ['canceled', 'failed']:
-                logger.info(f"❌ Payment failed for user {user_id}")
-                return jsonify({"status": "success"}), 200
-            else:
-                logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
-                return jsonify({"status": "success"}), 200
+        elif payment_status in ['canceled', 'failed']:
+            logger.info(f"❌ Payment failed for user {user_id}")
+            return jsonify({"status": "success"}), 200
         else:
-            # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ И ЛОГИРУЕМ
-            logger.warning(f"⚠️ Cannot identify user for payment {payment_id}")
-            save_unknown_payment_for_review(payment_object)
+            logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
             return jsonify({"status": "success"}), 200
             
     except Exception as e:
@@ -246,7 +365,9 @@ def determine_subscription_type(amount: str):
         "399.00": "6months",
         "799.00": "year"
     }
-    
+    if amount == "999.00":
+        return None
+
     return subscription_types.get(amount, "month")
 
 def save_unknown_payment_for_review(payment_object):
@@ -495,6 +616,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("buy", handlers.buy_command))
             application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
             application.add_handler(CommandHandler("message", handlers.show_daily_message))
+            application.add_handler(CommandHandler("messages", handlers.messages_command))
             application.add_handler(CommandHandler("message_status", handlers.message_status))
             application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
             application.add_handler(CommandHandler("init_messages", handlers.init_messages))
