@@ -171,7 +171,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "get_daily_message":
         await show_daily_message(query, context)
     
-     elif query.data == "messages_command":
+    elif query.data == "messages_command":
         await messages_command(update, context)
         
     elif query.data == "card_questions":  
