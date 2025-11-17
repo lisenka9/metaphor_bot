@@ -508,7 +508,8 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
             application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
             application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
-            application.add_handler(CommandHandler("getfileids", handlers.get_file_id))
+            application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
+            application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
             application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
             
             application.add_handler(CallbackQueryHandler(
@@ -526,7 +527,7 @@ def run_bot_with_restart():
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
             
-            application.add_handler(MessageHandler(
+            '''application.add_handler(MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 handlers.handle_random_messages
             ))
@@ -534,7 +535,7 @@ def run_bot_with_restart():
             application.add_handler(MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 handlers.handle_consult_form
-            ))
+            ))''''
             
             logger.info("🚀 Запуск бота в режиме Polling...")
             application.run_polling(

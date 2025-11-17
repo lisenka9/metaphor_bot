@@ -1673,28 +1673,78 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Автоматически обрабатывает любой отправленный документ"""
-    if update.message.document:
-        file_id = update.message.document.file_id
-        file_name = update.message.document.file_name or "Unknown"
-        mime_type = update.message.document.mime_type or "Unknown"
+    try:
+        if update.message and update.message.document:
+            file_id = update.message.document.file_id
+            file_name = update.message.document.file_name or "Unknown"
+            mime_type = update.message.document.mime_type or "Unknown"
+            file_size = update.message.document.file_size or 0
+            
+            # Сохраняем в контексте чата (последний файл)
+            context.chat_data['last_document'] = {
+                'file_id': file_id,
+                'file_name': file_name,
+                'mime_type': mime_type,
+                'file_size': file_size
+            }
+            
+            # Сохраняем в bot_data (все файлы)
+            if 'saved_files' not in context.bot_data:
+                context.bot_data['saved_files'] = []
+            
+            # Добавляем файл если его еще нет
+            if not any(f['file_id'] == file_id for f in context.bot_data['saved_files']):
+                context.bot_data['saved_files'].append({
+                    'file_id': file_id,
+                    'file_name': file_name,
+                    'mime_type': mime_type,
+                    'file_size': file_size,
+                    'uploaded_at': datetime.now().isoformat()
+                })
+            
+            logging.info(f"📎 DOCUMENT RECEIVED - File: {file_name}, Size: {file_size}, MIME: {mime_type}, ID: {file_id}")
+            
+            await update.message.reply_text(
+                f"📎 *Документ получен!*\n"
+                f"📄 Имя: `{file_name}`\n"
+                f"📊 Размер: {file_size} байт\n"
+                f"🔧 Тип: {mime_type}\n\n"
+                f"✅ File ID сохранен!\n"
+                f"Используйте:\n"
+                f"• `/getfileid` - последний файл\n"
+                f"• `/getallfiles` - все файлы",
+                parse_mode='Markdown'
+            )
+            
+        else:
+            logging.warning("❌ Document message but no document found")
+            
+    except Exception as e:
+        logging.error(f"❌ Error in handle_any_document: {e}")
         
-        # Сохраняем информацию о документе в контексте чата
-        context.chat_data['last_document'] = {
-            'file_id': file_id,
-            'file_name': file_name,
-            'mime_type': mime_type
-        }
-        
-        await update.message.reply_text(
-            f"📎 Документ получен!\n"
-            f"Имя: {file_name}\n"
-            f"Тип: {mime_type}\n\n"
-            f"✅ File ID сохранен! Используйте /getfileid чтобы посмотреть",
-            parse_mode='Markdown'
-        )
-        
-        # Логируем для отладки
-        logging.info(f"Document received - File: {file_name}, MIME: {mime_type}, ID: {file_id}")
+async def get_all_file_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает все сохраненные file_id"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    if 'saved_files' not in context.bot_data:
+        context.bot_data['saved_files'] = []
+    
+    if not context.bot_data['saved_files']:
+        await update.message.reply_text("📭 Нет сохраненных файлов.")
+        return
+    
+    message = "📋 *Сохраненные файлы:*\n\n"
+    for i, file_info in enumerate(context.bot_data['saved_files'], 1):
+        message += f"{i}. `{file_info['file_id']}`\n"
+        message += f"   📄 {file_info['file_name']}\n"
+        message += f"   🔧 {file_info['mime_type']}\n"
+        message += f"   📊 {file_info.get('file_size', 'N/A')} байт\n\n"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
 
 async def debug_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отладочная информация о сообщении"""
