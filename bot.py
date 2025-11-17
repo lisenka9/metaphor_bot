@@ -535,7 +535,7 @@ def run_bot_with_restart():
             application.add_handler(MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 handlers.handle_consult_form
-            ))''''
+            ))'''
             
             logger.info("🚀 Запуск бота в режиме Polling...")
             application.run_polling(
