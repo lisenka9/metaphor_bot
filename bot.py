@@ -508,7 +508,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
             application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
             application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
-            application.add_handler(CommandHandler("getfileids", handlers.upload_files))
+            application.add_handler(CommandHandler("getfileids", handlers.get_file_id))
             
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
