@@ -90,60 +90,70 @@ def handle_payment_notification(event_data):
                 if success:
                     logger.info(f"🎉 Deck purchase recorded for user {user_id}")
                     
-                    # Отправляем файлы колоды СИНХРОННО (без asyncio)
-                    try:
-                        from telegram import Bot
-                        from config import BOT_TOKEN
-                        
-                        bot = Bot(token=BOT_TOKEN)
-                        
-                        # Отправляем сообщение об успехе
-                        success_text = """
+                    # Запускаем отправку файлов в отдельном потоке
+                    import threading
+                    
+                    def send_deck_files_async():
+                        """Отправляет файлы колоды асинхронно"""
+                        try:
+                            from telegram import Bot
+                            from config import BOT_TOKEN
+                            
+                            bot = Bot(token=BOT_TOKEN)
+                            
+                            # Отправляем сообщение об успехе
+                            success_text = """
 ✅ *Оплата прошла успешно!*
 
 Ваша цифровая колода «Настроение как море» готова к скачиванию.
 
 📦 *Файлы отправляются...*
 """
-                        bot.send_message(
-                            chat_id=user_id,
-                            text=success_text,
-                            parse_mode='Markdown'
-                        )
-                        
-                        # Отправляем файлы (замените на ваши реальные file_id)
-                        try:
-                            # ZIP файл
-                            bot.send_document(
+                            bot.send_message(
                                 chat_id=user_id,
-                                document="BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
-                                filename="Ограничения.zip",
-                                caption="📦 Архив с картами (ZIP формат)"
+                                text=success_text,
+                                parse_mode='Markdown'
                             )
-                        except Exception as e:
-                            logger.error(f"❌ Error sending ZIP: {e}")
-                        
-                        try:
-                            # RAR файл
-                            bot.send_document(
-                                chat_id=user_id,
-                                document="BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA", 
-                                filename="Возможности.rar",
-                                caption="📦 Архив с картами (RAR формат)"
-                            )
-                        except Exception as e:
-                            logger.error(f"❌ Error sending RAR: {e}")
-                        
-                        try:
-                            # PDF файл
-                            bot.send_document(
-                                chat_id=user_id,
-                                document="BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ",
-                                filename="Колода_Настроение_как_море_методическое_пособие.pdf",
-                                caption="📚 Методическое пособие с посланиями"
-                            )
-                        except Exception as e:
-                            logger.error(f"❌ Error sending PDF: {e}")
+                            
+                            # Отправляем файлы (ЗАМЕНИТЕ НА РЕАЛЬНЫЕ file_id)
+                            file_ids = {
+                                "zip": "BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
+                                "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA",
+                                "pdf": "BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ"
+                            }
+                            
+                            try:
+                                # ZIP файл
+                                bot.send_document(
+                                    chat_id=user_id,
+                                    document=file_ids["zip"],
+                                    filename="Ограничения.zip",
+                                    caption="📦 Архив с картами (ZIP формат)"
+                                )
+                            except Exception as e:
+                                logger.error(f"❌ Error sending ZIP: {e}")
+                            
+                            try:
+                                # RAR файл
+                                bot.send_document(
+                                    chat_id=user_id,
+                                    document=file_ids["rar"],
+                                    filename="Возможности.rar",
+                                    caption="📦 Архив с картами (RAR формат)"
+                                )
+                            except Exception as e:
+                                logger.error(f"❌ Error sending RAR: {e}")
+                            
+                            try:
+                                # PDF файл
+                                bot.send_document(
+                                    chat_id=user_id,
+                                    document=file_ids["pdf"],
+                                    filename="Колода_Настроение_как_море_методическое_пособие.pdf",
+                                    caption="📚 Методическое пособие с посланиями"
+                                )
+                            except Exception as e:
+                                logger.error(f"❌ Error sending PDF: {e}")
                         
                         # Финальное сообщение
                         final_text = """
@@ -162,7 +172,12 @@ def handle_payment_notification(event_data):
                         logger.info(f"✅ Deck files sent to user {user_id}")
                         
                     except Exception as e:
-                        logger.error(f"❌ Error sending deck files: {e}")
+                        logger.error(f"❌ Error in send_deck_files_async: {e}")
+                    
+                    # Запускаем в отдельном потоке
+                    thread = threading.Thread(target=send_deck_files_async)
+                    thread.daemon = True
+                    thread.start()
                     
                 return jsonify({"status": "success"}), 200
                 
@@ -176,19 +191,22 @@ def handle_payment_notification(event_data):
                 if success:
                     logger.info(f"🎉 Subscription activated for user {user_id}")
                     
-                    # Отправляем уведомление СИНХРОННО
-                    try:
-                        from telegram import Bot
-                        from config import BOT_TOKEN
-                        
-                        bot = Bot(token=BOT_TOKEN)
-                        
-                        subscription_names = {
-                            "month": "1 месяц",
-                            "3months": "3 месяца", 
-                            "6months": "6 месяцев",
-                            "year": "1 год"
-                        }
+                    import threading
+                    
+                    def send_subscription_notification_async():
+                        """Отправляет уведомление о подписке асинхронно"""
+                        try:
+                            from telegram import Bot
+                            from config import BOT_TOKEN
+                            
+                            bot = Bot(token=BOT_TOKEN)
+                            
+                            subscription_names = {
+                                "month": "1 месяц",
+                                "3months": "3 месяца", 
+                                "6months": "6 месяцев",
+                                "year": "1 год"
+                            }
                         
                         message_text = f"""
 ✅ *Оплата прошла успешно!*
