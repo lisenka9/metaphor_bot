@@ -1650,26 +1650,36 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда для получения file_id последнего документа"""
-    # Проверяем, был ли отправлен документ в этом чате
     user_id = update.effective_user.id
+    
+    # Добавим отладочную информацию
+    logging.info(f"🔍 get_file_id called by user {user_id}")
+    logging.info(f"🔍 chat_data keys: {list(context.chat_data.keys())}")
+    
     if 'last_document' in context.chat_data:
-        file_id = context.chat_data['last_document']['file_id']
-        file_name = context.chat_data['last_document']['file_name']
+        file_info = context.chat_data['last_document']
+        file_id = file_info['file_id']
+        file_name = file_info['file_name']
         
         await update.message.reply_text(
             f"✅ Последний полученный документ:\n"
-            f"📎 File ID: `{file_id}`\n"
+            f"📎 File ID: {file_id}\n"
             f"📄 File name: {file_name}",
-            parse_mode='Markdown'
+            parse_mode=None  # Без Markdown
         )
+        
+        # Также покажем в логах
+        logging.info(f"✅ Found file: {file_name}, ID: {file_id}")
     else:
         await update.message.reply_text(
-            "❌ Документы не найдены.\n\n"
+            "❌ Документы не найдены в контексте.\n\n"
             "Как получить file_id:\n"
             "1. Отправьте PDF файл как 'File'\n"
             "2. Бот автоматически сохранит file_id\n"
-            "3. Используйте /getfileid для просмотра"
+            "3. Используйте /getfileid для просмотра",
+            parse_mode=None
         )
+        logging.warning("❌ No documents found in chat_data")
 
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Автоматически обрабатывает любой отправленный документ"""
@@ -1679,6 +1689,9 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
             file_name = update.message.document.file_name or "Unknown"
             mime_type = update.message.document.mime_type or "Unknown"
             file_size = update.message.document.file_size or 0
+            
+            # Экранируем имя файла для Markdown
+            safe_file_name = file_name.replace('_', '\\_').replace('-', '\\-').replace('.', '\\.')
             
             # Сохраняем в контексте чата (последний файл)
             context.chat_data['last_document'] = {
@@ -1704,17 +1717,18 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             logging.info(f"📎 DOCUMENT RECEIVED - File: {file_name}, Size: {file_size}, MIME: {mime_type}, ID: {file_id}")
             
+            # Отправляем сообщение БЕЗ Markdown разметки
             await update.message.reply_text(
-                f"📎 *Документ получен!*\n"
-                f"📄 Имя: `{file_name}`\n"
+                f"📎 Документ получен!\n"
+                f"📄 Имя: {file_name}\n"
                 f"📊 Размер: {file_size} байт\n"
                 f"🔧 Тип: {mime_type}\n"
-                f"ID: {file_id}\n"
+                f"🆔 ID: {file_id}\n\n"
                 f"✅ File ID сохранен!\n"
                 f"Используйте:\n"
-                f"• `/getfileid` - последний файл\n"
-                f"• `/getallfiles` - все файлы",
-                parse_mode='Markdown'
+                f"• /getfileid - последний файл\n"
+                f"• /getallfiles - все файлы"
+                # Убрали parse_mode='Markdown'
             )
             
         else:
@@ -1722,6 +1736,8 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
             
     except Exception as e:
         logging.error(f"❌ Error in handle_any_document: {e}")
+        # Отправляем простой текст без разметки
+        await update.message.reply_text("❌ Ошибка при обработке документа")
 
 async def get_all_file_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает все сохраненные file_id"""
@@ -1731,21 +1747,27 @@ async def get_all_file_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
+    # Отладочная информация
+    logging.info(f"🔍 get_all_file_ids called by admin {user.id}")
+    logging.info(f"🔍 bot_data keys: {list(context.bot_data.keys())}")
+    
     if 'saved_files' not in context.bot_data:
         context.bot_data['saved_files'] = []
     
     if not context.bot_data['saved_files']:
-        await update.message.reply_text("📭 Нет сохраненных файлов.")
+        await update.message.reply_text("📭 Нет сохраненных файлов в bot_data.")
+        logging.warning("❌ No saved_files in bot_data")
         return
     
-    message = "📋 *Сохраненные файлы:*\n\n"
+    message = "📋 Сохраненные файлы:\n\n"
     for i, file_info in enumerate(context.bot_data['saved_files'], 1):
-        message += f"{i}. `{file_info['file_id']}`\n"
+        message += f"{i}. {file_info['file_id']}\n"
         message += f"   📄 {file_info['file_name']}\n"
         message += f"   🔧 {file_info['mime_type']}\n"
         message += f"   📊 {file_info.get('file_size', 'N/A')} байт\n\n"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await update.message.reply_text(message, parse_mode=None)
+    logging.info(f"✅ Sent {len(context.bot_data['saved_files'])} file IDs to admin")
 
 async def debug_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отладочная информация о сообщении"""
