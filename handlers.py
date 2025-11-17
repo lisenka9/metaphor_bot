@@ -3447,7 +3447,7 @@ async def handle_buy_deck(query, context: ContextTypes.DEFAULT_TYPE):
             # Попытка отправить ZIP файл
             # Замените file_id на реальный ID вашего ZIP файла
             await query.message.reply_document(
-                document="BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ",  # Заглушка
+                document="BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",  
                 filename="Ограничения.zip",
                 caption="📦 Архив с картами (ZIP формат)"
             )
@@ -3461,7 +3461,7 @@ async def handle_buy_deck(query, context: ContextTypes.DEFAULT_TYPE):
             # Попытка отправить RAR файл  
             # Замените file_id на реальный ID вашего RAR файла
             await query.message.reply_document(
-                document="BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ",  # Заглушка
+                document="BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA",  
                 filename="Возможности.rar",
                 caption="📦 Архив с картами (RAR формат)"
             )
@@ -3475,7 +3475,7 @@ async def handle_buy_deck(query, context: ContextTypes.DEFAULT_TYPE):
             # Попытка отправить PDF файл
             # Замените file_id на реальный ID вашего PDF файла
             await query.message.reply_document(
-                document="BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ",  # Заглушка
+                document="BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ",  
                 filename="Колода_Настроение_как_море_методическое_пособие.pdf",
                 caption="📚 Методическое пособие с посланиями"
             )
