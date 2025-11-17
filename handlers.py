@@ -1708,7 +1708,8 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"📎 *Документ получен!*\n"
                 f"📄 Имя: `{file_name}`\n"
                 f"📊 Размер: {file_size} байт\n"
-                f"🔧 Тип: {mime_type}\n\n"
+                f"🔧 Тип: {mime_type}\n"
+                f"ID: {file_id}\n"
                 f"✅ File ID сохранен!\n"
                 f"Используйте:\n"
                 f"• `/getfileid` - последний файл\n"
@@ -1721,7 +1722,7 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
             
     except Exception as e:
         logging.error(f"❌ Error in handle_any_document: {e}")
-        
+
 async def get_all_file_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает все сохраненные file_id"""
     user = update.effective_user
