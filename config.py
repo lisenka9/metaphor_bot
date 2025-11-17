@@ -45,4 +45,11 @@ SUBSCRIPTION_NAMES = {
     "year": "1 год"
 }
 
+DECK_PRODUCT = {
+    "price": 999.00,
+    "name": "Цифровая колода 'Настроение как море'",
+    "payment_link": "https://yookassa.ru/my/i/aRn2fkgcOd2v/l",
+    "description": "Полная цифровая версия колоды с методическим пособием"
+}
+
 print(f"✅ BOT_TOKEN loaded: {BOT_TOKEN[:10]}...") 

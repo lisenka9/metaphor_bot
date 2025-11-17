@@ -321,3 +321,21 @@ def get_after_purchase_keyboard():
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_deck_payment_keyboard(payment_url: str, payment_id: str):
+    """Клавиатура для оплаты колоды"""
+    keyboard = [
+        [InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)],
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_deck_payment_{payment_id}")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_deck_payment_check_keyboard(payment_id: str):
+    """Клавиатура для проверки оплаты колоды"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_deck_payment_{payment_id}")],
+        [InlineKeyboardButton("🛒 Попробовать снова", callback_data="buy_deck")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)

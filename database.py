@@ -101,6 +101,17 @@ class DatabaseManager:
                 )
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS deck_purchases (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    payment_id TEXT,
+                    status TEXT DEFAULT 'completed',
+                    amount DECIMAL DEFAULT 999.00
+                )
+            ''')
+
             # Обновляем таблицу пользователей
             cursor.execute('''
                 ALTER TABLE users 
@@ -126,6 +137,48 @@ class DatabaseManager:
             logging.error(f"❌ Error initializing database: {e}")
             conn.rollback()
             raise
+        finally:
+            conn.close()
+
+    def has_purchased_deck(self, user_id: int) -> bool:
+        """Проверяет, покупал ли пользователь колоду"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT id FROM deck_purchases 
+                WHERE user_id = %s AND status = 'completed'
+                LIMIT 1
+            ''', (user_id,))
+            
+            return cursor.fetchone() is not None
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking deck purchase: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def record_deck_purchase(self, user_id: int, payment_id: str = None) -> bool:
+        """Записывает факт покупки колоды"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                INSERT INTO deck_purchases (user_id, payment_id)
+                VALUES (%s, %s)
+            ''', (user_id, payment_id))
+            
+            conn.commit()
+            logging.info(f"✅ Deck purchase recorded for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error recording deck purchase: {e}")
+            conn.rollback()
+            return False
         finally:
             conn.close()
 

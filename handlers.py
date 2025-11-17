@@ -260,6 +260,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif query.data == "buy_deck":
         await handle_buy_deck(query, context)
+
+    elif query.data == "buy_deck":
+        await handle_buy_deck(query, context)
+
+    elif query.data.startswith("check_deck_payment_"):
+        await handle_deck_payment_check(query, context)
     
     elif query.data == "subscribe":
         await show_subscribe_from_button(query, context)
@@ -3368,6 +3374,14 @@ async def handle_three_waves_complete(query, context: ContextTypes.DEFAULT_TYPE)
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /buy"""
+    user = update.effective_user
+    
+    # Проверяем, покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        # Если уже покупал - сразу отправляем файлы
+        await send_deck_files(update, context, user.id)
+        return
+
     buy_text = """
 🛒 *Купить цифровую колоду*
 
@@ -3393,6 +3407,14 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает информацию о покупке из кнопки меню"""
+    user = query.from_user
+    
+    # Проверяем, покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        # Если уже покупал - сразу отправляем файлы
+        await send_deck_files_to_query(query, context, user.id)
+        return
+
     buy_text = """
 🛒 *Купить цифровую колоду*
 
@@ -3407,7 +3429,6 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 📦 *Мгновенная доставка:* файлы придут сразу после оплаты
 💰 *Стоимость:* 999₽
 
-*Нажмите кнопку "Купить" чтобы получить колоду:*
 """
     
     await query.message.reply_text(
@@ -3417,11 +3438,104 @@ async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_buy_deck(query, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает покупку колоды - отправляет файлы"""
-    await query.edit_message_reply_markup(reply_markup=None)
+    """Обрабатывает покупку колоды"""
+    user = query.from_user
     
+    # Проверяем, покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        # Если уже покупал - сразу отправляем файлы
+        await send_deck_files_to_query(query, context, user.id)
+        return
+    
+    # Создаем платеж
+    payment_url, payment_id = payment_processor.create_deck_payment(user.id)
+    
+    if not payment_url:
+        await query.message.reply_text(
+            "❌ Ошибка при создании платежа. Попробуйте позже.",
+            reply_markup=keyboard.get_buy_keyboard()
+        )
+        return
+    
+    # Сохраняем в контексте
+    context.user_data['deck_payment_id'] = payment_id
+    
+    payment_text = """
+💎 *Цифровая колода «Настроение как море»*
+
+Стоимость: 999₽
+
+Нажмите кнопку "💳 Оплатить онлайн" для перехода к оплате.
+
+После успешной оплаты файлы колоды будут отправлены автоматически в течение 1-2 минут.
+
+Если файлы не пришли, нажмите "🔄 Проверить оплату".
+"""
+    
+    await query.message.reply_text(
+        payment_text,
+        reply_markup=keyboard.get_deck_payment_keyboard(payment_url, payment_id),
+        parse_mode='Markdown'
+    )
+
+async def handle_deck_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет статус оплаты колоды"""
+    user = query.from_user
+    
+    # Проверяем, не покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        await send_deck_files_to_query(query, context, user.id)
+        return
+    
+    payment_id = context.user_data.get('deck_payment_id')
+    
+    if not payment_id:
+        await query.message.reply_text(
+            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
+            reply_markup=keyboard.get_buy_keyboard()
+        )
+        return
+    
+    # Проверяем статус платежа
+    payment_status = payment_processor.check_payment_status(payment_id)
+    
+    if payment_status is True:
+        # Платеж подтвержден, активируем покупку
+        if payment_processor.activate_deck_purchase(payment_id):
+            await send_deck_files_to_query(query, context, user.id)
+            
+            # Очищаем данные о платеже
+            if 'deck_payment_id' in context.user_data:
+                del context.user_data['deck_payment_id']
+        else:
+            await query.message.reply_text(
+                "❌ Ошибка при активации покупки. Свяжитесь с администратором.",
+                reply_markup=keyboard.get_buy_keyboard()
+            )
+            
+    elif payment_status is False:
+        await query.message.reply_text(
+            "❌ Платеж не прошел или был отменен. Попробуйте оплатить снова.",
+            reply_markup=keyboard.get_buy_keyboard()
+        )
+    else:
+        # Платеж еще обрабатывается
+        await query.message.reply_text(
+            "⏳ Платеж еще обрабатывается...\n\n"
+            "Пожалуйста, подождите 1-2 минуты и проверьте снова.",
+            reply_markup=keyboard.get_deck_payment_check_keyboard(payment_id)
+        )
+
+async def send_deck_files_to_query(query, context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """Отправляет файлы колоды в ответ на query"""
+    await query.edit_message_reply_markup(reply_markup=None)
+    await send_deck_files(None, context, user_id, query.message)
+
+async def send_deck_files(update, context: ContextTypes.DEFAULT_TYPE, user_id: int, message=None):
+    """Отправляет файлы колоды пользователю"""
     try:
-        # Сообщение о успешной покупке
+        if message is None and update:
+            message = update.message
         success_text = """
 ✅ *Спасибо за покупку!*
 
@@ -3494,18 +3608,27 @@ async def handle_buy_deck(query, context: ContextTypes.DEFAULT_TYPE):
 ✨ Приятного использования!
 """
         
-        await query.message.reply_text(
-            final_text,
-            reply_markup=keyboard.get_after_purchase_keyboard(),
-            parse_mode='Markdown'
-        )
+        if message:
+            await message.reply_text(
+                final_text,
+                reply_markup=keyboard.get_after_purchase_keyboard(),
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                final_text,
+                reply_markup=keyboard.get_after_purchase_keyboard(),
+                parse_mode='Markdown'
+            )
         
     except Exception as e:
-        logging.error(f"❌ Error in handle_buy_deck: {e}")
-        await query.message.reply_text(
-            "❌ Произошла ошибка при отправке файлов. Пожалуйста, свяжитесь с администратором.",
-            reply_markup=keyboard.get_buy_keyboard()
-        )
+        logging.error(f"❌ Error sending deck files: {e}")
+        error_msg = "❌ Произошла ошибка при отправке файлов. Пожалуйста, свяжитесь с администратором."
+        
+        if message:
+            await message.reply_text(error_msg)
+        else:
+            await update.message.reply_text(error_msg)
 
 
 async def upload_files(update: Update, context: ContextTypes.DEFAULT_TYPE):

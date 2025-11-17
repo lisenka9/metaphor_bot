@@ -280,5 +280,88 @@ class YooKassaPayment:
         thread.daemon = True
         thread.start()
 
+
+    def create_deck_payment(self, user_id: int):
+        """Создает платеж за колоду"""
+        from config import DECK_PRODUCT
+        
+        try:
+            payment_id = str(uuid.uuid4())
+            
+            payload = {
+                "amount": {
+                    "value": f"{DECK_PRODUCT['price']:.2f}",
+                    "currency": "RUB"
+                },
+                "payment_method_data": {
+                    "type": "bank_card"
+                },
+                "confirmation": {
+                    "type": "redirect",
+                    "return_url": f"https://t.me/MetaphorCardsSeaBot?start=deck_purchase_success"
+                },
+                "capture": True,
+                "description": DECK_PRODUCT['description'],
+                "metadata": {
+                    "user_id": int(user_id),
+                    "product_type": "deck",
+                    "payment_id": payment_id
+                }
+            }
+            
+            headers = {
+                "Idempotence-Key": str(uuid.uuid4()),
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/payments",
+                json=payload,
+                headers=headers,
+                auth=self.auth,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                payment_data = response.json()
+                
+                # Сохраняем информацию о платеже
+                self.pending_payments[payment_id] = {
+                    'user_id': user_id,
+                    'product_type': 'deck',
+                    'yookassa_payment_id': payment_data['id'],
+                    'status': payment_data['status'],
+                    'created_at': datetime.now(),
+                    'amount': DECK_PRODUCT['price']
+                }
+                
+                return payment_data['confirmation']['confirmation_url'], payment_id
+            else:
+                logging.error(f"❌ YooKassa API error for deck: {response.status_code} - {response.text}")
+                return None, None
+                
+        except Exception as e:
+            logging.error(f"❌ Error creating deck payment: {e}")
+            return None, None
+
+    def activate_deck_purchase(self, payment_id: str):
+        """Активирует покупку колоды после успешной оплаты"""
+        if payment_id not in self.pending_payments:
+            return False
+            
+        payment_info = self.pending_payments[payment_id]
+        user_id = payment_info['user_id']
+        
+        # Записываем покупку в базу
+        success = db.record_deck_purchase(user_id, payment_info['yookassa_payment_id'])
+        
+        if success:
+            # Удаляем из ожидающих платежей
+            del self.pending_payments[payment_id]
+            logging.info(f"✅ Deck purchase activated for user {user_id}")
+            return True
+        
+        return False
+
 # Глобальный экземпляр
 payment_processor = YooKassaPayment()
