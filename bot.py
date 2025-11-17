@@ -96,29 +96,31 @@ def handle_payment_notification(event_data):
                     def send_deck_files_async():
                         """Отправляет файлы колоды асинхронно"""
                         try:
+                            # Импортируем здесь чтобы избежать циклических импортов
                             from telegram import Bot
                             from config import BOT_TOKEN
                             
+                            # Используем синхронный Bot (без Application)
                             bot = Bot(token=BOT_TOKEN)
                             
                             # Отправляем сообщение об успехе
                             success_text = """
-✅ *Оплата прошла успешно!*
+                    ✅ *Оплата прошла успешно!*
 
-Ваша цифровая колода «Настроение как море» готова к скачиванию.
+                    Ваша цифровая колода «Настроение как море» готова к скачиванию.
 
-📦 *Файлы отправляются...*
-"""
+                    📦 *Файлы отправляются...*
+                    """
                             bot.send_message(
                                 chat_id=user_id,
                                 text=success_text,
                                 parse_mode='Markdown'
                             )
                             
-                            # Отправляем файлы (ЗАМЕНИТЕ НА РЕАЛЬНЫЕ file_id)
+                            # Отправляем файлы
                             file_ids = {
                                 "zip": "BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
-                                "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA",
+                                "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA", 
                                 "pdf": "BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ"
                             }
                             
@@ -138,7 +140,7 @@ def handle_payment_notification(event_data):
                                 bot.send_document(
                                     chat_id=user_id,
                                     document=file_ids["rar"],
-                                    filename="Возможности.rar",
+                                    filename="Возможности.rar", 
                                     caption="📦 Архив с картами (RAR формат)"
                                 )
                             except Exception as e:
@@ -157,12 +159,12 @@ def handle_payment_notification(event_data):
                             
                             # Финальное сообщение
                             final_text = """
-🎉 *Поздравляем с приобретением колоды!*
+                    🎉 *Поздравляем с приобретением колоды!*
 
-Теперь у вас есть полный доступ ко всем картам и методическим материалам.
+                    Теперь у вас есть полный доступ ко всем картам и методическим материалам.
 
-💫 Приятного использования!
-"""
+                    💫 Приятного использования!
+                    """
                             bot.send_message(
                                 chat_id=user_id,
                                 text=final_text,

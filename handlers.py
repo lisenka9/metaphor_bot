@@ -3413,7 +3413,7 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📦 *Мгновенная доставка:* файлы придут сразу после оплаты
 💰 *Стоимость:* 999₽
 
-*Нажмите кнопку "Купить" чтобы получить колоду:*
+*Нажмите кнопку "Купить колоду" чтобы получить колоду:*
 """
     
     await update.message.reply_text(
@@ -3546,7 +3546,74 @@ async def handle_deck_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
 async def send_deck_files_to_query(query, context: ContextTypes.DEFAULT_TYPE, user_id: int):
     """Отправляет файлы колоды в ответ на query"""
     await query.edit_message_reply_markup(reply_markup=None)
-    await send_deck_files(None, context, user_id, query.message)
+    
+    try:
+        # Отправляем сообщение об успехе
+        success_text = """
+✅ *Спасибо за покупку!*
+
+Ваша цифровая колода «Настроение как море» готова к скачиванию.
+
+📦 *Файлы отправляются...*
+"""
+        await query.message.reply_text(success_text, parse_mode='Markdown')
+        
+        # Отправляем файлы
+        file_ids = {
+            "zip": "BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
+            "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA",
+            "pdf": "BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ"
+        }
+        
+        try:
+            # ZIP файл
+            await query.message.reply_document(
+                document=file_ids["zip"],
+                filename="Ограничения.zip",
+                caption="📦 Архив с картами (ZIP формат)"
+            )
+        except Exception as e:
+            logger.error(f"❌ Error sending ZIP: {e}")
+        
+        try:
+            # RAR файл
+            await query.message.reply_document(
+                document=file_ids["rar"],
+                filename="Возможности.rar",
+                caption="📦 Архив с картами (RAR формат)"
+            )
+        except Exception as e:
+            logger.error(f"❌ Error sending RAR: {e}")
+        
+        try:
+            # PDF файл
+            await query.message.reply_document(
+                document=file_ids["pdf"],
+                filename="Колода_Настроение_как_море_методическое_пособие.pdf",
+                caption="📚 Методическое пособие с посланиями"
+            )
+        except Exception as e:
+            logger.error(f"❌ Error sending PDF: {e}")
+        
+        # Финальное сообщение
+        final_text = """
+🎉 *Поздравляем с приобретением колоды!*
+
+Теперь у вас есть полный доступ ко всем картам и методическим материалам.
+
+💫 Приятного использования!
+"""
+        await query.message.reply_text(
+            final_text,
+            reply_markup=keyboard.get_after_purchase_keyboard(),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending deck files: {e}")
+        await query.message.reply_text(
+            "❌ Произошла ошибка при отправке файлов. Пожалуйста, свяжитесь с администратором."
+        )
 
 async def send_deck_files(update, context: ContextTypes.DEFAULT_TYPE, user_id: int, message=None):
     """Отправляет файлы колоды пользователю"""
