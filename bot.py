@@ -154,25 +154,25 @@ def handle_payment_notification(event_data):
                                 )
                             except Exception as e:
                                 logger.error(f"❌ Error sending PDF: {e}")
-                        
-                        # Финальное сообщение
-                        final_text = """
+                            
+                            # Финальное сообщение
+                            final_text = """
 🎉 *Поздравляем с приобретением колоды!*
 
 Теперь у вас есть полный доступ ко всем картам и методическим материалам.
 
 💫 Приятного использования!
 """
-                        bot.send_message(
-                            chat_id=user_id,
-                            text=final_text,
-                            parse_mode='Markdown'
-                        )
-                        
-                        logger.info(f"✅ Deck files sent to user {user_id}")
-                        
-                    except Exception as e:
-                        logger.error(f"❌ Error in send_deck_files_async: {e}")
+                            bot.send_message(
+                                chat_id=user_id,
+                                text=final_text,
+                                parse_mode='Markdown'
+                            )
+                            
+                            logger.info(f"✅ Deck files sent to user {user_id}")
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Error in send_deck_files_async: {e}")
                     
                     # Запускаем в отдельном потоке
                     thread = threading.Thread(target=send_deck_files_async)
@@ -207,8 +207,8 @@ def handle_payment_notification(event_data):
                                 "6months": "6 месяцев",
                                 "year": "1 год"
                             }
-                        
-                        message_text = f"""
+                            
+                            message_text = f"""
 ✅ *Оплата прошла успешно!*
 
 💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 месяц')}" активирована.
@@ -222,16 +222,20 @@ def handle_payment_notification(event_data):
 
 Наслаждайтесь полным доступом! 💫
 """
-                        
-                        bot.send_message(
-                            chat_id=user_id,
-                            text=message_text,
-                            parse_mode='Markdown'
-                        )
-                        logger.info(f"✅ Success notification sent to user {user_id}")
-                        
-                    except Exception as e:
-                        logger.error(f"❌ Error sending success notification: {e}")
+                            
+                            bot.send_message(
+                                chat_id=user_id,
+                                text=message_text,
+                                parse_mode='Markdown'
+                            )
+                            logger.info(f"✅ Success notification sent to user {user_id}")
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Error sending subscription notification: {e}")
+                    
+                    thread = threading.Thread(target=send_subscription_notification_async)
+                    thread.daemon = True
+                    thread.start()
                     
                 return jsonify({"status": "success"}), 200
                 
