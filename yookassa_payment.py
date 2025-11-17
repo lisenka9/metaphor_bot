@@ -100,7 +100,7 @@ class YooKassaPayment:
                         return True
                     return False
                 else:
-
+                    # Для подписки проверяем через API ЮKassa
                     headers = {
                         "Content-Type": "application/json"
                     }
@@ -128,34 +128,33 @@ class YooKassaPayment:
                     else:
                         logging.error(f"❌ YooKassa API check error: {response.status_code}")
                         return None
+            
+            else:
+                # Если payment_id нет в ожидающих, проверяем в базе данных
+                conn = db.get_connection()
+                cursor = conn.cursor()
                 
-                # ✅ ИСПРАВЛЕННАЯ ПРОВЕРКА ПЛАТЕЖЕЙ В БАЗЕ ДАННЫХ
-                else:
-                    # Ищем платеж в базе данных по yoomoney_payment_id
-                    conn = db.get_connection()
-                    cursor = conn.cursor()
-                    
-                    cursor.execute('''
-                        SELECT status 
-                        FROM payments 
-                        WHERE yoomoney_payment_id = %s
-                        ORDER BY payment_date DESC 
-                        LIMIT 1
-                    ''', (payment_id,))  # ✅ Ищем по yoomoney_payment_id
-                    
-                    result = cursor.fetchone()
-                    conn.close()
-                    
-                    if result:
-                        status = result[0]
-                        if status == 'success':
-                            return True
-                    
-                    return False
+                cursor.execute('''
+                    SELECT status 
+                    FROM payments 
+                    WHERE yoomoney_payment_id = %s
+                    ORDER BY payment_date DESC 
+                    LIMIT 1
+                ''', (payment_id,))
+                
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result:
+                    status = result[0]
+                    if status == 'success':
+                        return True
+                
+                return False
                         
-            except Exception as e:
-                logging.error(f"❌ Error checking payment status: {e}")
-                return None
+        except Exception as e:
+            logging.error(f"❌ Error checking payment status: {e}")
+            return None
 
     def find_user_payment(self, user_id: int):
         """Ищет платежи пользователя в базе данных"""
