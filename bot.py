@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import json
 import requests
 import threading
 from flask import Flask, request, jsonify
@@ -11,6 +12,10 @@ import handlers
 from database import db
 from yookassa_payment import payment_processor  
 import logging
+
+import multiprocessing
+import signal
+import sys
 
 # Настройка логирования
 logging.basicConfig(
@@ -563,12 +568,6 @@ def save_payment_to_db(user_id, subscription_type, yookassa_payment_id, internal
     except Exception as e:
         logger.error(f"❌ Error saving payment to DB: {e}")
 
-def start_flask():
-    """Запускает Flask сервер"""
-    port = int(os.environ.get("PORT", 10000))
-    logger.info(f"🚀 Starting Flask server on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
 def ping_self():
     """Пингует собственный health endpoint"""
     service_url = os.environ.get('RENDER_EXTERNAL_URL', 'https://metaphor-bot.onrender.com')
@@ -713,29 +712,82 @@ def start_payment_monitoring():
         # Проверяем каждые 30 секунд
         time.sleep(30)
 
+def run_flask_process():
+    """Запускает Flask в отдельном процессе"""
+    try:
+        port = int(os.environ.get("PORT", 10000))
+        logger.info(f"🚀 Starting Flask server on port {port}")
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    except Exception as e:
+        logger.error(f"❌ Flask process crashed: {e}")
+        sys.exit(1)
+
+def run_bot_process():
+    """Запускает бота в отдельном процессе"""
+    try:
+        # Запускаем мониторинг платежей в отдельном потоке
+        payment_thread = threading.Thread(target=start_payment_monitoring)
+        payment_thread.daemon = True
+        payment_thread.start()
+
+        # Даем Flask время на запуск
+        time.sleep(5)
+        
+        # Запускаем самопинг в отдельном потоке
+        ping_thread = threading.Thread(target=ping_self)
+        ping_thread.daemon = True
+        ping_thread.start()
+        
+        # Запускаем бота с автоматическим перезапуском
+        run_bot_with_restart()
+    except Exception as e:
+        logger.error(f"❌ Bot process crashed: {e}")
+        sys.exit(1)
+
+def signal_handler(signum, frame):
+    """Обработчик сигналов для graceful shutdown"""
+    logger.info("🛑 Received shutdown signal...")
+    sys.exit(0)
+
 def main():
     """Основная функция запуска"""
+    # Регистрируем обработчики сигналов
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
-    # Запускаем мониторинг платежей в отдельном потоке
-    payment_thread = threading.Thread(target=start_payment_monitoring)
-    payment_thread.daemon = True
-    payment_thread.start()
-
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(target=start_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
+    logger.info("🚀 Starting bot and Flask in separate processes...")
     
-    # Даем Flask время на запуск
-    time.sleep(3)
+    # Создаем процессы
+    flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
+    bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
     
-    # Запускаем самопинг в отдельном потоке
-    ping_thread = threading.Thread(target=ping_self)
-    ping_thread.daemon = True
-    ping_thread.start()
+    # Запускаем процессы
+    flask_process.start()
+    logger.info("✅ Flask process started")
     
-    # Запускаем бота с автоматическим перезапуском
-    run_bot_with_restart()
-
+    bot_process.start() 
+    logger.info("✅ Bot process started")
+    
+    # Мониторим процессы и перезапускаем при падении
+    while True:
+        time.sleep(10)
+        
+        # Проверяем статус процессов
+        if not flask_process.is_alive():
+            logger.error("❌ Flask process died, restarting...")
+            flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
+            flask_process.start()
+            logger.info("✅ Flask process restarted")
+            
+        if not bot_process.is_alive():
+            logger.error("❌ Bot process died, restarting...")
+            bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+            bot_process.start()
+            logger.info("✅ Bot process restarted")
+        
+        # Если оба процесса умерли, выходим
+        if not flask_process.is_alive() and not bot_process.is_alive():
+            logger.error("💥 Both processes died, exiting...")
+            break            
 if __name__ == '__main__':
     main()
