@@ -3754,6 +3754,16 @@ async def upload_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /messages - информация о посланиях дня"""
+    # Определяем, откуда пришел запрос - из команды или из кнопки
+    if update.callback_query:
+        # Если это callback query (нажатие кнопки)
+        query = update.callback_query
+        message = query.message
+        await query.answer()  # Подтверждаем нажатие кнопки
+    else:
+        # Если это обычная команда
+        message = update.message
+    
     user = update.effective_user
     
     # Получаем статистику пользователя для персонализации
@@ -3774,8 +3784,6 @@ async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 1. Сначала получите карту дня (/daily)
 2. Затем нажмите кнопку «🦋 Послание дня»
 3. Получите глубокое толкование вашей карты
-
-
 """
         else:
             # Для бесплатных пользователей
@@ -3823,7 +3831,7 @@ async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ✨ Послание дня — это ключ к пониманию вашего внутреннего состояния и подсказкам Вселенной!
 """
     
-    await update.message.reply_text(
+    await message.reply_text(
         message_text,
         reply_markup=keyboard.get_messages_info_keyboard(stats['has_subscription'] if stats else False),
         parse_mode='Markdown'
