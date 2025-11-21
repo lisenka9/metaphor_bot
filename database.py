@@ -112,6 +112,15 @@ class DatabaseManager:
                 )
             ''')
 
+            # Таблица для истории просмотров медитаций
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_meditations (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    watched_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # Обновляем таблицу пользователей
             cursor.execute('''
                 ALTER TABLE users 
@@ -1150,6 +1159,78 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"❌ Error getting opportunity card: {e}")
             return None
+        finally:
+            conn.close()
+
+    def can_watch_meditation(self, user_id: int) -> tuple:
+        """Проверяет, может ли пользователь смотреть медитацию"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Проверяем подписку пользователя
+            subscription = self.get_user_subscription(user_id)
+            
+            if subscription and subscription[1]:
+                # Если есть активная подписка - доступ всегда открыт
+                subscription_end = subscription[1]
+                if hasattr(subscription_end, 'date'):
+                    sub_date = subscription_end.date()
+                else:
+                    sub_date = subscription_end
+                
+                if sub_date >= date.today():
+                    return True, "✅ Доступ открыт по подписке"
+            
+            # Для бесплатных пользователей проверяем, смотрели ли они уже сегодня
+            today = date.today()
+            cursor.execute('''
+                SELECT COUNT(*) FROM user_meditations 
+                WHERE user_id = %s AND DATE(watched_date) = %s
+            ''', (user_id, today))
+            
+            today_watched = cursor.fetchone()[0]
+            
+            if today_watched > 0:
+                return False, "❌ Вы уже смотрели медитацию сегодня. Бесплатный доступ - 1 раз в день. Оформите подписку для неограниченного доступа!"
+            else:
+                return True, "✅ Можно смотреть медитацию (бесплатный доступ)"
+                
+        except Exception as e:
+            logging.error(f"❌ Error checking meditation access: {e}")
+            return False, "Ошибка проверки доступа"
+        finally:
+            conn.close()
+
+    def record_meditation_watch(self, user_id: int) -> bool:
+        """Записывает факт просмотра медитации"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Создаем таблицу для истории просмотров медитаций, если её нет
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_meditations (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    watched_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Записываем просмотр
+            cursor.execute('''
+                INSERT INTO user_meditations (user_id) 
+                VALUES (%s)
+            ''', (user_id,))
+            
+            conn.commit()
+            logging.info(f"✅ Meditation watch recorded for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error recording meditation watch: {e}")
+            conn.rollback()
+            return False
         finally:
             conn.close()
 # Глобальный экземпляр для использования в других файлах

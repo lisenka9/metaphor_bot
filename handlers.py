@@ -3867,6 +3867,9 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
+    # ✅ ЗАПИСЫВАЕМ ФАКТ ПРОСМОТРА
+    db.record_meditation_watch(user.id)
+    
     # Получаем информацию о подписке для текста
     subscription = db.get_user_subscription(user.id)
     has_subscription = False
@@ -3880,7 +3883,7 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
     
     meditation_text = f"""
-🧘‍♀️ *Медитация «Дары Моря»*
+🐚 *Медитация «Дары Моря»*
 
 {expires_text}
 
@@ -3925,6 +3928,9 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    # ✅ ЗАПИСЫВАЕМ ФАКТ ПРОСМОТРА
+    db.record_meditation_watch(user.id)
+    
     # Получаем информацию о подписке
     subscription = db.get_user_subscription(user.id)
     has_subscription = False
@@ -3938,7 +3944,7 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
                 expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
     
     meditation_text = f"""
-🧘‍♀️ *Медитация «Дары Моря»*
+🐚 *Медитация «Дары Моря»*
 
 {expires_text}
 
@@ -3958,3 +3964,4 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         disable_web_page_preview=True
     )
 
+    
