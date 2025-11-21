@@ -10,6 +10,7 @@ ADMIN_IDS = [int(id.strip()) for id in os.environ.get("ADMIN_IDS", "").split(","
 # Лимиты карт
 DAILY_CARD_LIMIT_FREE = 1
 DAILY_CARD_LIMIT_PREMIUM = 5
+BASE_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://metaphor-bot.onrender.com')
 
 # Настройки ЮKassa
 YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")

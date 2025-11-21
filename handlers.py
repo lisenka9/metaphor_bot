@@ -3839,4 +3839,122 @@ async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /meditation"""
+    user = update.effective_user
     
+    # Проверяем доступ
+    can_watch, reason = db.can_watch_meditation(user.id)
+    
+    if not can_watch:
+        await update.message.reply_text(
+            f"❌ {reason}",
+            reply_markup=keyboard.get_meditation_limited_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Показываем "загрузка"
+    loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
+    
+    # Генерируем защищенную ссылку
+    video_url = video_system.generate_secure_link(user.id)
+    
+    if not video_url:
+        await loading_msg.edit_text(
+            "❌ Ошибка при подготовке медитации. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Получаем информацию о подписке для текста
+    subscription = db.get_user_subscription(user.id)
+    has_subscription = False
+    expires_text = "⏰ Ссылка действительна 1 час"
+    
+    if subscription and subscription[1]:
+        sub_end = subscription[1]
+        if hasattr(sub_end, 'strftime'):
+            has_subscription = sub_end.date() >= datetime.now().date()
+            if has_subscription:
+                expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
+    
+    meditation_text = f"""
+🧘‍♀️ *Медитация «Дары Моря»*
+
+{expires_text}
+
+Ваша персональная ссылка готова!
+
+*Чтобы начать медитацию:*
+1. Нажмите кнопку «🎬 Смотреть медитацию» ниже
+2. Медитация откроется в браузере
+
+⚠️ Ссылка защищена и персональна
+"""
+    
+    await loading_msg.edit_text(
+        meditation_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard.get_meditation_link_keyboard(video_url)
+    )
+
+async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки медитации из меню"""
+    user = query.from_user
+    await query.answer()
+    
+    # Проверяем доступ
+    can_watch, reason = db.can_watch_meditation(user.id)
+    
+    if not can_watch:
+        await query.message.reply_text(
+            f"❌ {reason}",
+            reply_markup=keyboard.get_meditation_limited_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Генерируем защищенную ссылку
+    video_url = video_system.generate_secure_link(user.id)
+    
+    if not video_url:
+        await query.message.reply_text(
+            "❌ Ошибка при подготовке медитации. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Получаем информацию о подписке
+    subscription = db.get_user_subscription(user.id)
+    has_subscription = False
+    expires_text = "⏰ Ссылка действительна 1 час"
+    
+    if subscription and subscription[1]:
+        sub_end = subscription[1]
+        if hasattr(sub_end, 'strftime'):
+            has_subscription = sub_end.date() >= datetime.now().date()
+            if has_subscription:
+                expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
+    
+    meditation_text = f"""
+🧘‍♀️ *Медитация «Дары Моря»*
+
+{expires_text}
+
+Ваша персональная ссылка готова!
+
+*Инструкция:*
+1. Нажмите «🎬 Смотреть медитацию» ниже  
+2. Медитация откроется в браузере
+
+⚠️ Ссылка защищена и персональна
+"""
+    
+    await query.message.reply_text(
+        meditation_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard.get_meditation_link_keyboard(video_url),
+        disable_web_page_preview=True
+    )
+

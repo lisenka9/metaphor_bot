@@ -4,7 +4,7 @@ import time
 import json
 import requests
 import threading
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from config import BOT_TOKEN
@@ -63,6 +63,46 @@ def payment_callback():
     except Exception as e:
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
+
+@app.route('/protected-video/<link_hash>')
+def serve_protected_video(link_hash):
+    """Прокси для защищенного видео - перенаправляет на Яндекс Диск"""
+    try:
+        # Проверяем валидность ссылки
+        is_valid, yandex_link = video_system.validate_link(link_hash)
+        
+        if not is_valid or not yandex_link:
+            return """
+            <html>
+                <head><title>Ссылка недействительна</title></head>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Ссылка недействительна</h2>
+                    <p>Возможные причины:</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>Ссылка устарела (действует 1 час для бесплатных пользователей)</li>
+                        <li>Ссылка уже была использована</li>
+                        <li>Ошибка в ссылке</li>
+                    </ul>
+                    <p>Вернитесь в бота для получения новой ссылки.</p>
+                    <a href="https://t.me/MetaphorCardsSeaBot" style="color: blue;">Вернуться в бота</a>
+                </body>
+            </html>
+            """, 404
+        
+        # Перенаправляем на Яндекс Диск
+        return redirect(yandex_link)
+        
+    except Exception as e:
+        logging.error(f"Error in video proxy: {e}")
+        return """
+        <html>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                <h2>⚠️ Ошибка сервера</h2>
+                <p>Попробуйте получить новую ссылку в боте.</p>
+                <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+            </body>
+        </html>
+        """, 500
 
 def handle_payment_notification(event_data):
     """Обрабатывает уведомление о платеже"""
@@ -611,6 +651,7 @@ def run_bot_with_restart():
             logger.info("Инициализация базы данных...")
             db.init_database()
             db.update_existing_users_limits()
+            init_video_system(db)
             
             if not db.check_cards_exist():
                 logger.warning("В базе данных нет карт!")
@@ -655,7 +696,8 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
             application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
             application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
-            
+            application.add_handler(CommandHandler("meditation", handlers.meditation_command))
+
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
                 pattern="^subscribe_"
@@ -666,11 +708,10 @@ def run_bot_with_restart():
             ))
 
             
-
-            
             application.add_handler(CallbackQueryHandler(handlers.button_handler))
 
-            
+            application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
+
             #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
             
             application.add_handler(MessageHandler(
