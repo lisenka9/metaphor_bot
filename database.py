@@ -874,7 +874,7 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def can_take_daily_message(self, user_id: int) -> tuple: 
+    def can_take_daily_message(self, user_id: int) -> tuple:
         """Проверяет, может ли пользователь взять послание дня"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -897,11 +897,9 @@ class DatabaseManager:
             # Проверяем активную подписку
             has_active_subscription = False
             if premium_until:
-                # Преобразуем premium_until в date для сравнения
                 if hasattr(premium_until, 'date'):
                     premium_date = premium_until.date()
                 elif isinstance(premium_until, str):
-                    # Если это строка, парсим её
                     try:
                         premium_date = datetime.strptime(premium_until[:10], '%Y-%m-%d').date()
                     except:
@@ -929,41 +927,22 @@ class DatabaseManager:
                 else:
                     return True, f"Можно взять послание ({today_messages_count + 1}/5 сегодня)"
             else:
-                # Для бесплатных: проверяем 1 раз в неделю
+                # Для бесплатных: проверяем общее количество посланий (максимум 3 за всё время)
                 cursor.execute('''
-                    SELECT MAX(drawn_date) 
+                    SELECT COUNT(*) 
                     FROM user_messages 
                     WHERE user_id = %s
                 ''', (user_id,))
                 
-                last_message_result = cursor.fetchone()
-                if not last_message_result or not last_message_result[0]:
-                    logging.info(f"📊 Free user {user_id}: no previous messages, can take")
-                    return True, "Можно взять послание"
+                total_messages_count = cursor.fetchone()[0]
+                logging.info(f"📊 Free user {user_id}: total_messages_count={total_messages_count}")
                 
-                last_message_date = last_message_result[0]
-                
-                # Преобразуем дату в объект date
-                if hasattr(last_message_date, 'date'):
-                    last_message_date_only = last_message_date.date()
-                elif isinstance(last_message_date, str):
-                    # Если это строка, парсим её
-                    try:
-                        last_message_date_only = datetime.strptime(last_message_date[:10], '%Y-%m-%d').date()
-                    except:
-                        last_message_date_only = today
+                if total_messages_count >= 3:
+                    return False, "Вы использовали все бесплатные послания. Оформите подписку для неограниченного доступа!"
                 else:
-                    last_message_date_only = last_message_date
-                
-                days_since_last_message = (today - last_message_date_only).days
-                logging.info(f"📊 Free user {user_id}: last_message={last_message_date_only}, days_since={days_since_last_message}")
-                
-                if days_since_last_message >= 7:
-                    return True, "Можно взять послание"
-                else:
-                    days_left = 7 - days_since_last_message
-                    return False, f"Следующее бесплатное послание будет доступно через {days_left} дней"
-                    
+                    remaining = 3 - total_messages_count
+                    return True, f"Можно взять послание ({remaining} из 3 бесплатных осталось)"
+                        
         except Exception as e:
             logging.error(f"❌ Error checking daily message: {e}")
             return False, "Ошибка базы данных"
@@ -1056,31 +1035,24 @@ class DatabaseManager:
                     'remaining': remaining
                 }
             else:
-                # Для бесплатных: последнее послание
+                # Для бесплатных: общее количество посланий
                 cursor.execute('''
-                    SELECT MAX(drawn_date) 
+                    SELECT COUNT(*) 
                     FROM user_messages 
                     WHERE user_id = %s
                 ''', (user_id,))
                 
-                last_message_date = cursor.fetchone()[0]
-                if not last_message_date:
-                    return {
-                        'has_subscription': False,
-                        'last_message_date': None,
-                        'can_take': True
-                    }
-                
-                last_date = last_message_date.date() if hasattr(last_message_date, 'date') else last_message_date
-                days_since_last = (today - last_date).days
-                can_take = days_since_last >= 7
-                days_until_next = max(0, 7 - days_since_last) if not can_take else 0
+                total_messages_count = cursor.fetchone()[0]
+                limit = 3
+                remaining = max(0, limit - total_messages_count)
+                can_take = total_messages_count < limit
                 
                 return {
                     'has_subscription': False,
-                    'last_message_date': last_date,
-                    'can_take': can_take,
-                    'days_until_next': days_until_next
+                    'total_count': total_messages_count,
+                    'limit': limit,
+                    'remaining': remaining,
+                    'can_take': can_take
                 }
                 
         except Exception as e:

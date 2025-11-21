@@ -545,10 +545,10 @@ async def show_daily_message(query, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = keyboard.get_main_menu_keyboard()
             else:
                 if stats['can_take']:
-                    limit_text = "✅ Можно взять послание (1 раз в неделю)"
+                    limit_text = f"✅ Можно взять послание ({stats['remaining']} из 3 бесплатных осталось)"
                     reply_markup = keyboard.get_main_menu_keyboard()
                 else:
-                    limit_text = f"❌ {reason}\n\n📅 Следующее послание через {stats['days_until_next']} дней"
+                    limit_text = f"❌ {reason}\n\n💎 Оформите подписку для неограниченного доступа к посланиям!"
                     reply_markup = keyboard.get_message_status_keyboard()
         else:
             limit_text = f"❌ {reason}"
@@ -1952,8 +1952,8 @@ async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status_text = f"""
 📊 Статус ваших посланий (Бесплатно)
 
-🎯 Лимит: 1 послание в неделю
-⏳ Следующее послание через: {stats['days_until_next']} дней
+🎯 Лимит: 3 послания за всё время
+❌ Использовано: {stats['total_count']}/3
 
 ⚡ Оформите подписку для доступа к 5 посланиям в день!
 """
