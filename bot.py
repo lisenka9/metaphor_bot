@@ -29,20 +29,6 @@ logger = logging.getLogger(__name__)
 # Создаем Flask приложение
 app = Flask(__name__)
 
-flask_video_system = None
-
-def init_flask_video_system(db):
-    """Инициализирует video_system для Flask"""
-    global flask_video_system
-    try:
-        from secure_video import SecureVideoSystem
-        from config import BASE_URL
-        flask_video_system = SecureVideoSystem(BASE_URL, db)
-        logger.info("✅ Flask video system initialized")
-    except Exception as e:
-        logger.error(f"❌ Error initializing Flask video system: {e}")
-        flask_video_system = None
-
 @app.route('/')
 def home():
     return "🌊 Metaphor Bot is running!"
@@ -80,28 +66,16 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
+from database import db  # Убедитесь что db импортирована
+
 @app.route('/protected-video/<link_hash>')
 def serve_protected_video(link_hash):
     """Прокси для защищенного видео - перенаправляет на Яндекс Диск"""
     try:
-        global flask_video_system
+        # Используем базу данных для проверки ссылки
+        link_data = db.get_video_link(link_hash)
         
-        if not flask_video_system:
-            logger.error("❌ Video system not available in Flask context")
-            return """
-            <html>
-                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                    <h2>⚠️ Ошибка сервера</h2>
-                    <p>Система видео временно недоступна.</p>
-                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
-                </body>
-            </html>
-            """, 500
-        
-        # Проверяем валидность ссылки
-        is_valid, yandex_link = flask_video_system.validate_link(link_hash)
-        
-        if not is_valid or not yandex_link:
+        if not link_data:
             return """
             <html>
                 <head><title>Ссылка недействительна</title></head>
@@ -119,8 +93,21 @@ def serve_protected_video(link_hash):
             </html>
             """, 404
         
+        yandex_link = link_data['yandex_link']
+        
+        if not yandex_link:
+            return """
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>⚠️ Ошибка сервера</h2>
+                    <p>Не удалось получить видео.</p>
+                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                </body>
+            </html>
+            """, 500
+        
         # Перенаправляем на Яндекс Диск
-        logger.info(f"✅ Redirecting to Yandex: {yandex_link}")
+        logger.info(f"✅ Redirecting to Yandex for user {link_data['user_id']}")
         return redirect(yandex_link)
         
     except Exception as e:
