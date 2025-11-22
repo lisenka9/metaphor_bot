@@ -13,21 +13,47 @@ class SecureVideoSystem:
         self.meditation_path = "/meditation.MOV"
     
     def get_yandex_download_link(self) -> str:
-        """Получает временную ссылку для скачивания с Яндекс Диска"""
+        """Получает прямую ссылку на видео"""
         try:
             if not self.yandex_token:
                 logging.error("❌ Yandex token not set")
                 return None
                 
+            # Получаем информацию о файле
             response = requests.get(
-                'https://cloud-api.yandex.net/v1/disk/resources/download',
-                params={'path': self.meditation_path},
+                'https://cloud-api.yandex.net/v1/disk/resources',
+                params={
+                    'path': self.meditation_path,
+                    'fields': 'public_url,file'
+                },
                 headers={'Authorization': f'OAuth {self.yandex_token}'},
                 timeout=10
             )
             
             if response.status_code == 200:
-                return response.json()['href']
+                file_info = response.json()
+                
+                # Если файл публичный, используем публичную ссылку
+                if file_info.get('public_url'):
+                    public_url = file_info['public_url']
+                    # Преобразуем в embed ссылку
+                    return public_url.replace('/d/', '/embed/')
+                
+                # Если файл не публичный, получаем временную ссылку для скачивания
+                download_response = requests.post(
+                    'https://cloud-api.yandex.net/v1/disk/resources/download',
+                    params={'path': self.meditation_path},
+                    headers={'Authorization': f'OAuth {self.yandex_token}'},
+                    timeout=10
+                )
+                
+                if download_response.status_code == 200:
+                    download_data = download_response.json()
+                    return download_data['href']
+                else:
+                    logging.error(f"Download link error: {download_response.status_code}")
+                    return None
+                    
             else:
                 logging.error(f"Yandex Disk error: {response.status_code} - {response.text}")
                 return None
