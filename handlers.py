@@ -11,17 +11,19 @@ from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
 import uuid
 try:
-    from secure_video import video_system
-except ImportError:
-    # Создаем заглушку
-    class VideoSystemStub:
-        def generate_secure_link(self, user_id):
-            return None
-        def validate_link(self, link_hash):
-            return False, None
-    
-    video_system = VideoSystemStub()
-    logging.warning("⚠️ Using video system stub - meditation links will not work")
+    from secure_video import get_video_system
+    video_system = get_video_system()
+except ImportError as e:
+    logging.error(f"❌ Cannot import video system: {e}")
+    video_system = None
+
+def get_video_system_safe():
+    """Безопасно получает video_system"""
+    try:
+        from secure_video import get_video_system
+        return get_video_system()
+    except ImportError:
+        return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -3858,6 +3860,8 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Проверяем доступ
     can_watch, reason = db.can_watch_meditation(user.id)
     
+    video_system = get_video_system_safe()
+
     if not can_watch:
         await update.message.reply_text(
             f"❌ {reason}",

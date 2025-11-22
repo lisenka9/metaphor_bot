@@ -60,6 +60,7 @@ class SecureVideoSystem:
         # Получаем свежую ссылку на Яндекс Диск
         yandex_link = self.get_yandex_download_link()
         if not yandex_link:
+            logging.error("❌ Failed to get Yandex download link")
             return None
         
         # Сохраняем данные ссылки
@@ -70,6 +71,8 @@ class SecureVideoSystem:
             'created_at': datetime.now(),
             'is_premium': has_active_subscription
         }
+        
+        logging.info(f"✅ Generated secure link for user {user_id}, expires: {expires_at}")
         
         # Возвращаем ссылку на наш прокси
         return f"{self.base_url}/protected-video/{link_hash}"
@@ -99,11 +102,23 @@ class SecureVideoSystem:
         for hash in expired_hashes:
             del self.active_links[hash]
 
-# Глобальный экземпляр
+# Глобальный экземпляр - ИНИЦИАЛИЗИРУЕМ КАК None
 video_system = None
 
 def init_video_system(db):
+    """Инициализирует систему защищенного видео"""
     global video_system
-    from config import BASE_URL
-    video_system = SecureVideoSystem(BASE_URL, db)
-    logging.info("✅ Secure video system initialized")
+    try:
+        from config import BASE_URL
+        video_system = SecureVideoSystem(BASE_URL, db)
+        logging.info("✅ Secure video system initialized successfully")
+        logging.info(f"✅ Yandex token: {'✅ Set' if video_system.yandex_token else '❌ Not set'}")
+        logging.info(f"✅ Base URL: {BASE_URL}")
+    except Exception as e:
+        logging.error(f"❌ Error initializing video system: {e}")
+        video_system = None
+
+def get_video_system():
+    """Возвращает глобальный экземпляр video_system"""
+    global video_system
+    return video_system
