@@ -17,7 +17,7 @@ import multiprocessing
 import signal
 import sys
 
-from secure_video import init_video_system, video_system
+from secure_video import init_video_system, video_system, get_video_system
 
 # Настройка логирования
 logging.basicConfig(
@@ -70,6 +70,21 @@ def payment_callback():
 def serve_protected_video(link_hash):
     """Прокси для защищенного видео - перенаправляет на Яндекс Диск"""
     try:
+        # Получаем video_system при каждом запросе
+        video_system = get_video_system()
+        
+        if not video_system:
+            logger.error("❌ Video system not available in Flask context")
+            return """
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>⚠️ Ошибка сервера</h2>
+                    <p>Система видео временно недоступна.</p>
+                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                </body>
+            </html>
+            """, 500
+        
         # Проверяем валидность ссылки
         is_valid, yandex_link = video_system.validate_link(link_hash)
         
@@ -92,6 +107,7 @@ def serve_protected_video(link_hash):
             """, 404
         
         # Перенаправляем на Яндекс Диск
+        logger.info(f"✅ Redirecting to Yandex: {yandex_link}")
         return redirect(yandex_link)
         
     except Exception as e:
@@ -653,7 +669,14 @@ def run_bot_with_restart():
             logger.info("Инициализация базы данных...")
             db.init_database()
             db.update_existing_users_limits()
-            init_video_system(db)
+            
+            # ✅ ИНИЦИАЛИЗИРУЕМ СИСТЕМУ ВИДЕО И СОХРАНЯЕМ РЕЗУЛЬТАТ
+            from secure_video import init_video_system
+            video_system_instance = init_video_system(db)
+            if video_system_instance:
+                logger.info("✅ Video system initialized successfully")
+            else:
+                logger.error("❌ Failed to initialize video system")
             
             if not db.check_cards_exist():
                 logger.warning("В базе данных нет карт!")
