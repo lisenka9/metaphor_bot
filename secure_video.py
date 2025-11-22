@@ -80,3 +80,14 @@ class SecureVideoSystem:
             return False, None
         
         return True, link_data['yandex_link']
+
+    def init_video_system(db):
+        """Инициализирует систему видео (для обратной совместимости)"""
+        try:
+            from config import BASE_URL
+            video_system = SecureVideoSystem(BASE_URL, db)
+            logger.info("✅ Video system initialized")
+            return video_system
+        except Exception as e:
+            logger.error(f"❌ Error initializing video system: {e}")
+            return None

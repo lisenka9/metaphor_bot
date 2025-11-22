@@ -17,7 +17,6 @@ import multiprocessing
 import signal
 import sys
 
-from secure_video import init_video_system, video_system, get_video_system
 
 # Настройка логирования
 logging.basicConfig(
@@ -669,15 +668,12 @@ def run_bot_with_restart():
             logger.info("Инициализация базы данных...")
             db.init_database()
             db.update_existing_users_limits()
-            init_flask_video_system(db)
             
-            # ✅ ИНИЦИАЛИЗИРУЕМ СИСТЕМУ ВИДЕО И СОХРАНЯЕМ РЕЗУЛЬТАТ
-            from secure_video import init_video_system
-            video_system_instance = init_video_system(db)
-            if video_system_instance:
-                logger.info("✅ Video system initialized successfully")
-            else:
-                logger.error("❌ Failed to initialize video system")
+            try:
+                cleaned_count = db.cleanup_expired_video_links()
+                logger.info(f"✅ Cleaned up {cleaned_count} expired video links")
+            except Exception as e:
+                logger.error(f"❌ Error cleaning video links: {e}")
             
             if not db.check_cards_exist():
                 logger.warning("В базе данных нет карт!")
@@ -804,6 +800,21 @@ def run_bot_process():
         ping_thread = threading.Thread(target=ping_self)
         ping_thread.daemon = True
         ping_thread.start()
+        
+        # ✅ ПЕРИОДИЧЕСКАЯ ОЧИСТКА ССЫЛОК
+        def cleanup_video_links():
+            while True:
+                try:
+                    time.sleep(3600)  # Каждый час
+                    cleaned_count = db.cleanup_expired_video_links()
+                    if cleaned_count > 0:
+                        logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
+                except Exception as e:
+                    logger.error(f"❌ Error in periodic video links cleanup: {e}")
+        
+        cleanup_thread = threading.Thread(target=cleanup_video_links)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
         
         # Запускаем бота с автоматическим перезапуском
         run_bot_with_restart()

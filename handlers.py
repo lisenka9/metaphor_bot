@@ -10,12 +10,6 @@ from datetime import datetime, date
 from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
 import uuid
-try:
-    from secure_video import get_video_system
-    video_system = get_video_system()
-except ImportError as e:
-    logging.error(f"❌ Cannot import video system: {e}")
-    video_system = None
 
 def get_video_system_safe():
     """Безопасно получает video_system"""
@@ -3855,6 +3849,17 @@ async def messages_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+def get_video_system():
+    """Создает экземпляр video_system при каждом вызове"""
+    try:
+        from secure_video import SecureVideoSystem
+        from config import BASE_URL
+        from database import db
+        return SecureVideoSystem(BASE_URL, db)
+    except Exception as e:
+        logging.error(f"❌ Error creating video system: {e}")
+        return None
+
 async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /meditation"""
     user = update.effective_user
@@ -3862,8 +3867,6 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Проверяем доступ
     can_watch, reason = db.can_watch_meditation(user.id)
     
-    video_system = get_video_system_safe()
-
     if not can_watch:
         await update.message.reply_text(
             f"❌ {reason}",
@@ -3871,6 +3874,22 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode='Markdown'
         )
         return
+    
+    # Создаем video_system при каждом вызове
+    video_system = get_video_system()
+    
+    if not video_system:
+        await update.message.reply_text(
+            "❌ Система видео временно недоступна. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Показываем "загрузка"
+    loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
+    
+    # Генерируем защищенную ссылку
+    video_url = video_system.generate_secure_link(user.id)
     
     if not video_system:
         await update.message.reply_text(
