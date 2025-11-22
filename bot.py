@@ -29,6 +29,20 @@ logger = logging.getLogger(__name__)
 # Создаем Flask приложение
 app = Flask(__name__)
 
+flask_video_system = None
+
+def init_flask_video_system(db):
+    """Инициализирует video_system для Flask"""
+    global flask_video_system
+    try:
+        from secure_video import SecureVideoSystem
+        from config import BASE_URL
+        flask_video_system = SecureVideoSystem(BASE_URL, db)
+        logger.info("✅ Flask video system initialized")
+    except Exception as e:
+        logger.error(f"❌ Error initializing Flask video system: {e}")
+        flask_video_system = None
+
 @app.route('/')
 def home():
     return "🌊 Metaphor Bot is running!"
@@ -70,10 +84,9 @@ def payment_callback():
 def serve_protected_video(link_hash):
     """Прокси для защищенного видео - перенаправляет на Яндекс Диск"""
     try:
-        # Получаем video_system при каждом запросе
-        video_system = get_video_system()
+        global flask_video_system
         
-        if not video_system:
+        if not flask_video_system:
             logger.error("❌ Video system not available in Flask context")
             return """
             <html>
@@ -86,7 +99,7 @@ def serve_protected_video(link_hash):
             """, 500
         
         # Проверяем валидность ссылки
-        is_valid, yandex_link = video_system.validate_link(link_hash)
+        is_valid, yandex_link = flask_video_system.validate_link(link_hash)
         
         if not is_valid or not yandex_link:
             return """
@@ -669,6 +682,7 @@ def run_bot_with_restart():
             logger.info("Инициализация базы данных...")
             db.init_database()
             db.update_existing_users_limits()
+            init_flask_video_system(db)
             
             # ✅ ИНИЦИАЛИЗИРУЕМ СИСТЕМУ ВИДЕО И СОХРАНЯЕМ РЕЗУЛЬТАТ
             from secure_video import init_video_system
