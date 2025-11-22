@@ -69,7 +69,7 @@ from database import db  # Убедитесь что db импортирован
 
 @app.route('/protected-video/<link_hash>')
 def serve_protected_video(link_hash):
-    """Прокси для защищенного видео - перенаправляет на Яндекс Диск"""
+    """HTML страница с видео-плеером"""
     try:
         # Используем базу данных для проверки ссылки
         link_data = db.get_video_link(link_hash)
@@ -105,9 +105,134 @@ def serve_protected_video(link_hash):
             </html>
             """, 500
         
-        # Перенаправляем на Яндекс Диск
-        logger.info(f"✅ Redirecting to Yandex for user {link_data['user_id']}")
-        return redirect(yandex_link)
+        # HTML страница с видео-плеером
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Медитация «Дары Моря»</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .container {{
+                    background: white;
+                    border-radius: 15px;
+                    padding: 30px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    max-width: 800px;
+                    width: 90%;
+                    text-align: center;
+                }}
+                h1 {{
+                    color: #333;
+                    margin-bottom: 20px;
+                }}
+                .video-container {{
+                    position: relative;
+                    width: 100%;
+                    height: 0;
+                    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+                    margin: 20px 0;
+                }}
+                .video-container iframe {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 10px;
+                    border: none;
+                }}
+                .info {{
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 20px 0;
+                    text-align: left;
+                }}
+                .warning {{
+                    color: #856404;
+                    background: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 10px 0;
+                }}
+                .btn {{
+                    background: #667eea;
+                    color: white;
+                    padding: 12px 30px;
+                    text-decoration: none;
+                    border-radius: 25px;
+                    font-weight: bold;
+                    margin: 10px;
+                    display: inline-block;
+                    transition: background 0.3s;
+                }}
+                .btn:hover {{
+                    background: #764ba2;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🧘‍♀️ Медитация «Дары Моря»</h1>
+                
+                <div class="info">
+                    <p><strong>⏰ Время доступа:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
+                    <p><strong>👤 Пользователь:</strong> {link_data['user_id']}</p>
+                </div>
+                
+                <div class="warning">
+                    ⚠️ <strong>Внимание:</strong> Это персональная ссылка. Не передавайте её другим.
+                </div>
+                
+                <div class="video-container">
+                    <video controls width="100%" style="border-radius: 10px;">
+                        <source src="{yandex_link}" type="video/mp4">
+                        Ваш браузер не поддерживает видео тег.
+                    </video>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
+                </div>
+            </div>
+            
+            <script>
+                // Автоматическое воспроизведение (опционально)
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const video = document.querySelector('video');
+                    if (video) {{
+                        video.play().catch(function(error) {{
+                            console.log('Autoplay prevented:', error);
+                        }});
+                    }}
+                }});
+                
+                // Предупреждение при закрытии страницы
+                window.addEventListener('beforeunload', function(e) {{
+                    e.preventDefault();
+                    e.returnValue = 'Медитация будет прервана. Вы уверены, что хотите уйти?';
+                }});
+            </script>
+        </body>
+        </html>
+        """
+        
+        logger.info(f"✅ Serving video page for user {link_data['user_id']}")
+        return html_content
         
     except Exception as e:
         logging.error(f"Error in video proxy: {e}")
