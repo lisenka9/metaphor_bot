@@ -10,6 +10,18 @@ from datetime import datetime, date
 from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
 import uuid
+try:
+    from secure_video import video_system
+except ImportError:
+    # Создаем заглушку
+    class VideoSystemStub:
+        def generate_secure_link(self, user_id):
+            return None
+        def validate_link(self, link_hash):
+            return False, None
+    
+    video_system = VideoSystemStub()
+    logging.warning("⚠️ Using video system stub - meditation links will not work")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -3854,6 +3866,13 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
+    if not video_system:
+        await update.message.reply_text(
+            "❌ Система видео временно недоступна. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+
     # Показываем "загрузка"
     loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
     
