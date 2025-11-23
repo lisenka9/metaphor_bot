@@ -162,26 +162,26 @@ def secure_video_player(link_hash):
                 
                 <div class="info">
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
+                    <p><em>Нажмите на видео для начала воспроизведения</em></p>
                 </div>
                 
                 <div class="video-container">
-                    <video id="meditationVideo" controls autoplay muted playsinline>
-                        <source src="https://drive.google.com/uc?export=download&id=1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6" type="video/mp4">
+                    <video id="meditationVideo" controls playsinline>
+                        <source src="https://www.googleapis.com/drive/v3/files/1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6?alt=media&key=AIzaSyD9EdV2JfOg1o5Z3cWGwQ3Q8cOv2vSnnOs" type="video/mp4">
                         Ваш браузер не поддерживает видео.
                     </video>
                 </div>
                 
                 <script>
                     const video = document.getElementById('meditationVideo');
+                    let played = false;
                     
-                    // Попытка автозапуска
-                    video.play().catch(error => {{
-                        console.log('Автозапуск заблокирован, требуется взаимодействие');
-                    }});
-                    
-                    // Автозапуск при клике на страницу
-                    document.addEventListener('click', function() {{
-                        video.play().catch(e => console.log('Play failed:', e));
+                    // Автозапуск при клике на видео
+                    video.addEventListener('click', function() {{
+                        if (!played) {{
+                            video.play();
+                            played = true;
+                        }}
                     }});
                 </script>
                 
