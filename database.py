@@ -1235,7 +1235,6 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS video_links (
                     link_hash TEXT PRIMARY KEY,
                     user_id BIGINT REFERENCES users(user_id),
-                    username TEXT REFERENCES users(username),
                     yandex_link TEXT NOT NULL,
                     expires_at TIMESTAMP NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1266,7 +1265,7 @@ class DatabaseManager:
         
         try:
             cursor.execute('''
-                SELECT user_id, username, yandex_link, expires_at 
+                SELECT user_id, yandex_link, expires_at 
                 FROM video_links 
                 WHERE link_hash = %s
             ''', (link_hash,))

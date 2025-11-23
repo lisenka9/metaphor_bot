@@ -181,11 +181,6 @@ def secure_video_player(link_hash):
             <div class="container">
                 <h1>🐚 Медитация «Дары Моря»</h1>
                 
-                <div class="info">
-                    <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
-                    <p><strong>👤 Пользователь:</strong> {link_data['username']}</p>
-                </div>
-                
                 <div class="video-container">
                     <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1" 
                             frameborder="0" 
