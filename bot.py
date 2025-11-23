@@ -188,6 +188,12 @@ def secure_video_player(link_hash):
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
                 </div>
                 
+                <div class="instructions">
+                    <p><strong>📱 Как смотреть:</strong></p>
+                    <p>• Нажмите на кнопку воспроизведения</p>
+                    <p>• Для полноэкранного режима нажмите 🛆 в правом нижнем углу</p>
+                    <p>• Рекомендуем использовать наушники</p>
+                </div>
                 
                 <div class="video-container">
                     <iframe src="https://drive.google.com/file/d/1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6/preview?autoplay=1&controls=1&modestbranding=1&rel=0" 
@@ -203,10 +209,12 @@ def secure_video_player(link_hash):
             </div>
             
             <script>
-                // Автоматический скролл к видео
+                // Простой скролл к видео (без параметров)
                 document.addEventListener('DOMContentLoaded', function() {{
                     const videoContainer = document.querySelector('.video-container');
-                    videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    if (videoContainer) {{
+                        videoContainer.scrollIntoView({{ block: 'center' }});
+                    }}
                 }});
             </script>
         </body>
