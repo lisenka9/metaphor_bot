@@ -209,34 +209,18 @@ def serve_protected_video(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <!-- Основной вариант - iframe для прямых ссылок -->
-                    <iframe src="{yandex_link}" 
+                    <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1" 
                             frameborder="0" 
-                            allow="autoplay; encrypted-media; fullscreen" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowfullscreen
-                            id="videoPlayer">
+                            style="width: 100%; height: 100%;">
                     </iframe>
                 </div>
-                
-                <!-- Альтернативный вариант через тег video -->
-                <div style="display: none;" id="fallbackVideo">
-                    <div class="video-container">
-                        <video controls autoplay style="width: 100%;">
-                            <source src="{yandex_link}" type="video/mp4">
-                            Ваш браузер не поддерживает видео тег.
-                        </video>
-                    </div>
-                </div>
-                
-                <div class="fallback" id="directLink" style="display: none;">
-                    <p>Если видео не загружается, попробуйте открыть ссылку напрямую:</p>
-                    <a href="{yandex_link}" target="_blank" class="btn">📺 Открыть видео напрямую</a>
-                </div>
-                
-                <p class="loading" id="loadingText">Загрузка видео...</p>
-                
-                <div style="margin-top: 20px;">
-                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
+
+                <div class="fallback" style="margin-top: 20px;">
+                    <p><strong>Если видео не воспроизводится:</strong></p>
+                    <a href="https://www.youtube.com/watch?v=qBqIO-_OsgA" target="_blank" class="btn">📺 Открыть на YouTube</a>
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">🔙 Вернуться в бота</a>
                 </div>
             </div>
 

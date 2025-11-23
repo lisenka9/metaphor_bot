@@ -14,8 +14,9 @@ class SecureVideoSystem:
         logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
     def get_yandex_download_link(self) -> str:
-        """Прямая ссылка на видео с Яндекс.Диска"""
-        return "https://disk.yandex.ru/i/pV3tz4RKMqQN0Q"
+        """Ссылка на приватное YouTube видео"""
+        youtube_id = "qBqIO-_OsgA"  
+        return f"https://www.youtube.com/embed/{youtube_id}?autoplay=1&rel=0&modestbranding=1"
 
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
