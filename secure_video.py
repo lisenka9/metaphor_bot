@@ -14,25 +14,8 @@ class SecureVideoSystem:
         logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
     def get_yandex_download_link(self) -> str:
-        """Получает прямую ссылку для воспроизведения видео"""
-        try:
-            # Прямая ссылка на ваше видео с Яндекс.Диска
-            # Замените на вашу реальную публичную ссылку
-            public_link = "https://disk.yandex.ru/i/pV3tz4RKMqQN0Q"
-            
-            # Конвертируем в прямую ссылку для скачивания/воспроизведения
-            # Формат: https://disk.yandex.ru/d/ID_ФАЙЛА?w=1
-            direct_link = public_link.replace('disk.yandex.ru/i/', 'getfile.dok.works/')
-            
-            # Или используем альтернативный сервис для прямых ссылок
-            # direct_link = public_link.replace('disk.yandex.ru/i/', 'yadi.sk/i/') + "?download=1"
-            
-            logging.info(f"✅ Using direct video link: {direct_link}")
-            return direct_link
-            
-        except Exception as e:
-            logging.error(f"❌ Error getting video link: {e}")
-            return None
+        """Прямая ссылка на видео с Яндекс.Диска"""
+        return "https://disk.yandex.ru/d/pV3tz4RKMqQN0Q"
 
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
