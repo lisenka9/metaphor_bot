@@ -134,15 +134,38 @@ def secure_video_player(link_hash):
                     color: #333;
                     margin-bottom: 20px;
                 }}
+                .video-wrapper {{
+                    position: relative;
+                    width: 100%;
+                    margin: 20px 0;
+                }}
                 .video-container {{
                     position: relative;
                     width: 100%;
                     height: 0;
                     padding-bottom: 56.25%;
-                    margin: 20px 0;
                     background: #000;
                     border-radius: 10px;
                     overflow: hidden;
+                }}
+                .video-overlay {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 10;
+                }}
+                .hide-youtube-elements {{
+                    /* Скрываем элементы YouTube */
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 60px;
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
+                    pointer-events: none;
                 }}
                 iframe {{
                     position: absolute;
@@ -151,6 +174,7 @@ def secure_video_player(link_hash):
                     width: 100%;
                     height: 100%;
                     border: none;
+                    z-index: 1;
                 }}
                 .info {{
                     background: #f8f9fa;
@@ -169,31 +193,57 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
-                .fallback {{
-                    margin-top: 20px;
-                    padding: 15px;
-                    background: #e9ecef;
-                    border-radius: 10px;
-                }}
             </style>
         </head>
         <body>
             <div class="container">
                 <h1>🐚 Медитация «Дары Моря»</h1>
                 
-                <div class="video-container">
-                    <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1" 
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen
-                            style="width: 100%; height: 100%;">
-                    </iframe>
+                <div class="info">
+                    <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
+                </div>
+                
+                <div class="video-wrapper">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=1&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen>
+                        </iframe>
+                        <div class="video-overlay">
+                            <div class="hide-youtube-elements"></div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
+            
+            <script>
+                // Дополнительный скрипт для скрытия элементов YouTube
+                document.addEventListener('DOMContentLoaded', function() {{
+                    // Ждем загрузки iframe
+                    setTimeout(function() {{
+                        // Пытаемся скрыть элементы через стили
+                        const style = document.createElement('style');
+                        style.textContent = `
+                            .ytp-title-link, 
+                            .ytp-title-channel, 
+                            .ytp-chrome-top-buttons,
+                            .ytp-share-button,
+                            .ytp-copylink-button {{
+                                display: none !important;
+                            }}
+                            .ytp-show-cards-title {{
+                                display: none !important;
+                            }}
+                        `;
+                        document.head.appendChild(style);
+                    }}, 2000);
+                }});
+            </script>
         </body>
         </html>
         """
