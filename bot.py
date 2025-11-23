@@ -183,11 +183,11 @@ def secure_video_player(link_hash):
                 
                 <div class="info">
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
-                    <p><strong>👤 Пользователь:</strong> {link_data['user_id']}</p>
+                    <p><strong>👤 Пользователь:</strong> {link_data['username']}</p>
                 </div>
                 
                 <div class="video-container">
-                    <iframe src="{yandex_link}" 
+                    <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1" 
                             frameborder="0" 
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowfullscreen
