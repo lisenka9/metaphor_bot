@@ -139,7 +139,7 @@ def secure_video_player(link_hash):
                     position: relative;
                     width: 100%;
                     height: 0;
-                    padding-bottom: 56.25%; /* Соотношение 16:9 */
+                    padding-bottom: 56.25%;
                     margin: 20px 0;
                     background: #000;
                     border-radius: 10px;
@@ -170,14 +170,6 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
-                .instructions {{
-                    background: #e7f3ff;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 15px 0;
-                    text-align: left;
-                    border-left: 4px solid #667eea;
-                }}
             </style>
         </head>
         <body>
@@ -186,13 +178,6 @@ def secure_video_player(link_hash):
                 
                 <div class="info">
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
-                </div>
-                
-                <div class="instructions">
-                    <p><strong>📱 Как смотреть:</strong></p>
-                    <p>• Нажмите на кнопку воспроизведения</p>
-                    <p>• Для полноэкранного режима нажмите 🛆 в правом нижнем углу</p>
-                    <p>• Рекомендуем использовать наушники</p>
                 </div>
                 
                 <div class="video-container">
@@ -207,16 +192,6 @@ def secure_video_player(link_hash):
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
-            
-            <script>
-                // Простой скролл к видео (без параметров)
-                document.addEventListener('DOMContentLoaded', function() {{
-                    const videoContainer = document.querySelector('.video-container');
-                    if (videoContainer) {{
-                        videoContainer.scrollIntoView({{ block: 'center' }});
-                    }}
-                }});
-            </script>
         </body>
         </html>
         """
