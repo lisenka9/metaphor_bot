@@ -118,6 +118,4 @@ class SecureVideoSystem:
             logger.error(f"❌ Error initializing video system: {e}")
             return None
 
-    def get_test_video_link(self) -> str:
-        """Тестовое видео для проверки"""
-        return "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    

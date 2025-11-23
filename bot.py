@@ -203,10 +203,11 @@ def serve_protected_video(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <video controls width="100%" style="border-radius: 10px;">
-                        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
-                        Ваш браузер не поддерживает видео тег.
-                    </video>
+                    <iframe src="{yandex_link}" 
+                            frameborder="0" 
+                            allow="autoplay; encrypted-media" 
+                            allowfullscreen>
+                    </iframe>
                 </div>
                 
                 <p class="loading">Если видео не загружается, попробуйте обновить страницу</p>
