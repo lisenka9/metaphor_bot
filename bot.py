@@ -298,6 +298,285 @@ def direct_video(link_hash):
         logger.error(f"❌ Error in direct video: {e}")
         return "❌ Ошибка сервера", 500
 
+import requests
+from flask import Response, stream_context
+import time
+
+@app.route('/video-stream/<link_hash>')
+def video_stream(link_hash):
+    """Потоковая передача видео с проверкой доступа"""
+    try:
+        # Проверяем доступ по ссылке
+        link_data = db.get_video_link(link_hash)
+        
+        if not link_data:
+            return "❌ Ссылка недействительна", 404
+        
+        # Проверяем срок действия
+        if datetime.now() > link_data['expires_at']:
+            # Удаляем просроченную ссылку
+            db.cleanup_expired_video_links()
+            return "❌ Срок действия ссылки истёк", 403
+        
+        yandex_link = link_data['yandex_link']
+        
+        if not yandex_link:
+            return "❌ Ошибка получения видео", 500
+        
+        # Создаем потоковую передачу видео
+        def generate():
+            try:
+                # Загружаем видео с Яндекс.Диска частями
+                headers = {
+                    'Range': request.headers.get('Range', 'bytes=0-'),
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                
+                response = requests.get(
+                    yandex_link, 
+                    headers=headers, 
+                    stream=True, 
+                    timeout=30
+                )
+                
+                # Передаем заголовки от Яндекс.Диска
+                content_length = response.headers.get('Content-Length')
+                content_range = response.headers.get('Content-Range')
+                content_type = response.headers.get('Content-Type', 'video/mp4')
+                
+                # Отправляем видео частями
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+                        
+            except Exception as e:
+                logging.error(f"❌ Error streaming video: {e}")
+        
+        # Устанавливаем правильные заголовки для видео
+        headers = {
+            'Content-Type': 'video/mp4',
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            # Запрещаем кэширование и скачивание
+            'Content-Disposition': 'inline',  # Только просмотр, не скачивание
+            'X-Content-Type-Options': 'nosniff'
+        }
+        
+        return Response(
+            generate(),
+            status=206,  # Partial Content для поддержки seek
+            headers=headers,
+            direct_passthrough=True
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error in video stream: {e}")
+        return "❌ Ошибка загрузки видео", 500
+
+@app.route('/secure-video/<link_hash>')
+def secure_video_player(link_hash):
+    """Безопасный видео-плеер с ограниченным доступом"""
+    try:
+        link_data = db.get_video_link(link_hash)
+        
+        if not link_data:
+            return """
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Ссылка недействительна</h2>
+                    <p>Вернитесь в бота для получения новой ссылки.</p>
+                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                </body>
+            </html>
+            """, 404
+        
+        # Проверяем срок действия
+        if datetime.now() > link_data['expires_at']:
+            db.cleanup_expired_video_links()
+            return """
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Срок действия ссылки истёк</h2>
+                    <p>Получите новую ссылку в боте.</p>
+                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                </body>
+            </html>
+            """, 403
+        
+        # HTML с защищенным видео-плеером
+        video_stream_url = f"{BASE_URL}/video-stream/{link_hash}"
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Медитация «Дары Моря»</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .container {{
+                    background: white;
+                    border-radius: 15px;
+                    padding: 30px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    max-width: 800px;
+                    width: 90%;
+                    text-align: center;
+                }}
+                h1 {{
+                    color: #333;
+                    margin-bottom: 20px;
+                }}
+                .video-container {{
+                    position: relative;
+                    width: 100%;
+                    height: 0;
+                    padding-bottom: 56.25%;
+                    margin: 20px 0;
+                    background: #000;
+                    border-radius: 10px;
+                    overflow: hidden;
+                }}
+                video {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                }}
+                .info {{
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 20px 0;
+                    text-align: left;
+                }}
+                .warning {{
+                    color: #856404;
+                    background: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 10px 0;
+                }}
+                .btn {{
+                    background: #667eea;
+                    color: white;
+                    padding: 12px 30px;
+                    text-decoration: none;
+                    border-radius: 25px;
+                    font-weight: bold;
+                    margin: 10px;
+                    display: inline-block;
+                }}
+                .protection-notice {{
+                    font-size: 14px;
+                    color: #666;
+                    margin-top: 10px;
+                }}
+                .controls {{
+                    margin: 15px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🧘‍♀️ Медитация «Дары Моря»</h1>
+                
+                <div class="info">
+                    <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
+                    <p><strong>👤 Пользователь:</strong> {link_data['user_id']}</p>
+                </div>
+                
+                <div class="warning">
+                    ⚠️ <strong>Защищённый доступ:</strong> Видео недоступно для скачивания и будет автоматически заблокировано после окончания срока доступа.
+                </div>
+                
+                <div class="video-container">
+                    <video controls controlsList="nodownload" oncontextmenu="return false;">
+                        <source src="{video_stream_url}" type="video/mp4">
+                        Ваш браузер не поддерживает видео.
+                    </video>
+                </div>
+                
+                <div class="protection-notice">
+                    🔒 Защита от скачивания активна. Правое кнопка мыши заблокирована.
+                </div>
+                
+                <div class="controls">
+                    <button onclick="toggleFullscreen()" class="btn">🖥 Полный экран</button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
+                </div>
+            </div>
+
+            <script>
+                // Блокировка правого клика и скачивания
+                document.addEventListener('contextmenu', function(e) {{
+                    e.preventDefault();
+                    return false;
+                }});
+                
+                // Блокировка горячих клавиш
+                document.addEventListener('keydown', function(e) {{
+                    // Блокировка F12, Ctrl+Shift+I, Ctrl+U и т.д.
+                    if (
+                        e.keyCode == 123 || // F12
+                        (e.ctrlKey && e.shiftKey && e.keyCode == 73) || // Ctrl+Shift+I
+                        (e.ctrlKey && e.keyCode == 85) // Ctrl+U
+                    ) {{
+                        e.preventDefault();
+                        return false;
+                    }}
+                }});
+                
+                // Полноэкранный режим
+                function toggleFullscreen() {{
+                    const video = document.querySelector('video');
+                    if (video.requestFullscreen) {{
+                        video.requestFullscreen();
+                    }} else if (video.webkitRequestFullscreen) {{
+                        video.webkitRequestFullscreen();
+                    }} else if (video.msRequestFullscreen) {{
+                        video.msRequestFullscreen();
+                    }}
+                }}
+                
+                // Автозапуск видео
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const video = document.querySelector('video');
+                    video.play().catch(function(error) {{
+                        console.log('Автозапуск заблокирован браузером');
+                    }});
+                }});
+            </script>
+        </body>
+        </html>
+        """
+        
+        logger.info(f"✅ Serving secure video for user {link_data['user_id']}")
+        return html_content
+        
+    except Exception as e:
+        logging.error(f"❌ Error in secure video: {e}")
+        return "❌ Ошибка загрузки видео", 500
+
 def handle_payment_notification(event_data):
     """Обрабатывает уведомление о платеже"""
     try:

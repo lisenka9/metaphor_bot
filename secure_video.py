@@ -72,7 +72,7 @@ class SecureVideoSystem:
             return None
 
     def generate_secure_link(self, user_id: int) -> str:
-        """Генерирует защищенную ссылку через прокси"""
+        """Генерирует защищенную ссылку на безопасный видео-плеер"""
         try:
             # Определяем срок действия
             subscription = self.db.get_user_subscription(user_id)
@@ -106,13 +106,13 @@ class SecureVideoSystem:
             
             logging.info(f"✅ Generated secure link for user {user_id}, expires: {expires_at}")
             
-            # Возвращаем ссылку на наш прокси
-            return f"{self.base_url}/protected-video/{link_hash}"
+            # Возвращаем ссылку на наш защищенный плеер
+            return f"{self.base_url}/secure-video/{link_hash}"
         
         except Exception as e:
             logging.error(f"❌ Error generating secure link: {e}")
             return None
-    
+
     def validate_link(self, link_hash: str) -> tuple:
         """Проверяет валидность ссылки через базу данных"""
         link_data = self.db.get_video_link(link_hash)

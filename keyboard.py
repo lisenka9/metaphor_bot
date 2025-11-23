@@ -358,9 +358,9 @@ def get_messages_info_keyboard(has_subscription: bool = False):
     return InlineKeyboardMarkup(keyboard)
 
 def get_meditation_link_keyboard(video_url: str):
-    """Клавиатура со ссылкой на медитацию"""
+    """Клавиатура со ссылкой на защищенную медитацию"""
     keyboard = [
-        [InlineKeyboardButton("🎬 Смотреть медитацию", url=video_url)],
+        [InlineKeyboardButton("🎬 Смотреть медитацию (защищённый доступ)", url=video_url)],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
