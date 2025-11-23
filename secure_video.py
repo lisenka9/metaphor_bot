@@ -13,53 +13,53 @@ class SecureVideoSystem:
         self.meditation_path = "/meditation.MOV"
     
     def get_yandex_download_link(self) -> str:
-        """Получает прямую ссылку на видео"""
+        """Публикует файл и получает публичную ссылку"""
         try:
             if not self.yandex_token:
                 logging.error("❌ Yandex token not set")
                 return None
                 
-            logging.info(f"🔍 Trying to get link for path: {self.meditation_path}")
-            logging.info(f"🔍 Yandex token: {'✅ Set' if self.yandex_token else '❌ Not set'}")
-                
-            # Проверим существование файла
-            check_response = requests.get(
-                'https://cloud-api.yandex.net/v1/disk/resources',
+            # Сначала публикуем файл (если еще не опубликован)
+            publish_response = requests.put(
+                'https://cloud-api.yandex.net/v1/disk/resources/publish',
                 params={'path': self.meditation_path},
                 headers={'Authorization': f'OAuth {self.yandex_token}'},
                 timeout=10
             )
             
-            if check_response.status_code != 200:
-                logging.error(f"❌ File not found: {check_response.status_code} - {check_response.text}")
+            if publish_response.status_code not in [200, 202, 409]:  # 409 - уже опубликован
+                logging.error(f"❌ Publish error: {publish_response.status_code} - {publish_response.text}")
                 return None
                 
-            logging.info("✅ File exists, getting download link...")
-            
-            # Получаем ссылку для скачивания
-            download_response = requests.get(
-                'https://cloud-api.yandex.net/v1/disk/resources/download',
-                params={'path': self.meditation_path},
+            # Получаем публичную ссылку
+            public_response = requests.get(
+                'https://cloud-api.yandex.net/v1/disk/resources',
+                params={
+                    'path': self.meditation_path,
+                    'fields': 'public_url'
+                },
                 headers={'Authorization': f'OAuth {self.yandex_token}'},
                 timeout=10
             )
             
-            if download_response.status_code == 200:
-                download_data = download_response.json()
-                direct_link = download_data.get('href')
+            if public_response.status_code == 200:
+                file_info = public_response.json()
+                public_url = file_info.get('public_url')
                 
-                if direct_link:
-                    logging.info(f"✅ Successfully got download link")
-                    return direct_link
+                if public_url:
+                    logging.info(f"✅ Got public URL: {public_url}")
+                    # Преобразуем в embed ссылку
+                    embed_url = public_url.replace('/d/', '/embed/')
+                    return embed_url
                 else:
-                    logging.error("❌ No href in download response")
+                    logging.error("❌ No public URL available")
                     return None
             else:
-                logging.error(f"❌ Download API error: {download_response.status_code} - {download_response.text}")
+                logging.error(f"❌ Public URL error: {public_response.status_code}")
                 return None
                     
         except Exception as e:
-            logging.error(f"❌ Error getting Yandex link: {e}")
+            logging.error(f"❌ Error in Yandex publish: {e}")
             return None
 
     def generate_secure_link(self, user_id: int) -> str:
