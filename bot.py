@@ -154,6 +154,16 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
+                .fallback-link {{
+                    background: #28a745;
+                    color: white;
+                    padding: 15px 25px;
+                    text-decoration: none;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    margin: 10px;
+                    display: inline-block;
+                }}
             </style>
         </head>
         <body>
@@ -162,26 +172,32 @@ def secure_video_player(link_hash):
                 
                 <div class="info">
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
-                    <p><em>Нажмите на видео для начала воспроизведения</em></p>
                 </div>
                 
                 <div class="video-container">
-                    <video controls autoplay muted playsinline style="width:100%">
-                        <source src="https://limewire.com/d/qdSHq#y3Oo6DpONk" type="video/mp4">
+                    <video id="meditationVideo" controls playsinline>
+                        <source src="" type="video/mp4" id="videoSource">
+                        Ваш браузер не поддерживает видео.
                     </video>
                 </div>
                 
+                <div style="margin: 20px 0;">
+                    <p>Если видео не загружается, откройте его напрямую:</p>
+                    <a href="https://limewire.com/d/qdSHq#y3Oo6DpONk" class="fallback-link" target="_blank">🎬 Открыть медитацию в новом окне</a>
+                </div>
+                
                 <script>
-                    const video = document.getElementById('meditationVideo');
-                    let played = false;
-                    
-                    // Автозапуск при клике на видео
-                    video.addEventListener('click', function() {{
-                        if (!played) {{
-                            video.play();
-                            played = true;
+                    // Пытаемся получить прямую ссылку на видео
+                    async function loadVideo() {{
+                        try {{
+                            // Limewire может блокировать прямые запросы, поэтому показываем fallback
+                            console.log('Limewire video loading...');
+                        }} catch (error) {{
+                            console.error('Error loading video:', error);
                         }}
-                    }});
+                    }}
+                    
+                    document.addEventListener('DOMContentLoaded', loadVideo);
                 </script>
                 
                 <div style="margin-top: 20px;">
