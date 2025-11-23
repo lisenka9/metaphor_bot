@@ -166,9 +166,8 @@ def secure_video_player(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <video id="meditationVideo" controls playsinline>
-                        <source src="https://www.googleapis.com/drive/v3/files/1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6?alt=media&key=AIzaSyD9EdV2JfOg1o5Z3cWGwQ3Q8cOv2vSnnOs" type="video/mp4">
-                        Ваш браузер не поддерживает видео.
+                    <video controls autoplay muted playsinline style="width:100%">
+                        <source src="https://limewire.com/d/qdSHq#y3Oo6DpONk" type="video/mp4">
                     </video>
                 </div>
                 
