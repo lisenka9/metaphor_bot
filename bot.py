@@ -65,7 +65,6 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
-from database import db  # Убедитесь что db импортирована
 
 @app.route('/protected-video/<link_hash>')
 def serve_protected_video(link_hash):
@@ -105,7 +104,7 @@ def serve_protected_video(link_hash):
             </html>
             """, 500
         
-        # HTML страница с видео-плеером
+        # Улучшенный HTML с несколькими вариантами видео-плеера
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">
@@ -145,7 +144,8 @@ def serve_protected_video(link_hash):
                     padding-bottom: 56.25%; /* 16:9 aspect ratio */
                     margin: 20px 0;
                 }}
-                .video-container iframe {{
+                .video-container iframe,
+                .video-container video {{
                     position: absolute;
                     top: 0;
                     left: 0;
@@ -187,6 +187,12 @@ def serve_protected_video(link_hash):
                     color: #666;
                     font-style: italic;
                 }}
+                .fallback {{
+                    margin-top: 20px;
+                    padding: 15px;
+                    background: #e9ecef;
+                    border-radius: 10px;
+                }}
             </style>
         </head>
         <body>
@@ -203,19 +209,54 @@ def serve_protected_video(link_hash):
                 </div>
                 
                 <div class="video-container">
+                    <!-- Основной вариант - iframe для прямых ссылок -->
                     <iframe src="{yandex_link}" 
                             frameborder="0" 
-                            allow="autoplay; encrypted-media" 
-                            allowfullscreen>
+                            allow="autoplay; encrypted-media; fullscreen" 
+                            allowfullscreen
+                            id="videoPlayer">
                     </iframe>
                 </div>
                 
-                <p class="loading">Если видео не загружается, попробуйте обновить страницу</p>
+                <!-- Альтернативный вариант через тег video -->
+                <div style="display: none;" id="fallbackVideo">
+                    <div class="video-container">
+                        <video controls autoplay style="width: 100%;">
+                            <source src="{yandex_link}" type="video/mp4">
+                            Ваш браузер не поддерживает видео тег.
+                        </video>
+                    </div>
+                </div>
+                
+                <div class="fallback" id="directLink" style="display: none;">
+                    <p>Если видео не загружается, попробуйте открыть ссылку напрямую:</p>
+                    <a href="{yandex_link}" target="_blank" class="btn">📺 Открыть видео напрямую</a>
+                </div>
+                
+                <p class="loading" id="loadingText">Загрузка видео...</p>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
+
+            <script>
+                // Проверяем загрузку видео
+                setTimeout(function() {{
+                    const videoPlayer = document.getElementById('videoPlayer');
+                    const fallbackVideo = document.getElementById('fallbackVideo');
+                    const directLink = document.getElementById('directLink');
+                    const loadingText = document.getElementById('loadingText');
+                    
+                    // Показываем альтернативные варианты через 5 секунд
+                    setTimeout(function() {{
+                        loadingText.innerHTML = 'Если видео не загрузилось, используйте альтернативные варианты ниже:';
+                        fallbackVideo.style.display = 'block';
+                        directLink.style.display = 'block';
+                    }}, 5000);
+                    
+                }}, 1000);
+            </script>
         </body>
         </html>
         """
@@ -230,10 +271,32 @@ def serve_protected_video(link_hash):
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
                 <h2>⚠️ Ошибка сервера</h2>
                 <p>Попробуйте получить новую ссылку в боте.</p>
-                <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
             </body>
         </html>
         """, 500
+
+@app.route('/direct-video/<link_hash>')
+def direct_video(link_hash):
+    """Прямая загрузка видео (редирект на Яндекс.Диск)"""
+    try:
+        link_data = db.get_video_link(link_hash)
+        
+        if not link_data:
+            return "❌ Ссылка недействительна", 404
+        
+        yandex_link = link_data['yandex_link']
+        
+        if not yandex_link:
+            return "❌ Ошибка получения видео", 500
+        
+        # Делаем редирект на прямую ссылку Яндекс.Диска
+        logger.info(f"🔗 Redirecting to Yandex video: {yandex_link}")
+        return redirect(yandex_link)
+        
+    except Exception as e:
+        logger.error(f"❌ Error in direct video: {e}")
+        return "❌ Ошибка сервера", 500
 
 def handle_payment_notification(event_data):
     """Обрабатывает уведомление о платеже"""

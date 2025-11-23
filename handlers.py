@@ -3876,7 +3876,7 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     
     # Создаем video_system при каждом вызове
-    video_system = get_video_system()
+    video_system = get_video_system_safe()
     
     if not video_system:
         await update.message.reply_text(
@@ -3885,19 +3885,6 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Показываем "загрузка"
-    loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
-    
-    # Генерируем защищенную ссылку
-    video_url = video_system.generate_secure_link(user.id)
-    
-    if not video_system:
-        await update.message.reply_text(
-            "❌ Система видео временно недоступна. Попробуйте позже.",
-            reply_markup=keyboard.get_main_menu_keyboard()
-        )
-        return
-
     # Показываем "загрузка"
     loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
     
@@ -3931,19 +3918,26 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 {expires_text}
 
-Ваша персональная ссылка готова!
-
 *Чтобы начать медитацию:*
 1. Нажмите кнопку «🎬 Смотреть медитацию» ниже
 2. Медитация откроется в браузере
+3. Если видео не загружается, используйте кнопку «📥 Альтернативная ссылка»
 
 ⚠️ Ссылка защищена и персональна
 """
     
+    # Создаем клавиатуру с двумя кнопками
+    keyboard_buttons = [
+        [InlineKeyboardButton("🎬 Смотреть медитацию", url=video_url)],
+        [InlineKeyboardButton("📥 Альтернативная ссылка", url=f"{video_url.replace('/protected-video/', '/direct-video/')}")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard_buttons)
+    
     await loading_msg.edit_text(
         meditation_text,
         parse_mode='Markdown',
-        reply_markup=keyboard.get_meditation_link_keyboard(video_url)
+        reply_markup=reply_markup
     )
 
 async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
