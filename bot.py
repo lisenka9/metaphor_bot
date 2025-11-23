@@ -489,8 +489,14 @@ def secure_video_player(link_hash):
                     </video>
                 </div>
 
+                <!-- Запасной вариант через iframe -->
+                <div style="margin-top: 20px;">
+                    <a href="{{ yandex_link }}" target="_blank" class="btn">📺 Открыть видео в новом окне</a>
+                </div>
                 
-                
+                <div style="margin-top: 20px;">
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
+                </div>
             </div>
         </body>
         </html>
