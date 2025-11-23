@@ -138,6 +138,8 @@ def secure_video_player(link_hash):
                     position: relative;
                     width: 100%;
                     margin: 20px 0;
+                    overflow: hidden;
+                    border-radius: 10px;
                 }}
                 .video-container {{
                     position: relative;
@@ -145,10 +147,16 @@ def secure_video_player(link_hash):
                     height: 0;
                     padding-bottom: 56.25%;
                     background: #000;
-                    border-radius: 10px;
-                    overflow: hidden;
                 }}
-                .video-overlay {{
+                iframe {{
+                    position: absolute;
+                    top: -60px; /* Сдвигаем вверх чтобы скрыть верхнюю панель */
+                    left: 0;
+                    width: 100%;
+                    height: calc(100% + 120px); /* Увеличиваем высоту для компенсации сдвига */
+                    border: none;
+                }}
+                .video-mask {{
                     position: absolute;
                     top: 0;
                     left: 0;
@@ -156,25 +164,7 @@ def secure_video_player(link_hash):
                     height: 100%;
                     pointer-events: none;
                     z-index: 10;
-                }}
-                .hide-youtube-elements {{
-                    /* Скрываем элементы YouTube */
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 60px;
-                    background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
-                    pointer-events: none;
-                }}
-                iframe {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border: none;
-                    z-index: 1;
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
                 }}
                 .info {{
                     background: #f8f9fa;
@@ -205,14 +195,13 @@ def secure_video_player(link_hash):
                 
                 <div class="video-wrapper">
                     <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=1&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru" 
+                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
                                 frameborder="0" 
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen>
+                                allowfullscreen
+                                id="video-player">
                         </iframe>
-                        <div class="video-overlay">
-                            <div class="hide-youtube-elements"></div>
-                        </div>
+                        <div class="video-mask"></div>
                     </div>
                 </div>
                 
@@ -222,27 +211,40 @@ def secure_video_player(link_hash):
             </div>
             
             <script>
-                // Дополнительный скрипт для скрытия элементов YouTube
-                document.addEventListener('DOMContentLoaded', function() {{
-                    // Ждем загрузки iframe
-                    setTimeout(function() {{
-                        // Пытаемся скрыть элементы через стили
-                        const style = document.createElement('style');
-                        style.textContent = `
-                            .ytp-title-link, 
-                            .ytp-title-channel, 
-                            .ytp-chrome-top-buttons,
-                            .ytp-share-button,
-                            .ytp-copylink-button {{
-                                display: none !important;
-                            }}
-                            .ytp-show-cards-title {{
-                                display: none !important;
-                            }}
-                        `;
-                        document.head.appendChild(style);
-                    }}, 2000);
+                // Скрываем элементы YouTube
+                function hideYouTubeElements() {{
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .ytp-chrome-top,
+                        .ytp-title-link,
+                        .ytp-title-channel,
+                        .ytp-share-button,
+                        .ytp-copylink-button,
+                        .ytp-show-cards-title,
+                        .ytp-pause-overlay,
+                        .ytp-watermark {{
+                            display: none !important;
+                            opacity: 0 !important;
+                            visibility: hidden !important;
+                        }}
+                        
+                        /* Скрываем верхнюю панель */
+                        .ytp-chrome-top {{
+                            height: 0 !important;
+                            min-height: 0 !important;
+                            padding: 0 !important;
+                        }}
+                    `;
+                    document.head.appendChild(style);
+                }}
+                
+                // Ждем загрузки iframe
+                document.getElementById('video-player').addEventListener('load', function() {{
+                    setTimeout(hideYouTubeElements, 2000);
                 }});
+                
+                // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
+                document.addEventListener('click', hideYouTubeElements);
             </script>
         </body>
         </html>
