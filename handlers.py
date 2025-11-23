@@ -288,6 +288,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("check_deck_payment_"):
         await handle_deck_payment_check(query, context)
     
+    elif query.data == "meditation":
+        await meditation_button_handler(query, context)
+    
     elif query.data == "subscribe":
         await show_subscribe_from_button(query, context)
     
