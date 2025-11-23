@@ -102,6 +102,7 @@ def secure_video_player(link_hash):
         logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
         
         # Исправленный HTML с правильными ссылками
+        
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">
@@ -134,37 +135,23 @@ def secure_video_player(link_hash):
                     color: #333;
                     margin-bottom: 20px;
                 }}
-                .video-wrapper {{
-                    position: relative;
-                    width: 100%;
-                    margin: 20px 0;
-                    overflow: hidden;
-                    border-radius: 10px;
-                }}
                 .video-container {{
                     position: relative;
                     width: 100%;
                     height: 0;
-                    padding-bottom: 56.25%;
+                    padding-bottom: 56.25%; /* Соотношение 16:9 */
+                    margin: 20px 0;
                     background: #000;
+                    border-radius: 10px;
+                    overflow: hidden;
                 }}
                 iframe {{
-                    position: absolute;
-                    top: -60px; /* Сдвигаем вверх чтобы скрыть верхнюю панель */
-                    left: 0;
-                    width: 100%;
-                    height: calc(100% + 120px); /* Увеличиваем высоту для компенсации сдвига */
-                    border: none;
-                }}
-                .video-mask {{
                     position: absolute;
                     top: 0;
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    pointer-events: none;
-                    z-index: 10;
-                    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
+                    border: none;
                 }}
                 .info {{
                     background: #f8f9fa;
@@ -183,6 +170,14 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
+                .instructions {{
+                    background: #e7f3ff;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 15px 0;
+                    text-align: left;
+                    border-left: 4px solid #667eea;
+                }}
             </style>
         </head>
         <body>
@@ -193,16 +188,13 @@ def secure_video_player(link_hash):
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
                 </div>
                 
-                <div class="video-wrapper">
-                    <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen
-                                id="video-player">
-                        </iframe>
-                        <div class="video-mask"></div>
-                    </div>
+                
+                <div class="video-container">
+                    <iframe src="https://drive.google.com/file/d/1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6/preview?autoplay=1&controls=1&modestbranding=1&rel=0" 
+                            frameborder="0" 
+                            allow="autoplay; fullscreen; accelerometer; gyroscope" 
+                            allowfullscreen>
+                    </iframe>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -211,40 +203,11 @@ def secure_video_player(link_hash):
             </div>
             
             <script>
-                // Скрываем элементы YouTube
-                function hideYouTubeElements() {{
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        .ytp-chrome-top,
-                        .ytp-title-link,
-                        .ytp-title-channel,
-                        .ytp-share-button,
-                        .ytp-copylink-button,
-                        .ytp-show-cards-title,
-                        .ytp-pause-overlay,
-                        .ytp-watermark {{
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                        
-                        /* Скрываем верхнюю панель */
-                        .ytp-chrome-top {{
-                            height: 0 !important;
-                            min-height: 0 !important;
-                            padding: 0 !important;
-                        }}
-                    `;
-                    document.head.appendChild(style);
-                }}
-                
-                // Ждем загрузки iframe
-                document.getElementById('video-player').addEventListener('load', function() {{
-                    setTimeout(hideYouTubeElements, 2000);
+                // Автоматический скролл к видео
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const videoContainer = document.querySelector('.video-container');
+                    videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }});
-                
-                // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
-                document.addEventListener('click', hideYouTubeElements);
             </script>
         </body>
         </html>

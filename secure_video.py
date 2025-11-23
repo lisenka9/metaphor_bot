@@ -14,24 +14,15 @@ class SecureVideoSystem:
         logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
     def get_yandex_download_link(self) -> str:
-        """Ссылка на приватное YouTube видео"""
-        youtube_id = "qBqIO-_OsgA"  
+        """Ссылка на Google Drive видео"""
+        file_id = "1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6"  # ID из вашей ссылки
         params = [
             "autoplay=1",           # Автозапуск
-            "rel=0",                # Не показывать похожие видео
-            "modestbranding=1",     # Минимум логотипов YouTube
-            "showinfo=0",           # Скрыть заголовок и информацию о канале
-            "controls=1",           # Показать элементы управления (пауза, громкость)
-            "disablekb=1",          # Отключить клавиатурные shortcuts
-            "fs=1",                 # Разрешить полноэкранный режим
-            "iv_load_policy=3",     # Скрыть аннотации
-            "playsinline=1",        # Воспроизведение в окне на iOS
-            "cc_load_policy=0",     # Скрыть субтитры
-            "color=white",          # Цвет прогресс-бара
-            "hl=ru",               # Язык интерфейса
-            "enablejsapi=1",       # Включить JS API для дополнительного контроля
+            "controls=1",           # Элементы управления
+            "modestbranding=1",     # Минимальный брендинг
+            "rel=0"                 # Не показывать похожие видео
         ]
-        return f"https://www.youtube.com/embed/{youtube_id}?{'&'.join(params)}"
+        return f"https://drive.google.com/file/d/{file_id}/preview?{'&'.join(params)}"
 
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
