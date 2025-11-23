@@ -482,12 +482,17 @@ def secure_video_player(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <iframe src="{yandex_link}" 
-                            frameborder="0" 
-                            allow="autoplay; encrypted-media" 
-                            allowfullscreen>
-                    </iframe>
+                    <!-- Основной вариант - тег video для прямого воспроизведения -->
+                    <video controls autoplay style="width: 100%; height: 100%;" preload="metadata">
+                        <source src="{{ yandex_link }}" type="video/mp4">
+                        Ваш браузер не поддерживает видео тег.
+                    </video>
                 </div>
+
+<!-- Запасной вариант через iframe -->
+<div style="margin-top: 20px;">
+    <a href="{{ yandex_link }}" target="_blank" class="btn">📺 Открыть видео в новом окне</a>
+</div>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>

@@ -14,38 +14,24 @@ class SecureVideoSystem:
         logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
     def get_yandex_download_link(self) -> str:
-        """Получает прямую ссылку на видео с Яндекс.Диска"""
+        """Получает прямую ссылку для воспроизведения видео"""
         try:
-            if not self.yandex_token:
-                logging.error("❌ Yandex token not set")
-                return None
-                
-            logging.info(f"🔍 Getting Yandex link for path: {self.meditation_path}")
+            # Прямая ссылка на ваше видео с Яндекс.Диска
+            # Замените на вашу реальную публичную ссылку
+            public_link = "https://disk.yandex.ru/i/pV3tz4RKMqQN0Q"
             
-            # Получаем download ссылку
-            download_response = requests.get(
-                'https://cloud-api.yandex.net/v1/disk/resources/download',
-                params={'path': self.meditation_path},
-                headers={'Authorization': f'OAuth {self.yandex_token}'},
-                timeout=10
-            )
+            # Конвертируем в прямую ссылку для скачивания/воспроизведения
+            # Формат: https://disk.yandex.ru/d/ID_ФАЙЛА?w=1
+            direct_link = public_link.replace('disk.yandex.ru/i/', 'getfile.dok.works/')
             
-            if download_response.status_code == 200:
-                download_data = download_response.json()
-                direct_link = download_data.get('href')
-                
-                if direct_link:
-                    logging.info(f"✅ Got direct download link: {direct_link[:100]}...")
-                    return direct_link
-                else:
-                    logging.error("❌ No href in download response")
-                    return None
-            else:
-                logging.error(f"❌ Download link error: {download_response.status_code} - {download_response.text}")
-                return None
-                    
+            # Или используем альтернативный сервис для прямых ссылок
+            # direct_link = public_link.replace('disk.yandex.ru/i/', 'yadi.sk/i/') + "?download=1"
+            
+            logging.info(f"✅ Using direct video link: {direct_link}")
+            return direct_link
+            
         except Exception as e:
-            logging.error(f"❌ Error getting Yandex link: {e}")
+            logging.error(f"❌ Error getting video link: {e}")
             return None
 
     def generate_secure_link(self, user_id: int) -> str:
