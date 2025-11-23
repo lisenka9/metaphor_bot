@@ -1235,6 +1235,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS video_links (
                     link_hash TEXT PRIMARY KEY,
                     user_id BIGINT REFERENCES users(user_id),
+                    username TEXT REFERENCES users(username),
                     yandex_link TEXT NOT NULL,
                     expires_at TIMESTAMP NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

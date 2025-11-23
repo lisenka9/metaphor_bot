@@ -3962,7 +3962,6 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # ✅ СОЗДАЕМ video_system при каждом вызове (как в команде)
     video_system = get_video_system_safe()
     
     if not video_system:
