@@ -131,34 +131,18 @@ def secure_video_player(link_hash):
                     width: 90%;
                     text-align: center;
                 }}
-                h1 {{
-                    color: #333;
-                    margin-bottom: 20px;
-                }}
                 .video-container {{
-                    position: relative;
                     width: 100%;
-                    height: 0;
-                    padding-bottom: 56.25%;
+                    max-width: 720px;
                     margin: 20px 0;
                     background: #000;
                     border-radius: 10px;
                     overflow: hidden;
                 }}
-                iframe {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
+                video {{
                     width: 100%;
-                    height: 100%;
-                    border: none;
-                }}
-                .info {{
-                    background: #f8f9fa;
-                    padding: 15px;
+                    height: auto;
                     border-radius: 10px;
-                    margin: 20px 0;
-                    text-align: left;
                 }}
                 .btn {{
                     background: #667eea;
@@ -181,12 +165,25 @@ def secure_video_player(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <iframe src="https://drive.google.com/file/d/1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6/preview?autoplay=1&controls=1&modestbranding=1&rel=0" 
-                            frameborder="0" 
-                            allow="autoplay; fullscreen; accelerometer; gyroscope" 
-                            allowfullscreen>
-                    </iframe>
+                    <video id="meditationVideo" controls autoplay muted playsinline>
+                        <source src="https://drive.google.com/uc?export=download&id=1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6" type="video/mp4">
+                        Ваш браузер не поддерживает видео.
+                    </video>
                 </div>
+                
+                <script>
+                    const video = document.getElementById('meditationVideo');
+                    
+                    // Попытка автозапуска
+                    video.play().catch(error => {{
+                        console.log('Автозапуск заблокирован, требуется взаимодействие');
+                    }});
+                    
+                    // Автозапуск при клике на страницу
+                    document.addEventListener('click', function() {{
+                        video.play().catch(e => console.log('Play failed:', e));
+                    }});
+                </script>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
