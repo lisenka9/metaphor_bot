@@ -99,10 +99,10 @@ def secure_video_player(link_hash):
             """, 403
         
         yandex_link = link_data['yandex_link']
+        expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
         logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
         
         # Исправленный HTML с правильными ссылками
-        
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">
@@ -209,7 +209,7 @@ def secure_video_player(link_hash):
                 <h1>🐚 Медитация «Дары Моря»</h1>
                 
                 <div class="info">
-                    <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
+                    <p><strong>⏰ Доступно до:</strong> {expires_time}</p>
                 </div>
                 
                 <div class="video-wrapper">
@@ -236,31 +236,31 @@ def secure_video_player(link_hash):
             <script>
                 var player;
                 
-                function onYouTubeIframeAPIReady() {
-                    player = new YT.Player('youtube-player', {
-                        events: {
+                function onYouTubeIframeAPIReady() {{
+                    player = new YT.Player('youtube-player', {{
+                        events: {{
                             'onReady': onPlayerReady,
                             'onStateChange': onPlayerStateChange
-                        }
-                    });
-                }
+                        }}
+                    }});
+                }}
                 
-                function onPlayerReady(event) {
+                function onPlayerReady(event) {{
                     // Скрываем элементы при загрузке
                     hideYouTubeElements();
                     
                     // Запускаем видео
                     event.target.playVideo();
-                }
+                }}
                 
-                function onPlayerStateChange(event) {
+                function onPlayerStateChange(event) {{
                     // При изменении состояния также скрываем элементы
-                    if (event.data == YT.PlayerState.PLAYING) {
+                    if (event.data == YT.PlayerState.PLAYING) {{
                         hideYouTubeElements();
-                    }
-                }
+                    }}
+                }}
                 
-                function hideYouTubeElements() {
+                function hideYouTubeElements() {{
                     // Создаем стили для скрытия элементов YouTube
                     const style = document.createElement('style');
                     style.id = 'youtube-hider';
@@ -274,41 +274,41 @@ def secure_video_player(link_hash):
                         .ytp-copylink-button,
                         .ytp-youtube-button,
                         .ytp-pause-overlay,
-                        .ytp-watermark {
+                        .ytp-watermark {{
                             display: none !important;
                             opacity: 0 !important;
                             visibility: hidden !important;
-                        }
+                        }}
                         
                         /* Скрываем информацию о канале */
                         .ytp-show-cards-title,
-                        .ytp-ce-element {
+                        .ytp-ce-element {{
                             display: none !important;
-                        }
+                        }}
                         
                         /* Скрываем кнопку "Скопировать ссылку" в меню */
                         .ytp-popup ytp-share-panel,
                         .ytp-share-button[aria-label*="копир"],
                         .ytp-share-button[aria-label*="share"],
-                        .ytp-copylink-button {
+                        .ytp-copylink-button {{
                             display: none !important;
-                        }
+                        }}
                         
                         /* Скрываем нижнюю панель управления */
-                        .ytp-chrome-bottom {
+                        .ytp-chrome-bottom {{
                             opacity: 0 !important;
                             transition: opacity 0.3s !important;
-                        }
+                        }}
                         
                         /* Показываем панель управления только при наведении */
-                        .video-container:hover .ytp-chrome-bottom {
+                        .video-container:hover .ytp-chrome-bottom {{
                             opacity: 1 !important;
-                        }
+                        }}
                         
                         /* Скрываем лого YouTube */
-                        .ytp-youtube-button {
+                        .ytp-youtube-button {{
                             display: none !important;
-                        }
+                        }}
                     `;
                     
                     // Удаляем старые стили если есть
@@ -318,13 +318,13 @@ def secure_video_player(link_hash):
                     document.head.appendChild(style);
                     
                     // Дополнительные меры через JavaScript
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         // Скрываем элементы через DOM
                         const iframe = document.getElementById('youtube-player');
                         const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                         
                         // Пытаемся найти и скрыть элементы
-                        try {
+                        try {{
                             const topButtons = iframeDoc.querySelectorAll('.ytp-chrome-top-buttons');
                             topButtons.forEach(el => el.style.display = 'none');
                             
@@ -333,21 +333,21 @@ def secure_video_player(link_hash):
                             
                             const channel = iframeDoc.querySelector('.ytp-title-channel');
                             if (channel) channel.style.display = 'none';
-                        } catch (e) {
+                        }} catch (e) {{
                             // Cross-origin ограничения, используем только CSS
-                        }
-                    }, 1000);
-                }
+                        }}
+                    }}, 1000);
+                }}
                 
                 // Периодически скрываем элементы (на случай появления)
                 setInterval(hideYouTubeElements, 3000);
                 
                 // Скрываем правый клик на видео
-                document.addEventListener('contextmenu', function(e) {
-                    if (e.target.closest('.video-container')) {
+                document.addEventListener('contextmenu', function(e) {{
+                    if (e.target.closest('.video-container')) {{
                         e.preventDefault();
-                    }
-                });
+                    }}
+                }});
             </script>
         </body>
         </html>
