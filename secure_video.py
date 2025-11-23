@@ -16,7 +16,7 @@ class SecureVideoSystem:
     def get_yandex_download_link(self) -> str:
         """Ссылка на приватное YouTube видео"""
         youtube_id = "qBqIO-_OsgA"  
-        params = [
+            params = [
             "autoplay=1",           # Автозапуск
             "rel=0",                # Не показывать похожие видео
             "modestbranding=1",     # Минимум логотипов YouTube
@@ -25,7 +25,11 @@ class SecureVideoSystem:
             "disablekb=1",          # Отключить клавиатурные shortcuts
             "fs=1",                 # Разрешить полноэкранный режим
             "iv_load_policy=3",     # Скрыть аннотации
-            "playsinline=1"         # Воспроизведение в окне на iOS
+            "playsinline=1",        # Воспроизведение в окне на iOS
+            "cc_load_policy=0",     # Скрыть субтитры
+            "color=white",          # Цвет прогресс-бара
+            "hl=ru",               # Язык интерфейса
+            "enablejsapi=1",       # Включить JS API для дополнительного контроля
         ]
         return f"https://www.youtube.com/embed/{youtube_id}?{'&'.join(params)}"
 
