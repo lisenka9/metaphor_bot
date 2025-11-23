@@ -19,49 +19,53 @@ class SecureVideoSystem:
                 logging.error("❌ Yandex token not set")
                 return None
                 
-            # Получаем информацию о файле
-            response = requests.get(
-                'https://cloud-api.yandex.net/v1/disk/resources',
-                params={
-                    'path': self.meditation_path,
-                    'fields': 'public_url,file'
-                },
+            # Сначала пытаемся получить прямую ссылку через download
+            download_response = requests.get(
+                'https://cloud-api.yandex.net/v1/disk/resources/download',
+                params={'path': self.meditation_path},
                 headers={'Authorization': f'OAuth {self.yandex_token}'},
                 timeout=10
             )
             
-            if response.status_code == 200:
-                file_info = response.json()
+            if download_response.status_code == 200:
+                download_data = download_response.json()
+                direct_link = download_data.get('href')
                 
-                # Если файл публичный, используем публичную ссылку
-                if file_info.get('public_url'):
-                    public_url = file_info['public_url']
-                    # Преобразуем в embed ссылку
-                    return public_url.replace('/d/', '/embed/')
+                if direct_link:
+                    logging.info(f"✅ Got direct download link: {direct_link[:50]}...")
+                    return direct_link
+                else:
+                    logging.error("❌ No href in download response")
+                    return None
+            else:
+                logging.error(f"❌ Download link error: {download_response.status_code} - {download_response.text}")
                 
-                # Если файл не публичный, получаем временную ссылку для скачивания
-                download_response = requests.post(
-                    'https://cloud-api.yandex.net/v1/disk/resources/download',
+                # Попробуем альтернативный метод - получить информацию о файле
+                file_info_response = requests.get(
+                    'https://cloud-api.yandex.net/v1/disk/resources',
                     params={'path': self.meditation_path},
                     headers={'Authorization': f'OAuth {self.yandex_token}'},
                     timeout=10
                 )
                 
-                if download_response.status_code == 200:
-                    download_data = download_response.json()
-                    return download_data['href']
+                if file_info_response.status_code == 200:
+                    file_info = file_info_response.json()
+                    # Если файл публичный
+                    if file_info.get('public_url'):
+                        public_url = file_info['public_url']
+                        logging.info(f"✅ Using public URL: {public_url}")
+                        return public_url
+                    else:
+                        logging.error("❌ File is not public and download failed")
+                        return None
                 else:
-                    logging.error(f"Download link error: {download_response.status_code}")
+                    logging.error(f"❌ File info error: {file_info_response.status_code}")
                     return None
                     
-            else:
-                logging.error(f"Yandex Disk error: {response.status_code} - {response.text}")
-                return None
-                
         except Exception as e:
-            logging.error(f"Error getting Yandex link: {e}")
+            logging.error(f"❌ Error getting Yandex link: {e}")
             return None
-    
+
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
         # Определяем срок действия

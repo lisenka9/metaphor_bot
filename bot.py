@@ -183,6 +183,10 @@ def serve_protected_video(link_hash):
                 .btn:hover {{
                     background: #764ba2;
                 }}
+                .loading {{
+                    color: #666;
+                    font-style: italic;
+                }}
             </style>
         </head>
         <body>
@@ -199,34 +203,19 @@ def serve_protected_video(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <video controls width="100%" style="border-radius: 10px;">
-                        <source src="{yandex_link}" type="video/mp4">
-                        Ваш браузер не поддерживает видео тег.
-                    </video>
+                    <iframe src="{yandex_link}" 
+                            frameborder="0" 
+                            allow="autoplay; encrypted-media" 
+                            allowfullscreen>
+                    </iframe>
                 </div>
+                
+                <p class="loading">Если видео не загружается, попробуйте обновить страницу</p>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
-            
-            <script>
-                // Автоматическое воспроизведение (опционально)
-                document.addEventListener('DOMContentLoaded', function() {{
-                    const video = document.querySelector('video');
-                    if (video) {{
-                        video.play().catch(function(error) {{
-                            console.log('Autoplay prevented:', error);
-                        }});
-                    }}
-                }});
-                
-                // Предупреждение при закрытии страницы
-                window.addEventListener('beforeunload', function(e) {{
-                    e.preventDefault();
-                    e.returnValue = 'Медитация будет прервана. Вы уверены, что хотите уйти?';
-                }});
-            </script>
         </body>
         </html>
         """
