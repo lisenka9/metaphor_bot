@@ -164,6 +164,13 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
+                .error {{
+                    color: #dc3545;
+                    background: #f8d7da;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 15px 0;
+                }}
             </style>
         </head>
         <body>
@@ -175,29 +182,46 @@ def secure_video_player(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <video id="meditationVideo" controls playsinline>
-                        <source src="" type="video/mp4" id="videoSource">
+                    <video id="meditationVideo" controls playsinline autoplay>
+                        <source src="{link_data['yandex_link']}" type="video/mp4">
                         Ваш браузер не поддерживает видео.
                     </video>
                 </div>
                 
                 <div style="margin: 20px 0;">
-                    <p>Если видео не загружается, откройте его напрямую:</p>
-                    <a href="https://limewire.com/d/qdSHq#y3Oo6DpONk" class="fallback-link" target="_blank">🎬 Открыть медитацию в новом окне</a>
+                    <p>Если видео не загружается, попробуйте:</p>
+                    <a href="{link_data['yandex_link']}" class="fallback-link" target="_blank" download="Медитация_Дары_Моря.mp4">
+                        📥 Скачать видео
+                    </a>
                 </div>
                 
                 <script>
-                    // Пытаемся получить прямую ссылку на видео
-                    async function loadVideo() {{
-                        try {{
-                            // Limewire может блокировать прямые запросы, поэтому показываем fallback
-                            console.log('Limewire video loading...');
-                        }} catch (error) {{
-                            console.error('Error loading video:', error);
+                    // Автоматическая загрузка видео
+                    document.addEventListener('DOMContentLoaded', function() {{
+                        const video = document.getElementById('meditationVideo');
+                        const videoUrl = "{link_data['yandex_link']}";
+                        
+                        console.log('Loading video from:', videoUrl);
+                        
+                        // Пытаемся загрузить видео
+                        video.load();
+                        
+                        video.addEventListener('error', function(e) {{
+                            console.error('Video loading error:', e);
+                            showError('Ошибка загрузки видео. Попробуйте скачать его по ссылке выше.');
+                        }});
+                        
+                        video.addEventListener('loadeddata', function() {{
+                            console.log('Video loaded successfully');
+                        }});
+                        
+                        function showError(message) {{
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error';
+                            errorDiv.textContent = message;
+                            video.parentNode.appendChild(errorDiv);
                         }}
-                    }}
-                    
-                    document.addEventListener('DOMContentLoaded', loadVideo);
+                    }});
                 </script>
                 
                 <div style="margin-top: 20px;">
