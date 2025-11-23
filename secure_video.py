@@ -16,7 +16,7 @@ class SecureVideoSystem:
     def get_yandex_download_link(self) -> str:
         """Ссылка на приватное YouTube видео"""
         youtube_id = "qBqIO-_OsgA"  
-            params = [
+        params = [
             "autoplay=1",           # Автозапуск
             "rel=0",                # Не показывать похожие видео
             "modestbranding=1",     # Минимум логотипов YouTube
