@@ -1265,7 +1265,7 @@ class DatabaseManager:
         
         try:
             cursor.execute('''
-                SELECT user_id, yandex_link, expires_at 
+                SELECT user_id, username, yandex_link, expires_at 
                 FROM video_links 
                 WHERE link_hash = %s
             ''', (link_hash,))
