@@ -1164,43 +1164,33 @@ class DatabaseManager:
 
     def can_watch_meditation(self, user_id: int) -> tuple:
         """Проверяет, может ли пользователь смотреть медитацию"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        # Проверяем подписку пользователя
+        subscription = self.get_user_subscription(user_id)
         
-        try:
-            # Проверяем подписку пользователя
-            subscription = self.get_user_subscription(user_id)
-            
-            if subscription and subscription[1]:
-                # Если есть активная подписка - доступ всегда открыт
-                subscription_end = subscription[1]
-                if hasattr(subscription_end, 'date'):
-                    sub_date = subscription_end.date()
-                else:
-                    sub_date = subscription_end
-                
-                if sub_date >= date.today():
-                    return True, "✅ Доступ открыт по подписке"
-            
-            # Для бесплатных пользователей проверяем, смотрели ли они уже сегодня
-            today = date.today()
-            cursor.execute('''
-                SELECT COUNT(*) FROM user_meditations 
-                WHERE user_id = %s AND DATE(watched_date) = %s
-            ''', (user_id, today))
-            
-            today_watched = cursor.fetchone()[0]
-            
-            if today_watched > 0:
-                return False, "❌ Вы уже смотрели медитацию сегодня. Бесплатный доступ - 1 раз в день. Оформите подписку для неограниченного доступа!"
+        if subscription and subscription[1]:
+            # Если есть активная подписка - доступ всегда открыт
+            subscription_end = subscription[1]
+            if hasattr(subscription_end, 'date'):
+                sub_date = subscription_end.date()
             else:
-                return True, "✅ Можно смотреть медитацию (бесплатный доступ)"
-                
-        except Exception as e:
-            logging.error(f"❌ Error checking meditation access: {e}")
-            return False, "Ошибка проверки доступа"
-        finally:
-            conn.close()
+                sub_date = subscription_end
+            
+            if sub_date >= date.today():
+                return True, "✅ Доступ открыт по подписке"
+        
+        # Для бесплатных пользователей проверяем ОБЩЕЕ количество просмотров
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_meditations 
+            WHERE user_id = %s
+        ''', (user_id,))
+        
+        total_watched = cursor.fetchone()[0]
+        
+        # Ограничиваем 1 бесплатным просмотром ВСЕГО
+        if total_watched >= 1:
+            return False, "❌ Вы уже использовали бесплатный доступ к медитации. Оформите подписку для неограниченного доступа!"
+        else:
+            return True, "✅ Можно смотреть медитацию (бесплатный доступ)"
 
     def record_meditation_watch(self, user_id: int) -> bool:
         """Записывает факт просмотра медитации"""
