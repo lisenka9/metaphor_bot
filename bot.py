@@ -65,285 +65,6 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
-
-@app.route('/protected-video/<link_hash>')
-def serve_protected_video(link_hash):
-    """HTML страница с видео-плеером"""
-    try:
-        # Используем базу данных для проверки ссылки
-        link_data = db.get_video_link(link_hash)
-        
-        if not link_data:
-            return """
-            <html>
-                <head><title>Ссылка недействительна</title></head>
-                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                    <h2>❌ Ссылка недействительна</h2>
-                    <p>Возможные причины:</p>
-                    <ul style="text-align: left; display: inline-block;">
-                        <li>Ссылка устарела (действует 1 час для пользователей без подписки)</li>
-                        <li>Ссылка уже была использована</li>
-                        <li>Ошибка в ссылке</li>
-                    </ul>
-                    <p>Вернитесь в бота для получения новой ссылки.</p>
-                    <a href="https://t.me/MetaphorCardsSeaBot" style="color: blue;">Вернуться в бота</a>
-                </body>
-            </html>
-            """, 404
-        
-        yandex_link = link_data['yandex_link']
-        
-        if not yandex_link:
-            return """
-            <html>
-                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                    <h2>⚠️ Ошибка сервера</h2>
-                    <p>Не удалось получить видео.</p>
-                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
-                </body>
-            </html>
-            """, 500
-        
-        # Улучшенный HTML с несколькими вариантами видео-плеера
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Медитация «Дары Моря»</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    margin: 0;
-                    padding: 20px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                }}
-                .container {{
-                    background: white;
-                    border-radius: 15px;
-                    padding: 30px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                    max-width: 800px;
-                    width: 90%;
-                    text-align: center;
-                }}
-                h1 {{
-                    color: #333;
-                    margin-bottom: 20px;
-                }}
-                .video-container {{
-                    position: relative;
-                    width: 100%;
-                    height: 0;
-                    padding-bottom: 56.25%; /* 16:9 aspect ratio */
-                    margin: 20px 0;
-                }}
-                .video-container iframe,
-                .video-container video {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 10px;
-                    border: none;
-                }}
-                .info {{
-                    background: #f8f9fa;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 20px 0;
-                    text-align: left;
-                }}
-                .warning {{
-                    color: #856404;
-                    background: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                }}
-                .btn {{
-                    background: #667eea;
-                    color: white;
-                    padding: 12px 30px;
-                    text-decoration: none;
-                    border-radius: 25px;
-                    font-weight: bold;
-                    margin: 10px;
-                    display: inline-block;
-                    transition: background 0.3s;
-                }}
-                .btn:hover {{
-                    background: #764ba2;
-                }}
-                .loading {{
-                    color: #666;
-                    font-style: italic;
-                }}
-                .fallback {{
-                    margin-top: 20px;
-                    padding: 15px;
-                    background: #e9ecef;
-                    border-radius: 10px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🧘‍♀️ Медитация «Дары Моря»</h1>
-                
-                <div class="info">
-                    <p><strong>⏰ Время доступа:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
-                    <p><strong>👤 Пользователь:</strong> {link_data['user_id']}</p>
-                </div>
-                
-                <div class="warning">
-                    ⚠️ <strong>Внимание:</strong> Это персональная ссылка. Не передавайте её другим.
-                </div>
-                
-                <div class="video-container">
-                    <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=1&iv_load_policy=3" 
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen
-                            style="width: 100%; height: 100%;">
-                    </iframe>
-                </div>
-            </div>
-
-            <script>
-                // Проверяем загрузку видео
-                setTimeout(function() {{
-                    const videoPlayer = document.getElementById('videoPlayer');
-                    const fallbackVideo = document.getElementById('fallbackVideo');
-                    const directLink = document.getElementById('directLink');
-                    const loadingText = document.getElementById('loadingText');
-                    
-                    // Показываем альтернативные варианты через 5 секунд
-                    setTimeout(function() {{
-                        loadingText.innerHTML = 'Если видео не загрузилось, используйте альтернативные варианты ниже:';
-                        fallbackVideo.style.display = 'block';
-                        directLink.style.display = 'block';
-                    }}, 5000);
-                    
-                }}, 1000);
-            </script>
-        </body>
-        </html>
-        """
-        
-        logger.info(f"✅ Serving video page for user {link_data['user_id']}")
-        return html_content
-        
-    except Exception as e:
-        logging.error(f"Error in video proxy: {e}")
-        return """
-        <html>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                <h2>⚠️ Ошибка сервера</h2>
-                <p>Попробуйте получить новую ссылку в боте.</p>
-                <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
-            </body>
-        </html>
-        """, 500
-
-@app.route('/direct-video/<link_hash>')
-def direct_video(link_hash):
-    """Прямая загрузка видео (редирект на Яндекс.Диск)"""
-    try:
-        link_data = db.get_video_link(link_hash)
-        
-        if not link_data:
-            return "❌ Ссылка недействительна", 404
-        
-        yandex_link = link_data['yandex_link']
-        
-        if not yandex_link:
-            return "❌ Ошибка получения видео", 500
-        
-        # Делаем редирект на прямую ссылку Яндекс.Диска
-        logger.info(f"🔗 Redirecting to Yandex video: {yandex_link}")
-        return redirect(yandex_link)
-        
-    except Exception as e:
-        logger.error(f"❌ Error in direct video: {e}")
-        return "❌ Ошибка сервера", 500
-
-@app.route('/video-stream/<link_hash>')
-def video_stream(link_hash):
-    """Потоковая передача видео с проверкой доступа"""
-    try:
-        # Проверяем доступ по ссылке
-        link_data = db.get_video_link(link_hash)
-        
-        if not link_data:
-            return "❌ Ссылка недействительна", 404
-        
-        # Проверяем срок действия
-        if datetime.now() > link_data['expires_at']:
-            # Удаляем просроченную ссылку
-            db.cleanup_expired_video_links()
-            return "❌ Срок действия ссылки истёк", 403
-        
-        yandex_link = link_data['yandex_link']
-        
-        if not yandex_link:
-            return "❌ Ошибка получения видео", 500
-        
-        # Создаем потоковую передачу видео
-        def generate():
-            try:
-                # Загружаем видео с Яндекс.Диска частями
-                headers = {
-                    'Range': request.headers.get('Range', 'bytes=0-'),
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-                
-                response = requests.get(
-                    yandex_link, 
-                    headers=headers, 
-                    stream=True, 
-                    timeout=30
-                )
-                
-                # Передаем видео частями
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        yield chunk
-                        
-            except Exception as e:
-                logging.error(f"❌ Error streaming video: {e}")
-        
-        # Устанавливаем правильные заголовки для видео
-        headers = {
-            'Content-Type': 'video/mp4',
-            'Accept-Ranges': 'bytes',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            # Запрещаем кэширование и скачивание
-            'Content-Disposition': 'inline',
-            'X-Content-Type-Options': 'nosniff'
-        }
-        
-        return Response(
-            stream_with_context(generate()),
-            status=206,  # Partial Content для поддержки seek
-            headers=headers,
-            direct_passthrough=True
-        )
-        
-    except Exception as e:
-        logging.error(f"❌ Error in video stream: {e}")
-        return "❌ Ошибка загрузки видео", 500
-
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
     """Безопасный видео-плеер с ограниченным доступом"""
@@ -431,14 +152,6 @@ def secure_video_player(link_hash):
                     height: 100%;
                     border: none;
                 }}
-                video {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border: none;
-                }}
                 .info {{
                     background: #f8f9fa;
                     padding: 15px;
@@ -456,9 +169,6 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
-                .btn:hover {{
-                    background: #764ba2;
-                }}
                 .fallback {{
                     margin-top: 20px;
                     padding: 15px;
@@ -469,7 +179,7 @@ def secure_video_player(link_hash):
         </head>
         <body>
             <div class="container">
-                <h1>🧘‍♀️ Медитация «Дары Моря»</h1>
+                <h1>🐚 Медитация «Дары Моря»</h1>
                 
                 <div class="info">
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
@@ -477,28 +187,18 @@ def secure_video_player(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <iframe src="https://www.youtube.com/embed/ABC123XYZ?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=1&iv_load_policy=3" 
+                    <iframe src="{yandex_link}" 
                             frameborder="0" 
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowfullscreen
                             style="width: 100%; height: 100%;">
                     </iframe>
                 </div>
+                
+                <div style="margin-top: 20px;">
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
+                </div>
             </div>
-            
-            <script>
-                // Проверяем загрузку видео
-                setTimeout(function() {{
-                    const iframe = document.querySelector('iframe');
-                    const fallback = document.querySelector('.fallback');
-                    
-                    // Показываем альтернативные варианты через 5 секунд
-                    setTimeout(function() {{
-                        fallback.style.display = 'block';
-                    }}, 5000);
-                    
-                }}, 1000);
-            </script>
         </body>
         </html>
         """
