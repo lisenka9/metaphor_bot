@@ -1,53 +1,37 @@
 import hashlib
-import hmac
-import time
+import secrets
+import requests
+import os
+from datetime import datetime, timedelta
+import logging
 
 class SecureVideoSystem:
     def __init__(self, base_url, db):
         self.base_url = base_url
         self.db = db
-        self.secret_key = os.environ.get('VIDEO_SECRET_KEY', 'your-secret-key-change-in-production')
+        self.yandex_token = os.environ.get('YANDEX_DISK_TOKEN')
+        self.meditation_path = "/meditation.MOV"
+        logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
-    def generate_secure_token(self, user_id: int, expires_in: int = 3600) -> str:
-        """Генерирует токен для доступа к видео"""
-        timestamp = str(int(time.time()) + expires_in)
-        data = f"{user_id}:{timestamp}"
-        signature = hmac.new(
-            self.secret_key.encode(),
-            data.encode(),
-            hashlib.sha256
-        ).hexdigest()
-        return f"{data}:{signature}"
-    
-    def verify_token(self, token: str) -> tuple:
-        """Проверяет токен и возвращает user_id если валиден"""
-        try:
-            data, signature = token.rsplit(':', 1)
-            user_id, timestamp = data.split(':', 1)
-            
-            # Проверяем подпись
-            expected_signature = hmac.new(
-                self.secret_key.encode(),
-                data.encode(),
-                hashlib.sha256
-            ).hexdigest()
-            
-            if not hmac.compare_digest(signature, expected_signature):
-                return None, "Invalid signature"
-            
-            # Проверяем срок действия
-            if int(time.time()) > int(timestamp):
-                return None, "Token expired"
-            
-            return int(user_id), "Valid"
-            
-        except Exception as e:
-            return None, f"Token error: {str(e)}"
-    
-    def get_video_url(self, user_id: int) -> str:
-        """Генерирует защищенную ссылку на видео"""
-        token = self.generate_secure_token(user_id)
-        return f"{self.base_url}/protected-video/{token}"
+    def get_yandex_download_link(self) -> str:
+        """Ссылка на приватное YouTube видео с скрытыми элементами"""
+        youtube_id = "qBqIO-_OsgA"  
+        params = [
+            "autoplay=1",           # Автозапуск
+            "rel=0",                # Не показывать похожие видео
+            "modestbranding=1",     # Минимум логотипов YouTube
+            "showinfo=0",           # Скрыть заголовок и информацию о канале
+            "controls=1",           # Показать элементы управления (пауза, громкость)
+            "disablekb=1",          # Отключить клавиатурные shortcuts
+            "fs=1",                 # Разрешить полноэкранный режим
+            "iv_load_policy=3",     # Скрыть аннотации
+            "playsinline=1",        # Воспроизведение в окне на iOS
+            "cc_load_policy=0",     # Скрыть субтитры
+            "color=white",          # Цвет прогресс-бара
+            "hl=ru",               # Язык интерфейса
+            "enablejsapi=1",       # Включить JS API для дополнительного контроля
+        ]
+        return f"https://www.youtube.com/embed/{youtube_id}?{'&'.join(params)}"
 
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
@@ -70,8 +54,14 @@ class SecureVideoSystem:
             unique_string = f"{user_id}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
             link_hash = hashlib.sha256(unique_string.encode()).hexdigest()[:20]
             
+            # Получаем свежую ссылку на Яндекс Диск
+            yandex_link = self.get_yandex_download_link()
+            if not yandex_link:
+                logging.error("❌ Failed to get Yandex download link")
+                return None
+            
             # Сохраняем в базу данных
-            success = self.db.save_video_link(link_hash, user_id, "protected", expires_at)
+            success = self.db.save_video_link(link_hash, user_id, yandex_link, expires_at)
             if not success:
                 logging.error("❌ Failed to save video link to database")
                 return None
@@ -86,3 +76,24 @@ class SecureVideoSystem:
         except Exception as e:
             logging.error(f"❌ Error generating secure link: {e}")
             return None
+    
+    def validate_link(self, link_hash: str) -> tuple:
+        """Проверяет валидность ссылки через базу данных"""
+        link_data = self.db.get_video_link(link_hash)
+        if not link_data:
+            return False, None
+        
+        return True, link_data['yandex_link']
+
+def get_video_system_safe():
+    """Безопасно получает video_system"""
+    try:
+        from config import BASE_URL
+        from database import db
+        
+        video_system = SecureVideoSystem(BASE_URL, db)
+        logging.info("✅ Video system created successfully")
+        return video_system
+    except Exception as e:
+        logging.error(f"❌ Error creating video system: {e}")
+        return None

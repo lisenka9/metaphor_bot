@@ -4,7 +4,7 @@ import time
 import json
 import requests
 import threading
-from flask import Flask, request, jsonify, redirect, Response, stream_with_context, send_file, abort
+from flask import Flask, request, jsonify, redirect, Response, stream_with_context
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from config import BOT_TOKEN
@@ -24,8 +24,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-VIDEO_FILE_PATH = os.path.join(os.path.dirname(__file__), 'protected', 'meditation.MOV')
 
 # Создаем Flask приложение
 app = Flask(__name__)
@@ -67,39 +65,9 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
-
-@app.route('/protected-video/<token>')
-def protected_video(token):
-    """Защищенный доступ к видео файлу"""
-    try:
-        user_id, status = video_system.verify_token(token)
-        
-        if user_id is None:
-            logging.error(f"❌ Invalid video token: {status}")
-            abort(403)
-        
-        # Проверяем доступ пользователя
-        can_watch, reason = db.can_watch_meditation(user_id)
-        if not can_watch:
-            logging.error(f"❌ User {user_id} no access to video: {reason}")
-            abort(403)
-        
-        # Отправляем видео файл
-        logging.info(f"✅ Serving video to user {user_id}")
-        return send_file(
-            VIDEO_FILE_PATH,
-            as_attachment=False,
-            download_name='meditation.MOV',
-            mimetype='video/mp4'
-        )
-        
-    except Exception as e:
-        logging.error(f"❌ Error serving protected video: {e}")
-        abort(500)
-
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
-    """Безопасный видео-плеер с защищенным доступом"""
+    """Безопасный видео-плеер с ограниченным доступом"""
     try:
         logging.info(f"🔧 Secure video requested for hash: {link_hash}")
         link_data = db.get_video_link(link_hash)
@@ -116,8 +84,6 @@ def secure_video_player(link_hash):
             </html>
             """, 404
         
-        user_id = link_data['user_id']
-        
         # Проверяем срок действия
         if datetime.now() > link_data['expires_at']:
             logging.info(f"❌ Link expired: {link_hash}")
@@ -132,8 +98,10 @@ def secure_video_player(link_hash):
             </html>
             """, 403
         
-        # Генерируем защищенную ссылку на видео
-        secure_video_url = video_system.get_video_url(user_id)
+        yandex_link = link_data['yandex_link']
+        logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
+        
+        # Исправленный HTML с правильными ссылками
         
         html_content = f"""
         <!DOCTYPE html>
@@ -163,18 +131,58 @@ def secure_video_player(link_hash):
                     width: 90%;
                     text-align: center;
                 }}
-                .video-container {{
+                h1 {{
+                    color: #333;
+                    margin-bottom: 20px;
+                }}
+                .video-wrapper {{
+                    position: relative;
                     width: 100%;
-                    max-width: 720px;
                     margin: 20px 0;
+                }}
+                .video-container {{
+                    position: relative;
+                    width: 100%;
+                    height: 0;
+                    padding-bottom: 56.25%;
                     background: #000;
                     border-radius: 10px;
                     overflow: hidden;
                 }}
-                video {{
+                .video-overlay {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
                     width: 100%;
-                    height: auto;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 10;
+                }}
+                .hide-youtube-elements {{
+                    /* Скрываем элементы YouTube */
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 60px;
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
+                    pointer-events: none;
+                }}
+                iframe {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                    z-index: 1;
+                }}
+                .info {{
+                    background: #f8f9fa;
+                    padding: 15px;
                     border-radius: 10px;
+                    margin: 20px 0;
+                    text-align: left;
                 }}
                 .btn {{
                     background: #667eea;
@@ -186,20 +194,6 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
-                .info {{
-                    background: #f8f9fa;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 15px 0;
-                }}
-                .warning {{
-                    background: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                    font-size: 14px;
-                }}
             </style>
         </head>
         <body>
@@ -210,15 +204,17 @@ def secure_video_player(link_hash):
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
                 </div>
                 
-                <div class="warning">
-                    ⚠️ Ссылка защищена и будет работать только для вас до указанного времени
-                </div>
-                
-                <div class="video-container">
-                    <video controls playsinline autoplay>
-                        <source src="{secure_video_url}" type="video/mp4">
-                        Ваш браузер не поддерживает видео.
-                    </video>
+                <div class="video-wrapper">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=1&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen>
+                        </iframe>
+                        <div class="video-overlay">
+                            <div class="hide-youtube-elements"></div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -227,16 +223,26 @@ def secure_video_player(link_hash):
             </div>
             
             <script>
-                // Предотвращаем кэширование видео
-                const video = document.querySelector('video');
-                const source = document.querySelector('source');
-                source.src = '{secure_video_url}' + '?t=' + new Date().getTime();
-                video.load();
-                
-                // Логируем попытки скачивания
-                video.addEventListener('contextmenu', function(e) {{
-                    e.preventDefault();
-                    console.log('Right click disabled');
+                // Дополнительный скрипт для скрытия элементов YouTube
+                document.addEventListener('DOMContentLoaded', function() {{
+                    // Ждем загрузки iframe
+                    setTimeout(function() {{
+                        // Пытаемся скрыть элементы через стили
+                        const style = document.createElement('style');
+                        style.textContent = `
+                            .ytp-title-link, 
+                            .ytp-title-channel, 
+                            .ytp-chrome-top-buttons,
+                            .ytp-share-button,
+                            .ytp-copylink-button {{
+                                display: none !important;
+                            }}
+                            .ytp-show-cards-title {{
+                                display: none !important;
+                            }}
+                        `;
+                        document.head.appendChild(style);
+                    }}, 2000);
                 }});
             </script>
         </body>
