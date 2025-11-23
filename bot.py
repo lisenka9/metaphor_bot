@@ -4,7 +4,7 @@ import time
 import json
 import requests
 import threading
-from flask import Flask, request, jsonify, redirect, Response, stream_with_context
+from flask import Flask, request, jsonify, redirect, Response, stream_with_context, send_file, abort
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from config import BOT_TOKEN
@@ -24,6 +24,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+VIDEO_FILE_PATH = os.path.join(os.path.dirname(__file__), 'protected', 'meditation.MOV')
 
 # Создаем Flask приложение
 app = Flask(__name__)
@@ -65,9 +67,39 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
+
+@app.route('/protected-video/<token>')
+def protected_video(token):
+    """Защищенный доступ к видео файлу"""
+    try:
+        user_id, status = video_system.verify_token(token)
+        
+        if user_id is None:
+            logging.error(f"❌ Invalid video token: {status}")
+            abort(403)
+        
+        # Проверяем доступ пользователя
+        can_watch, reason = db.can_watch_meditation(user_id)
+        if not can_watch:
+            logging.error(f"❌ User {user_id} no access to video: {reason}")
+            abort(403)
+        
+        # Отправляем видео файл
+        logging.info(f"✅ Serving video to user {user_id}")
+        return send_file(
+            VIDEO_FILE_PATH,
+            as_attachment=False,
+            download_name='meditation.MOV',
+            mimetype='video/mp4'
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error serving protected video: {e}")
+        abort(500)
+
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
-    """Безопасный видео-плеер с ограниченным доступом"""
+    """Безопасный видео-плеер с защищенным доступом"""
     try:
         logging.info(f"🔧 Secure video requested for hash: {link_hash}")
         link_data = db.get_video_link(link_hash)
@@ -84,6 +116,8 @@ def secure_video_player(link_hash):
             </html>
             """, 404
         
+        user_id = link_data['user_id']
+        
         # Проверяем срок действия
         if datetime.now() > link_data['expires_at']:
             logging.info(f"❌ Link expired: {link_hash}")
@@ -98,10 +132,8 @@ def secure_video_player(link_hash):
             </html>
             """, 403
         
-        yandex_link = link_data['yandex_link']
-        logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
-        
-        # Исправленный HTML с правильными ссылками
+        # Генерируем защищенную ссылку на видео
+        secure_video_url = video_system.get_video_url(user_id)
         
         html_content = f"""
         <!DOCTYPE html>
@@ -154,22 +186,19 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
-                .fallback-link {{
-                    background: #28a745;
-                    color: white;
-                    padding: 15px 25px;
-                    text-decoration: none;
-                    border-radius: 10px;
-                    font-size: 16px;
-                    margin: 10px;
-                    display: inline-block;
-                }}
-                .error {{
-                    color: #dc3545;
-                    background: #f8d7da;
+                .info {{
+                    background: #f8f9fa;
                     padding: 15px;
                     border-radius: 10px;
                     margin: 15px 0;
+                }}
+                .warning {{
+                    background: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 10px 0;
+                    font-size: 14px;
                 }}
             </style>
         </head>
@@ -181,53 +210,35 @@ def secure_video_player(link_hash):
                     <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
                 </div>
                 
+                <div class="warning">
+                    ⚠️ Ссылка защищена и будет работать только для вас до указанного времени
+                </div>
+                
                 <div class="video-container">
-                    <video id="meditationVideo" controls playsinline autoplay>
-                        <source src="{link_data['yandex_link']}" type="video/mp4">
+                    <video controls playsinline autoplay>
+                        <source src="{secure_video_url}" type="video/mp4">
                         Ваш браузер не поддерживает видео.
                     </video>
                 </div>
-                
-                <div style="margin: 20px 0;">
-                    <p>Если видео не загружается, попробуйте:</p>
-                    <a href="{link_data['yandex_link']}" class="fallback-link" target="_blank" download="Медитация_Дары_Моря.mp4">
-                        📥 Скачать видео
-                    </a>
-                </div>
-                
-                <script>
-                    // Автоматическая загрузка видео
-                    document.addEventListener('DOMContentLoaded', function() {{
-                        const video = document.getElementById('meditationVideo');
-                        const videoUrl = "{link_data['yandex_link']}";
-                        
-                        console.log('Loading video from:', videoUrl);
-                        
-                        // Пытаемся загрузить видео
-                        video.load();
-                        
-                        video.addEventListener('error', function(e) {{
-                            console.error('Video loading error:', e);
-                            showError('Ошибка загрузки видео. Попробуйте скачать его по ссылке выше.');
-                        }});
-                        
-                        video.addEventListener('loadeddata', function() {{
-                            console.log('Video loaded successfully');
-                        }});
-                        
-                        function showError(message) {{
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'error';
-                            errorDiv.textContent = message;
-                            video.parentNode.appendChild(errorDiv);
-                        }}
-                    }});
-                </script>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
+            
+            <script>
+                // Предотвращаем кэширование видео
+                const video = document.querySelector('video');
+                const source = document.querySelector('source');
+                source.src = '{secure_video_url}' + '?t=' + new Date().getTime();
+                video.load();
+                
+                // Логируем попытки скачивания
+                video.addEventListener('contextmenu', function(e) {{
+                    e.preventDefault();
+                    console.log('Right click disabled');
+                }});
+            </script>
         </body>
         </html>
         """
