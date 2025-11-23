@@ -400,9 +400,9 @@ def secure_video_player(link_hash):
             """, 403
         
         yandex_link = link_data['yandex_link']
-        logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link[:100]}...")
+        logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
         
-        # Простой HTML с iframe для начала
+        # Исправленный HTML с правильными ссылками
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">
@@ -453,6 +453,14 @@ def secure_video_player(link_hash):
                     height: 100%;
                     border: none;
                 }}
+                video {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                }}
                 .info {{
                     background: #f8f9fa;
                     padding: 15px;
@@ -470,6 +478,15 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
+                .btn:hover {{
+                    background: #764ba2;
+                }}
+                .fallback {{
+                    margin-top: 20px;
+                    padding: 15px;
+                    background: #e9ecef;
+                    border-radius: 10px;
+                }}
             </style>
         </head>
         <body>
@@ -482,22 +499,39 @@ def secure_video_player(link_hash):
                 </div>
                 
                 <div class="video-container">
-                    <!-- Основной вариант - тег video для прямого воспроизведения -->
-                    <video controls autoplay style="width: 100%; height: 100%;" preload="metadata">
-                        <source src="{{ yandex_link }}" type="video/mp4">
-                        Ваш браузер не поддерживает видео тег.
-                    </video>
+                    <!-- Основной вариант - iframe для Яндекс.Диска -->
+                    <iframe src="{yandex_link}" 
+                            frameborder="0" 
+                            allow="autoplay; encrypted-media" 
+                            allowfullscreen>
+                    </iframe>
                 </div>
-
-                <!-- Запасной вариант через iframe -->
-                <div style="margin-top: 20px;">
-                    <a href="{{ yandex_link }}" target="_blank" class="btn">📺 Открыть видео в новом окне</a>
+                
+                <!-- Альтернативные варианты -->
+                <div class="fallback">
+                    <p><strong>Если видео не воспроизводится:</strong></p>
+                    <a href="{yandex_link}" target="_blank" class="btn">📺 Открыть на Яндекс.Диске</a>
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">🔙 Вернуться в бота</a>
                 </div>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
+            
+            <script>
+                // Проверяем загрузку видео
+                setTimeout(function() {{
+                    const iframe = document.querySelector('iframe');
+                    const fallback = document.querySelector('.fallback');
+                    
+                    // Показываем альтернативные варианты через 5 секунд
+                    setTimeout(function() {{
+                        fallback.style.display = 'block';
+                    }}, 5000);
+                    
+                }}, 1000);
+            </script>
         </body>
         </html>
         """

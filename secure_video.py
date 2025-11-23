@@ -15,7 +15,7 @@ class SecureVideoSystem:
     
     def get_yandex_download_link(self) -> str:
         """Прямая ссылка на видео с Яндекс.Диска"""
-        return "https://disk.yandex.ru/d/pV3tz4RKMqQN0Q"
+        return "https://disk.yandex.ru/i/pV3tz4RKMqQN0Q"
 
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
