@@ -14,15 +14,28 @@ class SecureVideoSystem:
         logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
     def get_yandex_download_link(self) -> str:
-        """Ссылка на Google Drive видео"""
-        file_id = "1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6"  # ID из вашей ссылки
-        params = [
-            "autoplay=1",           # Автозапуск
-            "controls=1",           # Элементы управления
-            "modestbranding=1",     # Минимальный брендинг
-            "rel=0"                 # Не показывать похожие видео
-        ]
-        return f"https://drive.google.com/file/d/{file_id}/preview?{'&'.join(params)}"
+        """Получает прямую ссылку на видео"""
+        try:
+            # Замените на прямую ссылку на ваше видео
+            # Вариант 1: Если видео на Google Drive
+            file_id = "1nH3w3j7bhKOv41v-JOTncDYnP2HHP6_6"
+            direct_link = f"https://drive.google.com/uc?export=download&id={file_id}"
+            
+            # Вариант 2: Если видео на другом хостинге (рекомендуется)
+            # direct_link = "https://ваш-хостинг.com/meditation.mp4"
+            
+            # Проверяем доступность ссылки
+            response = requests.head(direct_link, timeout=10)
+            if response.status_code == 200:
+                logging.info(f"✅ Video link is accessible: {direct_link}")
+                return direct_link
+            else:
+                logging.error(f"❌ Video link not accessible: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logging.error(f"❌ Error getting video link: {e}")
+            return None
 
     def generate_secure_link(self, user_id: int) -> str:
         """Генерирует защищенную ссылку через прокси"""
