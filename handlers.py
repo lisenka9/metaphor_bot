@@ -3929,13 +3929,11 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 {expires_text}
 
-• 🔒 Видео нельзя скачать
-• ⏰ Автоматическое отключение после окончания срока
-• 👤 Доступ только для вас
+Ваша персональная ссылка готова!
 
 *Инструкция:*
-1. Нажмите «🎬 Смотреть медитацию» ниже
-2. Видео откроется в браузере
+1. Нажмите «🎬 Смотреть медитацию» ниже  
+2. Медитация откроется в браузере
 
 ⚠️ Ссылка персональна и защищена
 """
@@ -3964,11 +3962,24 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    # ✅ СОЗДАЕМ video_system при каждом вызове (как в команде)
+    video_system = get_video_system_safe()
+    
+    if not video_system:
+        await query.message.reply_text(
+            "❌ Система видео временно недоступна. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
+    
+    # Показываем "загрузка"
+    loading_msg = await query.message.reply_text("🔄 Подготавливаем вашу медитацию...")
+    
     # Генерируем защищенную ссылку
     video_url = video_system.generate_secure_link(user.id)
     
     if not video_url:
-        await query.message.reply_text(
+        await loading_msg.edit_text(
             "❌ Ошибка при подготовке медитации. Попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
         )
@@ -3984,7 +3995,7 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
     
     if subscription and subscription[1]:
         sub_end = subscription[1]
-        if hasattr(sub_end, 'strftime'):
+        if hasattr(sub_end, 'date'):
             has_subscription = sub_end.date() >= datetime.now().date()
             if has_subscription:
                 expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
@@ -4003,11 +4014,10 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
 ⚠️ Ссылка защищена и персональна
 """
     
-    await query.message.reply_text(
+    await loading_msg.edit_text(
         meditation_text,
         parse_mode='Markdown',
         reply_markup=keyboard.get_meditation_link_keyboard(video_url),
         disable_web_page_preview=True
     )
-
     
