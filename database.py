@@ -1258,7 +1258,7 @@ class DatabaseManager:
             ''', (link_hash, user_id, yandex_link, expires_at))
             
             conn.commit()
-            logging.info(f"✅ Video link saved for user {user_id}")
+            logging.info(f"✅ Video link saved for user {user_id}, hash: {link_hash}")
             return True
             
         except Exception as e:

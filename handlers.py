@@ -14,9 +14,15 @@ import uuid
 def get_video_system_safe():
     """Безопасно получает video_system"""
     try:
-        from secure_video import get_video_system
-        return get_video_system()
-    except ImportError:
+        from secure_video import SecureVideoSystem
+        from config import BASE_URL
+        from database import db
+        
+        video_system = SecureVideoSystem(BASE_URL, db)
+        logging.info(f"✅ Video system created for user")
+        return video_system
+    except Exception as e:
+        logging.error(f"❌ Error creating video system: {e}")
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3863,9 +3869,11 @@ def get_video_system():
 async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /meditation"""
     user = update.effective_user
+    logging.info(f"🔧 Meditation command called by user {user.id}")
     
     # Проверяем доступ
     can_watch, reason = db.can_watch_meditation(user.id)
+    logging.info(f"🔧 User {user.id} can watch: {can_watch}, reason: {reason}")
     
     if not can_watch:
         await update.message.reply_text(
@@ -3879,6 +3887,7 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     video_system = get_video_system_safe()
     
     if not video_system:
+        logging.error(f"❌ Video system is None for user {user.id}")
         await update.message.reply_text(
             "❌ Система видео временно недоступна. Попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
@@ -3889,9 +3898,11 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
     
     # Генерируем защищенную ссылку
+    logging.info(f"🔧 Generating secure link for user {user.id}")
     video_url = video_system.generate_secure_link(user.id)
     
     if not video_url:
+        logging.error(f"❌ Failed to generate video URL for user {user.id}")
         await loading_msg.edit_text(
             "❌ Ошибка при подготовке медитации. Попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
@@ -3903,14 +3914,14 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Получаем информацию о подписке для текста
     subscription = db.get_user_subscription(user.id)
-    has_subscription = False
+    has_active_subscription = False
     expires_text = "⏰ Ссылка действительна 1 час"
     
     if subscription and subscription[1]:
         sub_end = subscription[1]
-        if hasattr(sub_end, 'strftime'):
-            has_subscription = sub_end.date() >= datetime.now().date()
-            if has_subscription:
+        if hasattr(sub_end, 'date'):
+            has_active_subscription = sub_end.date() >= datetime.now().date()
+            if has_active_subscription:
                 expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
     
     meditation_text = f"""
@@ -3931,6 +3942,7 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 ⚠️ Ссылка персональна и защищена
 """
     
+    logging.info(f"✅ Sending meditation link to user {user.id}: {video_url}")
     await loading_msg.edit_text(
         meditation_text,
         parse_mode='Markdown',

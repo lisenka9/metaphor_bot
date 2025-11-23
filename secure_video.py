@@ -11,60 +11,37 @@ class SecureVideoSystem:
         self.db = db
         self.yandex_token = os.environ.get('YANDEX_DISK_TOKEN')
         self.meditation_path = "/meditation.MOV"
+        logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
     
     def get_yandex_download_link(self) -> str:
         """Получает прямую ссылку на видео с Яндекс.Диска"""
         try:
-            logging.info(f"🔍 Yandex token: {'✅ Set' if self.yandex_token else '❌ Not set'}")
-            logging.info(f"🔍 Trying to get link for path: {self.meditation_path}")
-
             if not self.yandex_token:
                 logging.error("❌ Yandex token not set")
                 return None
                 
-            # Получаем информацию о файле
-            file_info_response = requests.get(
-                'https://cloud-api.yandex.net/v1/disk/resources',
-                params={
-                    'path': self.meditation_path,
-                    'fields': 'public_url,file'
-                },
+            logging.info(f"🔍 Getting Yandex link for path: {self.meditation_path}")
+            
+            # Получаем download ссылку
+            download_response = requests.get(
+                'https://cloud-api.yandex.net/v1/disk/resources/download',
+                params={'path': self.meditation_path},
                 headers={'Authorization': f'OAuth {self.yandex_token}'},
                 timeout=10
             )
             
-            if file_info_response.status_code == 200:
-                file_info = file_info_response.json()
+            if download_response.status_code == 200:
+                download_data = download_response.json()
+                direct_link = download_data.get('href')
                 
-                # Если файл публичный, используем прямую ссылку
-                if file_info.get('public_url'):
-                    public_url = file_info['public_url']
-                    logging.info(f"✅ Using public URL: {public_url}")
-                    return public_url
-                
-                # Если файл не публичный, получаем download ссылку
-                download_response = requests.get(
-                    'https://cloud-api.yandex.net/v1/disk/resources/download',
-                    params={'path': self.meditation_path},
-                    headers={'Authorization': f'OAuth {self.yandex_token}'},
-                    timeout=10
-                )
-                
-                if download_response.status_code == 200:
-                    download_data = download_response.json()
-                    direct_link = download_data.get('href')
-                    
-                    if direct_link:
-                        logging.info(f"✅ Got direct download link: {direct_link[:50]}...")
-                        return direct_link
-                    else:
-                        logging.error("❌ No href in download response")
-                        return None
+                if direct_link:
+                    logging.info(f"✅ Got direct download link: {direct_link[:100]}...")
+                    return direct_link
                 else:
-                    logging.error(f"❌ Download link error: {download_response.status_code}")
+                    logging.error("❌ No href in download response")
                     return None
             else:
-                logging.error(f"❌ File info error: {file_info_response.status_code}")
+                logging.error(f"❌ Download link error: {download_response.status_code} - {download_response.text}")
                 return None
                     
         except Exception as e:
@@ -72,7 +49,7 @@ class SecureVideoSystem:
             return None
 
     def generate_secure_link(self, user_id: int) -> str:
-        """Генерирует защищенную ссылку на безопасный видео-плеер"""
+        """Генерирует защищенную ссылку через прокси"""
         try:
             # Определяем срок действия
             subscription = self.db.get_user_subscription(user_id)
@@ -107,12 +84,14 @@ class SecureVideoSystem:
             logging.info(f"✅ Generated secure link for user {user_id}, expires: {expires_at}")
             
             # Возвращаем ссылку на наш защищенный плеер
-            return f"{self.base_url}/secure-video/{link_hash}"
+            secure_url = f"{self.base_url}/secure-video/{link_hash}"
+            logging.info(f"🔗 Secure URL: {secure_url}")
+            return secure_url
         
         except Exception as e:
             logging.error(f"❌ Error generating secure link: {e}")
             return None
-
+    
     def validate_link(self, link_hash: str) -> tuple:
         """Проверяет валидность ссылки через базу данных"""
         link_data = self.db.get_video_link(link_hash)
@@ -121,13 +100,15 @@ class SecureVideoSystem:
         
         return True, link_data['yandex_link']
 
-def init_video_system(db):
-    """Инициализирует систему видео (для обратной совместимости)"""
+def get_video_system_safe():
+    """Безопасно получает video_system"""
     try:
         from config import BASE_URL
+        from database import db
+        
         video_system = SecureVideoSystem(BASE_URL, db)
-        logging.info("✅ Video system initialized")
+        logging.info("✅ Video system created successfully")
         return video_system
     except Exception as e:
-        logging.error(f"❌ Error initializing video system: {e}")
+        logging.error(f"❌ Error creating video system: {e}")
         return None

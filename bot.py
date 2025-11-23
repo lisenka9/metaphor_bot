@@ -369,9 +369,11 @@ def video_stream(link_hash):
 def secure_video_player(link_hash):
     """Безопасный видео-плеер с ограниченным доступом"""
     try:
+        logging.info(f"🔧 Secure video requested for hash: {link_hash}")
         link_data = db.get_video_link(link_hash)
         
         if not link_data:
+            logging.error(f"❌ Link not found: {link_hash}")
             return """
             <html>
                 <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
@@ -384,6 +386,7 @@ def secure_video_player(link_hash):
         
         # Проверяем срок действия
         if datetime.now() > link_data['expires_at']:
+            logging.info(f"❌ Link expired: {link_hash}")
             db.cleanup_expired_video_links()
             return """
             <html>
@@ -395,9 +398,10 @@ def secure_video_player(link_hash):
             </html>
             """, 403
         
-        # HTML с защищенным видео-плеером
-        video_stream_url = f"{BASE_URL}/video-stream/{link_hash}"
+        yandex_link = link_data['yandex_link']
+        logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link[:100]}...")
         
+        # Простой HTML с iframe для начала
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">
@@ -440,7 +444,7 @@ def secure_video_player(link_hash):
                     border-radius: 10px;
                     overflow: hidden;
                 }}
-                video {{
+                iframe {{
                     position: absolute;
                     top: 0;
                     left: 0;
@@ -455,14 +459,6 @@ def secure_video_player(link_hash):
                     margin: 20px 0;
                     text-align: left;
                 }}
-                .warning {{
-                    color: #856404;
-                    background: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                }}
                 .btn {{
                     background: #667eea;
                     color: white;
@@ -472,14 +468,6 @@ def secure_video_player(link_hash):
                     font-weight: bold;
                     margin: 10px;
                     display: inline-block;
-                }}
-                .protection-notice {{
-                    font-size: 14px;
-                    color: #666;
-                    margin-top: 10px;
-                }}
-                .controls {{
-                    margin: 15px 0;
                 }}
             </style>
         </head>
@@ -492,75 +480,22 @@ def secure_video_player(link_hash):
                     <p><strong>👤 Пользователь:</strong> {link_data['user_id']}</p>
                 </div>
                 
-                <div class="warning">
-                    ⚠️ <strong>Защищённый доступ:</strong> Видео недоступно для скачивания и будет автоматически заблокировано после окончания срока доступа.
-                </div>
-                
                 <div class="video-container">
-                    <video controls controlsList="nodownload" oncontextmenu="return false;">
-                        <source src="{video_stream_url}" type="video/mp4">
-                        Ваш браузер не поддерживает видео.
-                    </video>
-                </div>
-                
-                <div class="protection-notice">
-                    🔒 Защита от скачивания активна. Правое кнопка мыши заблокирована.
-                </div>
-                
-                <div class="controls">
-                    <button onclick="toggleFullscreen()" class="btn">🖥 Полный экран</button>
+                    <iframe src="{yandex_link}" 
+                            frameborder="0" 
+                            allow="autoplay; encrypted-media" 
+                            allowfullscreen>
+                    </iframe>
                 </div>
                 
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
-
-            <script>
-                // Блокировка правого клика и скачивания
-                document.addEventListener('contextmenu', function(e) {{
-                    e.preventDefault();
-                    return false;
-                }});
-                
-                // Блокировка горячих клавиш
-                document.addEventListener('keydown', function(e) {{
-                    // Блокировка F12, Ctrl+Shift+I, Ctrl+U и т.д.
-                    if (
-                        e.keyCode == 123 || // F12
-                        (e.ctrlKey && e.shiftKey && e.keyCode == 73) || // Ctrl+Shift+I
-                        (e.ctrlKey && e.keyCode == 85) // Ctrl+U
-                    ) {{
-                        e.preventDefault();
-                        return false;
-                    }}
-                }});
-                
-                // Полноэкранный режим
-                function toggleFullscreen() {{
-                    const video = document.querySelector('video');
-                    if (video.requestFullscreen) {{
-                        video.requestFullscreen();
-                    }} else if (video.webkitRequestFullscreen) {{
-                        video.webkitRequestFullscreen();
-                    }} else if (video.msRequestFullscreen) {{
-                        video.msRequestFullscreen();
-                    }}
-                }}
-                
-                // Автозапуск видео
-                document.addEventListener('DOMContentLoaded', function() {{
-                    const video = document.querySelector('video');
-                    video.play().catch(function(error) {{
-                        console.log('Автозапуск заблокирован браузером');
-                    }});
-                }});
-            </script>
         </body>
         </html>
         """
         
-        logger.info(f"✅ Serving secure video for user {link_data['user_id']}")
         return html_content
         
     except Exception as e:
