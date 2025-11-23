@@ -4,7 +4,7 @@ import time
 import json
 import requests
 import threading
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, Response, stream_with_context
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from config import BOT_TOKEN
@@ -16,7 +16,6 @@ import logging
 import multiprocessing
 import signal
 import sys
-
 
 # Настройка логирования
 logging.basicConfig(
@@ -298,10 +297,6 @@ def direct_video(link_hash):
         logger.error(f"❌ Error in direct video: {e}")
         return "❌ Ошибка сервера", 500
 
-import requests
-from flask import Response, stream_context
-import time
-
 @app.route('/video-stream/<link_hash>')
 def video_stream(link_hash):
     """Потоковая передача видео с проверкой доступа"""
@@ -339,12 +334,7 @@ def video_stream(link_hash):
                     timeout=30
                 )
                 
-                # Передаем заголовки от Яндекс.Диска
-                content_length = response.headers.get('Content-Length')
-                content_range = response.headers.get('Content-Range')
-                content_type = response.headers.get('Content-Type', 'video/mp4')
-                
-                # Отправляем видео частями
+                # Передаем видео частями
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         yield chunk
@@ -360,12 +350,12 @@ def video_stream(link_hash):
             'Pragma': 'no-cache',
             'Expires': '0',
             # Запрещаем кэширование и скачивание
-            'Content-Disposition': 'inline',  # Только просмотр, не скачивание
+            'Content-Disposition': 'inline',
             'X-Content-Type-Options': 'nosniff'
         }
         
         return Response(
-            generate(),
+            stream_with_context(generate()),
             status=206,  # Partial Content для поддержки seek
             headers=headers,
             direct_passthrough=True
