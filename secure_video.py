@@ -22,13 +22,15 @@ class SecureVideoSystem:
             "showinfo=0",           # Скрыть информацию
             "controls=1",           
             "disablekb=1",          # Отключить клавиши
-            "fs=1",                 # Полноэкранный режим
+            "fs=0",                 # Отключить полноэкранный режим
             "iv_load_policy=3",     # Скрыть аннотации
             "playsinline=1",
             "cc_load_policy=0",     # Скрыть субтитры
             "color=white",
             "hl=ru",
-            "enablejsapi=1"
+            "enablejsapi=1",        # Включить API для контроля
+            "widget_referrer=telegram",
+            "origin=https://your-bot-url.render.com"
         ]
         return f"https://www.youtube.com/embed/{youtube_id}?{'&'.join(params)}"
 

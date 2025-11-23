@@ -156,16 +156,24 @@ def secure_video_player(link_hash):
                     width: 100%;
                     height: 100%;
                     pointer-events: none;
-                    z-index: 10;
+                    z-index: 100;
                 }}
-                .hide-youtube-elements {{
-                    /* Скрываем элементы YouTube */
+                .hide-top-elements {{
                     position: absolute;
                     top: 0;
                     left: 0;
                     width: 100%;
-                    height: 60px;
-                    background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
+                    height: 80px;
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+                    pointer-events: none;
+                }}
+                .hide-bottom-elements {{
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 120px;
+                    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
                     pointer-events: none;
                 }}
                 iframe {{
@@ -206,13 +214,15 @@ def secure_video_player(link_hash):
                 
                 <div class="video-wrapper">
                     <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=1&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru" 
+                        <iframe id="youtube-player"
+                                src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
                                 frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" 
                                 allowfullscreen>
                         </iframe>
                         <div class="video-overlay">
-                            <div class="hide-youtube-elements"></div>
+                            <div class="hide-top-elements"></div>
+                            <div class="hide-bottom-elements"></div>
                         </div>
                     </div>
                 </div>
@@ -222,28 +232,122 @@ def secure_video_player(link_hash):
                 </div>
             </div>
             
+            <script src="https://www.youtube.com/iframe_api"></script>
             <script>
-                // Дополнительный скрипт для скрытия элементов YouTube
-                document.addEventListener('DOMContentLoaded', function() {{
-                    // Ждем загрузки iframe
-                    setTimeout(function() {{
-                        // Пытаемся скрыть элементы через стили
-                        const style = document.createElement('style');
-                        style.textContent = `
-                            .ytp-title-link, 
-                            .ytp-title-channel, 
-                            .ytp-chrome-top-buttons,
-                            .ytp-share-button,
-                            .ytp-copylink-button {{
-                                display: none !important;
-                            }}
-                            .ytp-show-cards-title {{
-                                display: none !important;
-                            }}
-                        `;
-                        document.head.appendChild(style);
-                    }}, 2000);
-                }});
+                var player;
+                
+                function onYouTubeIframeAPIReady() {
+                    player = new YT.Player('youtube-player', {
+                        events: {
+                            'onReady': onPlayerReady,
+                            'onStateChange': onPlayerStateChange
+                        }
+                    });
+                }
+                
+                function onPlayerReady(event) {
+                    // Скрываем элементы при загрузке
+                    hideYouTubeElements();
+                    
+                    // Запускаем видео
+                    event.target.playVideo();
+                }
+                
+                function onPlayerStateChange(event) {
+                    // При изменении состояния также скрываем элементы
+                    if (event.data == YT.PlayerState.PLAYING) {
+                        hideYouTubeElements();
+                    }
+                }
+                
+                function hideYouTubeElements() {
+                    // Создаем стили для скрытия элементов YouTube
+                    const style = document.createElement('style');
+                    style.id = 'youtube-hider';
+                    style.textContent = `
+                        /* Скрываем верхнюю панель с названием и кнопками */
+                        .ytp-chrome-top,
+                        .ytp-title-channel,
+                        .ytp-title-link,
+                        .ytp-title-text,
+                        .ytp-share-button,
+                        .ytp-copylink-button,
+                        .ytp-youtube-button,
+                        .ytp-pause-overlay,
+                        .ytp-watermark {
+                            display: none !important;
+                            opacity: 0 !important;
+                            visibility: hidden !important;
+                        }
+                        
+                        /* Скрываем информацию о канале */
+                        .ytp-show-cards-title,
+                        .ytp-ce-element {
+                            display: none !important;
+                        }
+                        
+                        /* Скрываем кнопку "Скопировать ссылку" в меню */
+                        .ytp-popup ytp-share-panel,
+                        .ytp-share-button[aria-label*="копир"],
+                        .ytp-share-button[aria-label*="share"],
+                        .ytp-copylink-button {
+                            display: none !important;
+                        }
+                        
+                        /* Скрываем нижнюю панель управления */
+                        .ytp-chrome-bottom {
+                            opacity: 0 !important;
+                            transition: opacity 0.3s !important;
+                        }
+                        
+                        /* Показываем панель управления только при наведении */
+                        .video-container:hover .ytp-chrome-bottom {
+                            opacity: 1 !important;
+                        }
+                        
+                        /* Скрываем лого YouTube */
+                        .ytp-youtube-button {
+                            display: none !important;
+                        }
+                    `;
+                    
+                    // Удаляем старые стили если есть
+                    const oldStyle = document.getElementById('youtube-hider');
+                    if (oldStyle) oldStyle.remove();
+                    
+                    document.head.appendChild(style);
+                    
+                    // Дополнительные меры через JavaScript
+                    setTimeout(() => {
+                        // Скрываем элементы через DOM
+                        const iframe = document.getElementById('youtube-player');
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        
+                        // Пытаемся найти и скрыть элементы
+                        try {
+                            const topButtons = iframeDoc.querySelectorAll('.ytp-chrome-top-buttons');
+                            topButtons.forEach(el => el.style.display = 'none');
+                            
+                            const title = iframeDoc.querySelector('.ytp-title-link');
+                            if (title) title.style.display = 'none';
+                            
+                            const channel = iframeDoc.querySelector('.ytp-title-channel');
+                            if (channel) channel.style.display = 'none';
+                        } catch (e) {
+                            // Cross-origin ограничения, используем только CSS
+                        }
+                    }, 1000);
+                }
+                
+                // Периодически скрываем элементы (на случай появления)
+                setInterval(hideYouTubeElements, 3000);
+                
+                // Скрываем правый клик на видео
+                document.addEventListener('contextmenu', function(e) {
+                    if (e.target.closest('.video-container')) {
+                        e.preventDefault();
+                    }
+                });
             </script>
         </body>
         </html>
