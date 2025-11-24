@@ -10,13 +10,13 @@ class SecureVideoSystem:
         self.base_url = base_url
         self.db = db
         
-        # YouTube с минимальными настройками (только скрытие значков)
-        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&fs=0"
+        # YouTube с оригинальными настройками (как было)
+        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1"
         
-        # RUTUBE
-        self.rutube_url = "https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48?autoplay=1&controls=0"
+        # RUTUBE - будем использовать тот же подход что и для YouTube
+        self.rutube_url = "https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48"
         
-        logging.info("🔧 Video system initialized with clean YouTube and RUTUBE links")
+        logging.info("🔧 Video system initialized with original YouTube approach")
     
     def generate_secure_link(self, user_id: int, platform: str = "youtube") -> str:
         """Генерирует защищенную ссылку"""

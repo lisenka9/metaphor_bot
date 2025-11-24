@@ -67,11 +67,9 @@ def payment_callback():
 
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
-    """Безопасный видео-плеер в едином стиле"""
+    """Безопасный видео-плеер с ограниченным доступом (оригинальный подход)"""
     try:
         logging.info(f"🔧 Secure video requested for hash: {link_hash}")
-        
-        # Получаем данные ссылки
         link_data = db.get_video_link(link_hash)
         
         if not link_data:
@@ -86,297 +84,263 @@ def secure_video_player(link_hash):
             </html>
             """, 404
         
-        user_id = link_data['user_id']
-        platform = link_data['platform']
+        # Проверяем срок действия
+        if datetime.now() > link_data['expires_at']:
+            logging.info(f"❌ Link expired: {link_hash}")
+            db.cleanup_expired_video_links()
+            return """
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Срок действия ссылки истёк</h2>
+                    <p>Получите новую ссылку в боте.</p>
+                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                </body>
+            </html>
+            """, 403
+        
         video_url = link_data['video_url']
+        platform = link_data['platform']
+        expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
+        logging.info(f"✅ Serving {platform} video for user {link_data['user_id']}: {video_url}")
+
+        # Для YouTube используем оригинальный подход со сдвигом
+        # Для RUTUBE используем обычное отображение, но попробуем скрыть элементы
+        is_youtube = platform == "youtube"
         
-        # Для бесплатных пользователей проверяем и синхронизируем доступ
-        if not link_data['has_subscription']:
-            if not link_data['access_started_at']:
-                success = db.start_all_user_video_access(user_id)
-                if success:
-                    logging.info(f"🔄 Started video access for all user {user_id} links")
-            
-            if link_data['expires_at'] and datetime.now() > link_data['expires_at']:
-                logging.info(f"❌ Link expired: {link_hash}")
-                db.cleanup_expired_video_links()
-                return """
-                <html>
-                    <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                        <h2>❌ Время доступа истекло</h2>
-                        <p>Бесплатный доступ действителен в течение 1 часа с момента первого просмотра.</p>
-                        <p>Получите новую ссылку в боте.</p>
-                        <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
-                    </body>
-                </html>
-                """, 403
-        
-        # Форматируем информацию о времени доступа
-        if link_data['has_subscription']:
-            expires_time = link_data['expires_at'].strftime('%d.%m.%Y') if link_data['expires_at'] else "неограниченно"
-            access_info = f"🔐 Доступно по подписке до: {expires_time}"
+        if is_youtube:
+            iframe_style = "position: absolute; top: -60px; left: 0; width: 100%; height: calc(100% + 120px); border: none;"
         else:
-            if link_data['access_started_at']:
-                expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
-                access_info = f"⏰ Доступно до: {expires_time}"
-            else:
-                access_info = "⏰ Доступ откроется при первом просмотре (1 час)"
-        
-        logging.info(f"✅ Serving {platform} video for user {user_id}")
-        
-        # Единый HTML для обеих платформ
-        html_content = generate_unified_video_html(video_url, platform, access_info)
+            iframe_style = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Медитация «Дары Моря»</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .container {{
+                    background: white;
+                    border-radius: 15px;
+                    padding: 30px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    max-width: 800px;
+                    width: 90%;
+                    text-align: center;
+                }}
+                h1 {{
+                    color: #333;
+                    margin-bottom: 20px;
+                }}
+                .video-wrapper {{
+                    position: relative;
+                    width: 100%;
+                    margin: 20px 0;
+                    overflow: hidden;
+                    border-radius: 10px;
+                }}
+                .video-container {{
+                    position: relative;
+                    width: 100%;
+                    height: 0;
+                    padding-bottom: 56.25%;
+                    background: #000;
+                }}
+                .video-mask {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 10;
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
+                }}
+                .info {{
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 20px 0;
+                    text-align: left;
+                }}
+                .btn {{
+                    background: #667eea;
+                    color: white;
+                    padding: 12px 30px;
+                    text-decoration: none;
+                    border-radius: 25px;
+                    font-weight: bold;
+                    margin: 10px;
+                    display: inline-block;
+                }}
+                .platform-badge {{
+                    background: #667eea;
+                    color: white;
+                    padding: 5px 15px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    margin-bottom: 15px;
+                    display: inline-block;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🐚 Медитация «Дары Моря»</h1>
+                <div class="platform-badge">{platform.upper()}</div>
+                
+                <div class="info">
+                    <p><strong>⏰ Доступно до:</strong> {expires_time}</p>
+                </div>
+                
+                <div class="video-wrapper">
+                    <div class="video-container">
+                        <iframe src="{video_url}" 
+                            style="{iframe_style}"
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen
+                            id="video-player">
+                        </iframe>
+                        <div class="video-mask"></div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
+                </div>
+            </div>
+            
+            <script>
+            // Скрываем элементы YouTube (только для YouTube)
+            function hideYouTubeElements() {{
+                const style = document.createElement('style');
+                style.textContent = `
+                    .ytp-chrome-top,
+                    .ytp-title-link,
+                    .ytp-title-channel,
+                    .ytp-share-button,
+                    .ytp-copylink-button,
+                    .ytp-show-cards-title,
+                    .ytp-pause-overlay,
+                    .ytp-youtube-button,     
+                    .ytp-button.ytp-youtube-button {{  
+                        display: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                    }}
+                    .ytp-watermark {{
+                        display: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                    }}
+                    
+                    /* Скрываем верхнюю панель */
+                    .ytp-chrome-top {{
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        padding: 0 !important;
+                    }}
+                `;
+                document.head.appendChild(style);
+            }}
+            
+            // Пытаемся скрыть элементы RUTUBE
+            function hideRutubeElements() {{
+                // Добавляем стили для скрытия элементов RUTUBE
+                const style = document.createElement('style');
+                style.textContent = `
+                    /* Скрываем элементы управления RUTUBE */
+                    .video-page__control-panel,
+                    .video-controls,
+                    .controls,
+                    .player-controls,
+                    .top-panel,
+                    .bottom-panel,
+                    .rutube-player__controls,
+                    .video-controls__panel,
+                    .logo,
+                    .rutube-logo,
+                    .player-logo,
+                    .watermark {{
+                        display: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                    }}
+                    
+                    /* Делаем видео на весь экран */
+                    body, html, .video-container, iframe {{
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }}
+                `;
+                document.head.appendChild(style);
+                
+                // Дополнительно скрываем элементы через JS
+                setTimeout(() => {{
+                    const elements = document.querySelectorAll([
+                        '.video-page__control-panel',
+                        '.video-controls',
+                        '.controls', 
+                        '.player-controls',
+                        '.top-panel',
+                        '.bottom-panel',
+                        '.logo',
+                        '.rutube-logo'
+                    ].join(','));
+                    
+                    elements.forEach(el => {{
+                        if (el) {{
+                            el.style.display = 'none';
+                            el.style.opacity = '0';
+                            el.style.visibility = 'hidden';
+                        }}
+                    }});
+                }}, 1000);
+            }}
+            
+            // Определяем платформу и применяем соответствующий скрипт
+            document.getElementById('video-player').addEventListener('load', function() {{
+                const iframeSrc = document.getElementById('video-player').src;
+                
+                if (iframeSrc.includes('youtube')) {{
+                    setTimeout(hideYouTubeElements, 2000);
+                }} else if (iframeSrc.includes('rutube')) {{
+                    setTimeout(hideRutubeElements, 2000);
+                }}
+            }});
+            
+            // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
+            document.addEventListener('click', function() {{
+                const iframeSrc = document.getElementById('video-player').src;
+                
+                if (iframeSrc.includes('youtube')) {{
+                    hideYouTubeElements();
+                }} else if (iframeSrc.includes('rutube')) {{
+                    hideRutubeElements();
+                }}
+            }});
+            </script>
+        </body>
+        </html>
+        """
         
         return html_content
         
     except Exception as e:
         logging.error(f"❌ Error in secure video: {e}")
         return "❌ Ошибка загрузки видео", 500
-
-def generate_unified_video_html(video_url: str, platform: str, access_info: str) -> str:
-    """Генерирует единый HTML для YouTube и RUTUBE без элементов управления"""
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ru">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Медитация «Дары Моря»</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-            }}
-            .container {{
-                background: white;
-                border-radius: 15px;
-                padding: 30px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                max-width: 800px;
-                width: 90%;
-                text-align: center;
-            }}
-            h1 {{
-                color: #333;
-                margin-bottom: 20px;
-            }}
-            .video-wrapper {{
-                position: relative;
-                width: 100%;
-                margin: 20px 0;
-                overflow: hidden;
-                border-radius: 10px;
-            }}
-            .video-container {{
-                position: relative;
-                width: 100%;
-                height: 0;
-                padding-bottom: 56.25%;
-                background: #000;
-            }}
-            iframe {{
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }}
-            .video-mask {{
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-                z-index: 10;
-                background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
-            }}
-            .info {{
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 10px;
-                margin: 20px 0;
-                text-align: left;
-            }}
-            .btn {{
-                background: #667eea;
-                color: white;
-                padding: 12px 30px;
-                text-decoration: none;
-                border-radius: 25px;
-                font-weight: bold;
-                margin: 10px;
-                display: inline-block;
-            }}
-            .platform-badge {{
-                background: #667eea;
-                color: white;
-                padding: 5px 15px;
-                border-radius: 20px;
-                font-size: 14px;
-                margin-bottom: 15px;
-                display: inline-block;
-            }}
-            
-            /* Скрываем все возможные элементы управления */
-            .video-container::after {{
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-                z-index: 20;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🐚 Медитация «Дары Моря»</h1>
-            <div class="platform-badge">{platform.upper()}</div>
-            
-            <div class="info">
-                <p><strong>{access_info}</strong></p>
-            </div>
-            
-            <div class="video-wrapper">
-                <div class="video-container">
-                    <iframe src="{video_url}" 
-                        frameborder="0" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                        allowfullscreen
-                        id="video-player">
-                    </iframe>
-                    <div class="video-mask"></div>
-                </div>
-            </div>
-            
-            <div style="margin-top: 20px;">
-                <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
-            </div>
-        </div>
-        
-        <script>
-        // Скрываем элементы YouTube
-        function hideYouTubeElements() {{
-            if (!window.location.href.includes('youtube')) return;
-            
-            const style = document.createElement('style');
-            style.textContent = `
-                .ytp-chrome-top,
-                .ytp-title-link,
-                .ytp-title-channel,
-                .ytp-share-button,
-                .ytp-copylink-button,
-                .ytp-show-cards-title,
-                .ytp-pause-overlay,
-                .ytp-youtube-button,     
-                .ytp-button.ytp-youtube-button,
-                .ytp-watermark {{
-                    display: none !important;
-                    opacity: 0 !important;
-                    visibility: hidden !important;
-                }}
-                
-                .ytp-chrome-top {{
-                    height: 0 !important;
-                    min-height: 0 !important;
-                    padding: 0 !important;
-                }}
-            `;
-            document.head.appendChild(style);
-        }}
-        
-        // Скрываем элементы RUTUBE
-        function hideRutubeElements() {{
-            if (!window.location.href.includes('rutube')) return;
-            
-            const style = document.createElement('style');
-            style.textContent = `
-                /* Скрываем элементы управления RUTUBE */
-                .video-page__control-panel,
-                .video-controls,
-                .controls,
-                .player-controls,
-                .top-panel,
-                .bottom-panel,
-                .rutube-player__controls,
-                .video-controls__panel {{
-                    display: none !important;
-                    opacity: 0 !important;
-                    visibility: hidden !important;
-                }}
-                
-                /* Скрываем логотип RUTUBE */
-                .logo,
-                .rutube-logo,
-                .player-logo,
-                .watermark {{
-                    display: none !important;
-                }}
-                
-                /* Убираем отступы для полноэкранного вида */
-                body, html {{
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }}
-            `;
-            document.head.appendChild(style);
-            
-            // Дополнительно пытаемся найти и скрыть элементы через JavaScript
-            setTimeout(() => {{
-                const elements = document.querySelectorAll([
-                    '.video-page__control-panel',
-                    '.video-controls', 
-                    '.controls',
-                    '.player-controls',
-                    '.top-panel',
-                    '.bottom-panel',
-                    '.logo',
-                    '.rutube-logo',
-                    '.watermark'
-                ].join(','));
-                
-                elements.forEach(el => {{
-                    if (el) {{
-                        el.style.display = 'none';
-                        el.style.opacity = '0';
-                        el.style.visibility = 'hidden';
-                    }}
-                }});
-            }}, 1000);
-        }}
-        
-        // Определяем платформу и скрываем соответствующие элементы
-        function hideVideoElements() {{
-            if (window.location.href.includes('youtube')) {{
-                hideYouTubeElements();
-            }} else if (window.location.href.includes('rutube')) {{
-                hideRutubeElements();
-            }}
-        }}
-        
-        // Запускаем скрытие элементов
-        document.getElementById('video-player').addEventListener('load', function() {{
-            setTimeout(hideVideoElements, 2000);
-        }});
-        
-        // Периодически проверяем и скрываем появляющиеся элементы
-        setInterval(hideVideoElements, 3000);
-        document.addEventListener('click', hideVideoElements);
-        </script>
-    </body>
-    </html>
-    """
 
 def handle_payment_notification(event_data):
     """Обрабатывает уведомление о платеже"""
