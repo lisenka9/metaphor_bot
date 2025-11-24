@@ -220,6 +220,12 @@ def secure_video_player(link_hash):
                         .ytp-copylink-button,
                         .ytp-show-cards-title,
                         .ytp-pause-overlay,
+                        .ytp-youtube-button,     
+                        .ytp-button.ytp-youtube-button {{  
+                            display: none !important;
+                            opacity: 0 !important;
+                            visibility: hidden !important;
+                        }}
                         .ytp-watermark {{
                             display: none !important;
                             opacity: 0 !important;
