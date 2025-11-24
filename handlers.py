@@ -284,9 +284,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_guide_from_button(query, context)
     
     elif query.data == "report_problem":
+        logging.info(f"📝 Report problem button clicked by user {user_id}")
         await show_report_problem_from_button(query, context)
         
     elif query.data == "start_report_form":
+        logging.info(f"📝 Start report form clicked by user {user_id}")
         await start_report_form(query, context)
     
     elif query.data == "buy":
@@ -4149,6 +4151,7 @@ async def report_problem_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def show_report_problem_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает информацию о сообщении проблемы из кнопки меню"""
+    logging.info(f"🔧 show_report_problem_from_button called for user {query.from_user.id}")
     report_text = """
 🆘 Сообщить о проблеме
 
@@ -4167,6 +4170,7 @@ async def show_report_problem_from_button(query, context: ContextTypes.DEFAULT_T
 
 async def start_report_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы проблемы"""
+    logging.info(f"🔧 start_report_form called for user {query.from_user.id}")
     # Убираем кнопку из предыдущего сообщения
     await query.edit_message_reply_markup(reply_markup=None)
     
@@ -4308,3 +4312,20 @@ async def admin_reports(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+async def debug_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная команда для проверки кнопок"""
+    user = update.effective_user
+    
+    keyboard = [
+        [InlineKeyboardButton("🆘 Сообщить о проблеме", callback_data="report_problem")],
+        [InlineKeyboardButton("📝 Написать о проблеме", callback_data="start_report_form")],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🔧 Отладочные кнопки:",
+        reply_markup=reply_markup
+    )
+
+    
