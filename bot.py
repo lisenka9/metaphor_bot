@@ -264,8 +264,8 @@ def generate_youtube_html(video_url: str, expires_time: str) -> str:
     </html>
     """
 
-def generate_rutube_plyr_html(expires_time: str) -> str:
-    """Генерирует HTML для RUTUBE с Plyr.io"""
+def generate_rutube_videojs_html(expires_time: str) -> str:
+    """Генерирует HTML для RUTUBE с Video.js"""
     return f"""
     <!DOCTYPE html>
     <html lang="ru">
@@ -274,8 +274,8 @@ def generate_rutube_plyr_html(expires_time: str) -> str:
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Медитация «Дары Моря»</title>
         
-        <!-- Plyr.io CSS -->
-        <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+        <!-- Video.js CSS -->
+        <link href="https://vjs.zencdn.net/8.0.4/video-js.css" rel="stylesheet" />
         <style>
             body {{
                 font-family: Arial, sans-serif;
@@ -315,7 +315,7 @@ def generate_rutube_plyr_html(expires_time: str) -> str:
                 padding-bottom: 56.25%;
                 background: #000;
             }}
-            #player {{
+            .video-js {{
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -349,15 +349,15 @@ def generate_rutube_plyr_html(expires_time: str) -> str:
                 display: inline-block;
             }}
             
-            /* Полностью скрываем все элементы управления */
-            .plyr__controls {{
+            /* Кастомизация Video.js - скрываем ненужные элементы */
+            .vjs-control-bar {{
                 display: none !important;
             }}
-            .plyr__control {{
+            .vjs-big-play-button {{
                 display: none !important;
             }}
-            .plyr--full-ui {{
-                --plyr-control-icon-size: 0px;
+            .vjs-poster {{
+                background-size: cover !important;
             }}
         </style>
     </head>
@@ -372,7 +372,20 @@ def generate_rutube_plyr_html(expires_time: str) -> str:
             
             <div class="video-wrapper">
                 <div class="video-container">
-                    <div id="player" data-plyr-provider="html5" data-plyr-embed-id="af23160e9d682ffcb8c9819e69fedd48"></div>
+                    <video
+                        id="meditation-video"
+                        class="video-js vjs-default-skin"
+                        controls
+                        preload="auto"
+                        autoplay
+                        playsinline
+                        data-setup='{{}}'
+                    >
+                        <source src="https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48" type="video/mp4">
+                        <p class="vjs-no-js">
+                            Для просмотра видео пожалуйста включите JavaScript
+                        </p>
+                    </video>
                 </div>
             </div>
             
@@ -381,65 +394,52 @@ def generate_rutube_plyr_html(expires_time: str) -> str:
             </div>
         </div>
 
-        <!-- Plyr.io JavaScript -->
-        <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+        <!-- Video.js JavaScript -->
+        <script src="https://vjs.zencdn.net/8.0.4/video.min.js"></script>
         
         <script>
-        // Пытаемся инициализировать Plyr с RUTUBE
-        try {{
-            const player = new Plyr('#player', {{
-                autoplay: true,
-                muted: true, // Автовоспроизведение требует muted
-                controls: [], // Пустой массив - никаких контролов
-                hideControls: true,
-                clickToPlay: false,
-                disableContextMenu: true,
-                settings: [],
-                captions: {{ active: false }},
-                fullscreen: {{ enabled: false }},
-                seekTime: 0,
-                volume: 0,
-                ratio: '16:9'
-            }});
+        // Инициализация Video.js
+        var player = videojs('meditation-video');
+        
+        // Скрываем элементы управления после инициализации
+        player.ready(function() {{
+            // Скрываем control bar
+            const controlBar = player.controlBar;
+            if (controlBar) {{
+                controlBar.hide();
+            }}
             
-            // Скрываем все элементы управления
-            player.on('ready', function() {{
-                const controls = document.querySelectorAll('.plyr__controls, .plyr__control');
-                controls.forEach(control => {{
+            // Скрываем другие элементы
+            const bigPlayButton = player.bigPlayButton;
+            if (bigPlayButton) {{
+                bigPlayButton.hide();
+            }}
+            
+            // Автовоспроизведение
+            player.play();
+        }});
+        
+        // Периодически скрываем появляющиеся элементы
+        setInterval(() => {{
+            const controls = document.querySelectorAll('.vjs-control-bar, .vjs-big-play-button');
+            controls.forEach(control => {{
+                if (control) {{
                     control.style.display = 'none';
                     control.style.opacity = '0';
                     control.style.visibility = 'hidden';
-                }});
+                }}
             }});
-            
-        }} catch (error) {{
-            console.log('Plyr error:', error);
-            // Если Plyr не работает, показываем iframe
-            document.getElementById('player').innerHTML = `
-                <iframe 
-                    src="https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48?autoplay=1" 
-                    style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"
-                    allow="autoplay"
-                    allowfullscreen
-                ></iframe>
-            `;
-        }}
+        }}, 1000);
         
-        // Агрессивное скрытие любых элементов управления
-        setInterval(() => {{
-            const controls = document.querySelectorAll([
-                '.plyr__controls', '.plyr__control', 
-                '.vjs-control-bar', '.vjs-big-play-button',
-                '[class*="control"]', '[class*="button"]'
-            ].join(','));
-            
+        // Скрываем при клике
+        document.addEventListener('click', function() {{
+            const controls = document.querySelectorAll('.vjs-control-bar, .vjs-big-play-button');
             controls.forEach(control => {{
-                control.style.display = 'none';
-                control.style.opacity = '0';
-                control.style.visibility = 'hidden';
-                control.style.pointerEvents = 'none';
+                if (control) {{
+                    control.style.display = 'none';
+                }}
             }});
-        }}, 500);
+        }});
         </script>
     </body>
     </html>

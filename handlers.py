@@ -3977,7 +3977,7 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         if hasattr(sub_end, 'date'):
             has_active_subscription = sub_end.date() >= datetime.now().date()
             if has_active_subscription:
-                subscription_text = f"\n💎 *Ваша подписка активна до:* {sub_end.strftime('%d.%m.%Y')}"
+                subscription_text = f"\n💎 *Видео доступно до:* {sub_end.strftime('%d.%m.%Y')}"
             else:
                 subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
         else:
