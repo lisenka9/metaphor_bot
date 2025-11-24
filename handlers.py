@@ -4036,3 +4036,73 @@ async def update_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         logging.error(f"❌ Error updating video table: {e}")
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def fix_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принудительно обновляет таблицу video_links (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        db.update_video_links_table()
+        await update.message.reply_text("✅ Таблица video_links обновлена! Колонка base_hash добавлена.")
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating video table: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def recreate_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Полностью пересоздает таблицу video_links (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Создаем новую таблицу с правильной структурой
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS video_links_new (
+                link_hash TEXT PRIMARY KEY,
+                user_id BIGINT REFERENCES users(user_id),
+                video_url TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                has_subscription BOOLEAN DEFAULT FALSE,
+                access_started_at TIMESTAMP,
+                expires_at TIMESTAMP,
+                base_hash TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Копируем данные из старой таблицы если она существует
+        cursor.execute('''
+            INSERT INTO video_links_new (link_hash, user_id, video_url, platform, has_subscription, expires_at, created_at)
+            SELECT 
+                link_hash, 
+                user_id,
+                COALESCE(video_url, yandex_link) as video_url,
+                COALESCE(platform, 'youtube') as platform,
+                COALESCE(has_subscription, FALSE) as has_subscription,
+                expires_at,
+                created_at
+            FROM video_links 
+            WHERE link_hash NOT IN (SELECT link_hash FROM video_links_new)
+        ''')
+        
+        # Переименовываем таблицы
+        cursor.execute('DROP TABLE IF EXISTS video_links_old')
+        cursor.execute('ALTER TABLE IF EXISTS video_links RENAME TO video_links_old')
+        cursor.execute('ALTER TABLE video_links_new RENAME TO video_links')
+        
+        conn.commit()
+        await update.message.reply_text("✅ Таблица video_links полностью пересоздана с новой структурой!")
+        
+    except Exception as e:
+        logging.error(f"❌ Error recreating video table: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")

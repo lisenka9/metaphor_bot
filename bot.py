@@ -845,6 +845,8 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
             application.add_handler(CommandHandler("meditation", handlers.meditation_command))
             application.add_handler(CommandHandler("update_video_table", handlers.update_video_table))
+            application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
+            application.add_handler(CommandHandler("recreate_video_table", handlers.recreate_video_table))
 
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 
