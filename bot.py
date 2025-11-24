@@ -134,7 +134,7 @@ def secure_video_player(link_hash):
         return "❌ Ошибка загрузки видео", 500
 
 def generate_unified_video_html(video_url: str, platform: str, access_info: str) -> str:
-    """Генерирует единый HTML для YouTube и RUTUBE в стиле как было"""
+    """Генерирует единый HTML для YouTube и RUTUBE без элементов управления"""
     return f"""
     <!DOCTYPE html>
     <html lang="ru">
@@ -225,6 +225,18 @@ def generate_unified_video_html(video_url: str, platform: str, access_info: str)
                 margin-bottom: 15px;
                 display: inline-block;
             }}
+            
+            /* Скрываем все возможные элементы управления */
+            .video-container::after {{
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 20;
+            }}
         </style>
     </head>
     <body>
@@ -254,7 +266,7 @@ def generate_unified_video_html(video_url: str, platform: str, access_info: str)
         </div>
         
         <script>
-        // Скрываем элементы YouTube (только для YouTube)
+        // Скрываем элементы YouTube
         function hideYouTubeElements() {{
             if (!window.location.href.includes('youtube')) return;
             
@@ -275,7 +287,6 @@ def generate_unified_video_html(video_url: str, platform: str, access_info: str)
                     visibility: hidden !important;
                 }}
                 
-                /* Скрываем верхнюю панель */
                 .ytp-chrome-top {{
                     height: 0 !important;
                     min-height: 0 !important;
@@ -285,13 +296,83 @@ def generate_unified_video_html(video_url: str, platform: str, access_info: str)
             document.head.appendChild(style);
         }}
         
-        // Ждем загрузки iframe
+        // Скрываем элементы RUTUBE
+        function hideRutubeElements() {{
+            if (!window.location.href.includes('rutube')) return;
+            
+            const style = document.createElement('style');
+            style.textContent = `
+                /* Скрываем элементы управления RUTUBE */
+                .video-page__control-panel,
+                .video-controls,
+                .controls,
+                .player-controls,
+                .top-panel,
+                .bottom-panel,
+                .rutube-player__controls,
+                .video-controls__panel {{
+                    display: none !important;
+                    opacity: 0 !important;
+                    visibility: hidden !important;
+                }}
+                
+                /* Скрываем логотип RUTUBE */
+                .logo,
+                .rutube-logo,
+                .player-logo,
+                .watermark {{
+                    display: none !important;
+                }}
+                
+                /* Убираем отступы для полноэкранного вида */
+                body, html {{
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }}
+            `;
+            document.head.appendChild(style);
+            
+            // Дополнительно пытаемся найти и скрыть элементы через JavaScript
+            setTimeout(() => {{
+                const elements = document.querySelectorAll([
+                    '.video-page__control-panel',
+                    '.video-controls', 
+                    '.controls',
+                    '.player-controls',
+                    '.top-panel',
+                    '.bottom-panel',
+                    '.logo',
+                    '.rutube-logo',
+                    '.watermark'
+                ].join(','));
+                
+                elements.forEach(el => {{
+                    if (el) {{
+                        el.style.display = 'none';
+                        el.style.opacity = '0';
+                        el.style.visibility = 'hidden';
+                    }}
+                }});
+            }}, 1000);
+        }}
+        
+        // Определяем платформу и скрываем соответствующие элементы
+        function hideVideoElements() {{
+            if (window.location.href.includes('youtube')) {{
+                hideYouTubeElements();
+            }} else if (window.location.href.includes('rutube')) {{
+                hideRutubeElements();
+            }}
+        }}
+        
+        // Запускаем скрытие элементов
         document.getElementById('video-player').addEventListener('load', function() {{
-            setTimeout(hideYouTubeElements, 2000);
+            setTimeout(hideVideoElements, 2000);
         }});
         
-        // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
-        document.addEventListener('click', hideYouTubeElements);
+        // Периодически проверяем и скрываем появляющиеся элементы
+        setInterval(hideVideoElements, 3000);
+        document.addEventListener('click', hideVideoElements);
         </script>
     </body>
     </html>
