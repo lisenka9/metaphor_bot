@@ -18,6 +18,7 @@ class SecureVideoSystem:
         params = [
             "autoplay=1",
             "rel=0",                # Скрыть похожие видео
+            "fs=0",
             "modestbranding=1",     # Минимум лого YouTube
             "showinfo=0",           # Скрыть информацию
             "controls=1",           

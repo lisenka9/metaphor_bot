@@ -194,9 +194,9 @@ def secure_video_player(link_hash):
                 
                 <div class="video-wrapper">
                     <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
+                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
                             frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowfullscreen
                             id="video-player">
                         </iframe>
@@ -232,37 +232,8 @@ def secure_video_player(link_hash):
                             min-height: 0 !important;
                             padding: 0 !important;
                         }}
-                        
-                        /* В полноэкранном режиме скрываем дополнительные элементы */
-                        .html5-video-player:fullscreen .ytp-chrome-top,
-                        .html5-video-player:fullscreen .ytp-title-text,
-                        .html5-video-player:fullscreen .ytp-watermark,
-                        .html5-video-player:fullscreen .ytp-share-button,
-                        .html5-video-player:fullscreen .ytp-copylink-button {{
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
                     `;
                     document.head.appendChild(style);
-                }}
-                
-                // Дополнительная функция для скрытия элементов в полноэкранном режиме
-                function hideFullscreenElements() {{
-                    const fullscreenStyle = document.createElement('style');
-                    fullscreenStyle.textContent = `
-                        /* Скрываем элементы в полноэкранном режиме */
-                        .ytp-title-text,
-                        .ytp-watermark,
-                        .ytp-share-button,
-                        .ytp-copylink-button,
-                        .ytp-youtube-button {{
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                    `;
-                    document.head.appendChild(fullscreenStyle);
                 }}
                 
                 // Ждем загрузки iframe
@@ -272,20 +243,6 @@ def secure_video_player(link_hash):
                 
                 // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
                 document.addEventListener('click', hideYouTubeElements);
-                
-                // Скрываем элементы при переходе в полноэкранный режим
-                document.addEventListener('fullscreenchange', function() {{
-                    setTimeout(hideYouTubeElements, 100);
-                    setTimeout(hideFullscreenElements, 100);
-                }});
-                
-                document.addEventListener('webkitfullscreenchange', function() {{
-                    setTimeout(hideYouTubeElements, 100);
-                    setTimeout(hideFullscreenElements, 100);
-                }});
-                
-                // Периодически проверяем и скрываем элементы
-                setInterval(hideYouTubeElements, 3000);
             </script>
         </body>
         </html>
