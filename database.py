@@ -121,6 +121,23 @@ class DatabaseManager:
                 )
             ''')
 
+            # Таблица для видео ссылок
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS video_links (
+                    link_hash TEXT PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    video_url TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    has_subscription BOOLEAN DEFAULT FALSE,
+                    access_started_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        
+        # Обновляем структуру существующей таблицы
+        self.update_video_links_table()
+
             # Обновляем таблицу пользователей
             cursor.execute('''
                 ALTER TABLE users 
@@ -1243,13 +1260,16 @@ class DatabaseManager:
             conn.close()
 
     def save_video_link(self, link_hash: str, user_id: int, video_url: str, 
-                    expires_at: datetime, platform: str, has_subscription: bool) -> bool:
+                   expires_at: datetime, platform: str, has_subscription: bool) -> bool:
         """Сохраняет информацию о видео ссылке в базу"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            # Создаем таблицу для видео ссылок с дополнительными полями
+            # Сначала обновляем структуру таблицы
+            self.update_video_links_table()
+            
+            # Создаем таблицу для видео ссылок с дополнительными полями (если не существует)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS video_links (
                     link_hash TEXT PRIMARY KEY,
@@ -1267,6 +1287,12 @@ class DatabaseManager:
             cursor.execute('''
                 INSERT INTO video_links (link_hash, user_id, video_url, platform, has_subscription, expires_at)
                 VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (link_hash) 
+                DO UPDATE SET 
+                    video_url = EXCLUDED.video_url,
+                    platform = EXCLUDED.platform,
+                    has_subscription = EXCLUDED.has_subscription,
+                    expires_at = EXCLUDED.expires_at
             ''', (link_hash, user_id, video_url, platform, has_subscription, expires_at))
             
             conn.commit()
@@ -1352,6 +1378,47 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def update_video_links_table(self):
+        """Обновляет структуру таблицы video_links"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Добавляем недостающие колонки
+            cursor.execute('''
+                ALTER TABLE video_links 
+                ADD COLUMN IF NOT EXISTS video_url TEXT,
+                ADD COLUMN IF NOT EXISTS platform TEXT,
+                ADD COLUMN IF NOT EXISTS has_subscription BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS access_started_at TIMESTAMP
+            ''')
             
+            # Если есть старая колонка yandex_link, переносим данные
+            cursor.execute('''
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'video_links' AND column_name = 'yandex_link'
+            ''')
+            
+            has_yandex_column = cursor.fetchone() is not None
+            
+            if has_yandex_column:
+                cursor.execute('''
+                    UPDATE video_links 
+                    SET video_url = yandex_link 
+                    WHERE video_url IS NULL AND yandex_link IS NOT NULL
+                ''')
+                logging.info("✅ Migrated data from yandex_link to video_url")
+            
+            conn.commit()
+            logging.info("✅ Video links table updated successfully")
+            
+        except Exception as e:
+            logging.error(f"❌ Error updating video links table: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+    
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

@@ -4010,3 +4010,18 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         disable_web_page_preview=True
     )
     
+async def update_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновляет таблицу video_links (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        db.update_video_links_table()
+        await update.message.reply_text("✅ Таблица video_links обновлена!")
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating video table: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
