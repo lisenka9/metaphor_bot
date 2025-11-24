@@ -135,8 +135,8 @@ class DatabaseManager:
                 )
             ''')
         
-        # Обновляем структуру существующей таблицы
-        self.update_video_links_table()
+            # Обновляем структуру существующей таблицы
+            self.update_video_links_table()
 
             # Обновляем таблицу пользователей
             cursor.execute('''
