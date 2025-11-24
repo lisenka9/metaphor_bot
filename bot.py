@@ -1013,6 +1013,18 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("update_video_table", handlers.update_video_table))
             application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
             application.add_handler(CommandHandler("recreate_video_table", handlers.recreate_video_table))
+            application.add_handler(CommandHandler("report", handlers.report_problem_command))
+            application.add_handler(CommandHandler("reports", handlers.admin_reports))
+            
+            application.add_handler(CallbackQueryHandler(
+                handlers.show_report_problem_from_button, 
+                pattern="^report_problem$"
+            ))
+            
+            application.add_handler(CallbackQueryHandler(
+                handlers.start_report_form, 
+                pattern="^start_report_form$"
+            ))
 
             application.add_handler(CallbackQueryHandler(
                 handlers.handle_subscription_selection, 

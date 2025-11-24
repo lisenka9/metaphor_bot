@@ -77,6 +77,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить цифровую колоду (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
+/meditation - Медитация "Дары Моря"
+/report - Сообщить о проблеме
 /history - История ваших карт
 /subscribe - Приобрести подписку
 /consult - Запись на консультацию
@@ -127,6 +129,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить цифровую колоду (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
+/meditation - Медитация "Дары Моря"
+/report - Сообщить о проблеме
 /subscribe - Приобрести подписку
 /history - История ваших карт
         """
@@ -278,6 +282,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "guide":
         await show_guide_from_button(query, context)
+    
+    elif query.data == "report_problem":
+        await show_report_problem_from_button(query, context)
+        
+    elif query.data == "start_report_form":
+        await start_report_form(query, context)
     
     elif query.data == "buy":
         await show_buy_from_button(query, context)
@@ -531,6 +541,8 @@ async def show_main_menu_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить цифровую колоду (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
+/meditation - Медитация "Дары Моря"
+/report - Сообщить о проблеме
 /subscribe - Приобрести подписку
 /history - История ваших карт
 /consult - Запись на консультацию
@@ -875,6 +887,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /history - Посмотреть историю всех ваших карт
 /consult - Запись на консультацию
 /subscribe - Приобрести подписку
+/meditation - Медитация "Дары Моря"
+/report - Сообщить о проблеме
 /help - Эта справка
 
 ❓ Как это работает?
@@ -1464,6 +1478,8 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /buy - Купить цифровую колоду (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
+/meditation - Медитация "Дары Моря"
+/report - Сообщить о проблеме
 /history - История ваших карт
 /subscribe - Приобрести подписку
 /consult - Запись на консультацию
@@ -2451,11 +2467,14 @@ async def handle_random_messages(update: Update, context: ContextTypes.DEFAULT_T
         if user_message.startswith('/'):
             return
         
-        # ✅ НЕТ ДРУГИХ ФИЛЬТРОВ - реагируем на ВСЕ сообщения
-        
-        # Проверяем, не находится ли пользователь в процессе заполнения формы
+        # ✅ Проверяем, не находится ли пользователь в процессе заполнения формы консультации
         if 'consult_form' in context.user_data:
             await handle_consult_form(update, context)
+            return
+            
+        # ✅ Проверяем, не находится ли пользователь в процессе заполнения формы проблемы
+        if 'report_form' in context.user_data:
+            await handle_report_form(update, context)
             return
         
         logging.info(f"🔄 Random message from user {update.effective_user.id}: '{user_message}'")
@@ -2490,6 +2509,8 @@ async def handle_random_messages(update: Update, context: ContextTypes.DEFAULT_T
 /buy - Купить цифровую колоду (88 карт без рамки - возможности и 88 карт с рамкой - ограничения + методические рекомендации) 
 /profile - Ваша статистика
 /help - Помощь
+/meditation - Медитация "Дары Моря"
+/report - Сообщить о проблеме
 /history - История ваших карт
 /subscribe - Приобрести подписку
 /consult - Запись на консультацию
@@ -4106,3 +4127,184 @@ async def recreate_video_table(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logging.error(f"❌ Error recreating video table: {e}")
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+
+async def report_problem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /report - сообщить о проблеме"""
+    report_text = """
+🆘 Сообщить о проблеме
+
+Нашли ошибку в работе бота? Есть вопросы или предложения по улучшению? 
+
+Напишите нам о проблеме, и мы обязательно её исправим!
+
+Нажмите кнопку ниже чтобы начать описание проблемы:
+"""
+    
+    await update.message.reply_text(
+        report_text,
+        reply_markup=keyboard.get_report_problem_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def show_report_problem_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о сообщении проблемы из кнопки меню"""
+    report_text = """
+🆘 Сообщить о проблеме
+
+Нашли ошибку в работе бота? Есть вопросы или предложения по улучшению? 
+
+Напишите нам о проблеме, и мы обязательно её исправим!
+
+Нажмите кнопку ниже чтобы начать описание проблемы:
+"""
+    
+    await query.message.reply_text(
+        report_text,
+        reply_markup=keyboard.get_report_problem_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def start_report_form(query, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает процесс заполнения формы проблемы"""
+    # Убираем кнопку из предыдущего сообщения
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Сохраняем состояние формы
+    context.user_data['report_form'] = {
+        'step': 1,
+        'user_id': query.from_user.id,
+        'username': query.from_user.username or query.from_user.first_name
+    }
+    
+    # Первый вопрос формы
+    question_text = """
+📝 Сообщение о проблеме
+
+Пожалуйста, опишите проблему, с которой вы столкнулись, или ваше предложение по улучшению бота.
+
+1. Опишите проблему или предложение максимально подробно:
+"""
+    
+    await query.message.reply_text(
+        question_text,
+        parse_mode='Markdown'
+    )
+
+async def handle_report_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ответы формы проблемы"""
+    user_data = context.user_data.get('report_form', {})
+    
+    if not user_data or 'step' not in user_data:
+        # Если нет активной формы, показываем помощь
+        await help_command(update, context)
+        return
+    
+    step = user_data['step']
+    user_id = user_data['user_id']
+    
+    # Проверяем, что сообщение от того же пользователя
+    if update.effective_user.id != user_id:
+        return
+    
+    user_answer = update.message.text
+    
+    if step == 1:
+        user_data['problem_description'] = user_answer
+        user_data['step'] = 2
+        question_text = """
+2. Укажите, как мы можем с вами связаться для уточнений (Telegram, email или оставьте "не нужно"):
+"""
+        await update.message.reply_text(question_text, parse_mode='Markdown')
+        
+    elif step == 2:
+        user_data['contact'] = user_answer
+        
+        # Получаем московское время
+        try:
+            import pytz
+            moscow_tz = pytz.timezone('Europe/Moscow')
+            moscow_time = datetime.now(moscow_tz)
+        except:
+            moscow_time = datetime.now()
+        
+        # Формируем итоговое сообщение для отправки администраторам
+        report_summary = f"""
+🆘 *Новое сообщение о проблеме*
+
+👤 *От пользователя:* @{update.effective_user.username or 'не указан'}
+🆔 *User ID:* {user_id}
+
+📝 *Описание проблемы:*
+{user_data.get('problem_description', 'Не указано')}
+
+📞 *Контакт для связи:* {user_data.get('contact', 'Не указано')}
+
+⏰ *Время сообщения:* {moscow_time.strftime('%d.%m.%Y %H:%M')} (мск)
+"""
+        
+        try:
+            # Отправляем сообщение всем администраторам
+            from config import ADMIN_IDS
+            sent_to_admins = []
+            
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=report_summary,
+                        parse_mode='Markdown'
+                    )
+                    sent_to_admins.append(admin_id)
+                    logging.info(f"✅ Report sent to admin {admin_id}")
+                except Exception as admin_error:
+                    logging.error(f"❌ Error sending to admin {admin_id}: {admin_error}")
+            
+            if sent_to_admins:
+                # Подтверждаем пользователю
+                success_text = """
+✅ *Спасибо! Ваше сообщение отправлено!*
+
+Мы рассмотрим вашу проблему в ближайшее время и постараемся её исправить.
+
+"""
+                await update.message.reply_text(
+                    success_text,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard.get_main_menu_keyboard()
+                )
+            else:
+                raise Exception("Не удалось отправить ни одному администратору")
+            
+        except Exception as e:
+            logging.error(f"❌ Error sending report: {e}")
+            
+        
+            await update.message.reply_text(
+                copyable_report,
+                parse_mode='Markdown',
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+        
+        # Очищаем данные формы
+        if 'report_form' in context.user_data:
+            del context.user_data['report_form']
+
+async def admin_reports(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает сообщения о проблемах для администратора"""
+    user = update.effective_user
+    
+    # Проверяем, является ли пользователь администратором
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    # Здесь можно добавить логику для просмотра отчетов из базы данных
+    # если вы решите сохранять их в базу
+    
+    await update.message.reply_text(
+        "📋 Команда для просмотра сообщений о проблемах.\n"
+        "Сообщения автоматически отправляются всем администраторам.",
+        parse_mode='Markdown'
+    )
+

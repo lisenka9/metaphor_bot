@@ -155,7 +155,8 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
         [InlineKeyboardButton("📖 История карт", callback_data="history")],
-        [InlineKeyboardButton("📆 Запись на консультацию", callback_data="consult")]
+        [InlineKeyboardButton("📆 Запись на консультацию", callback_data="consult")],
+        [InlineKeyboardButton("🆘 Сообщить о проблеме", callback_data="report_problem")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -379,5 +380,20 @@ def get_meditation_platforms_keyboard(youtube_link: str, rutube_link: str):
         [InlineKeyboardButton("🎬 Смотреть на YouTube", url=youtube_link)],
         [InlineKeyboardButton("🎬 Смотреть на RUTUBE", url=rutube_link)],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_report_problem_keyboard():
+    """Клавиатура для сообщения о проблеме"""
+    keyboard = [
+        [InlineKeyboardButton("📝 Написать о проблеме", callback_data="start_report_form")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_report_form_keyboard():
+    """Клавиатура во время заполнения формы (можно использовать для отмены)"""
+    keyboard = [
+        [InlineKeyboardButton("❌ Отменить отправку", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
