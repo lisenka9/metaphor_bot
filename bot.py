@@ -101,8 +101,7 @@ def secure_video_player(link_hash):
         yandex_link = link_data['yandex_link']
         expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
         logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
-        
-        # Исправленный HTML с правильными ссылками
+
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">

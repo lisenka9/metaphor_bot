@@ -22,7 +22,6 @@ class SecureVideoSystem:
             "showinfo=0",           # Скрыть информацию
             "controls=1",           
             "disablekb=1",          # Отключить клавиши
-            "fs=0",                 # Отключить полноэкранный режим
             "iv_load_policy=3",     # Скрыть аннотации
             "playsinline=1",
             "cc_load_policy=0",     # Скрыть субтитры
