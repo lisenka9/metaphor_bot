@@ -102,103 +102,14 @@ def secure_video_player(link_hash):
         platform = link_data['platform']
         expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
         
-        # Для RUTUBE используем перенаправление на страницу просмотра
-        if platform == "rutube":
-            logging.info(f"🔗 Redirecting to RUTUBE for user {link_data['user_id']}")
-            return f"""
-            <!DOCTYPE html>
-            <html lang="ru">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Медитация «Дары Моря» - RUTUBE</title>
-                <style>
-                    body {{
-                        font-family: Arial, sans-serif;
-                        margin: 0;
-                        padding: 20px;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        min-height: 100vh;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                    }}
-                    .container {{
-                        background: white;
-                        border-radius: 15px;
-                        padding: 30px;
-                        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                        max-width: 600px;
-                        width: 90%;
-                        text-align: center;
-                    }}
-                    h1 {{
-                        color: #333;
-                        margin-bottom: 20px;
-                    }}
-                    .info {{
-                        background: #f8f9fa;
-                        padding: 15px;
-                        border-radius: 10px;
-                        margin: 20px 0;
-                        text-align: left;
-                    }}
-                    .btn {{
-                        background: #667eea;
-                        color: white;
-                        padding: 12px 30px;
-                        text-decoration: none;
-                        border-radius: 25px;
-                        font-weight: bold;
-                        margin: 10px;
-                        display: inline-block;
-                    }}
-                    .warning {{
-                        background: #fff3cd;
-                        border: 1px solid #ffeaa7;
-                        color: #856404;
-                        padding: 15px;
-                        border-radius: 10px;
-                        margin: 20px 0;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🐚 Медитация «Дары Моря»</h1>
-                    
-                    <div class="info">
-                        <p><strong>⏰ Доступно до:</strong> {expires_time}</p>
-                        <p><strong>🎬 Платформа:</strong> RUTUBE</p>
-                    </div>
-                    
-                    <div class="warning">
-                        <strong>⚠️ Внимание!</strong><br>
-                        Вы будете перенаправлены на RUTUBE для просмотра медитации.
-                    </div>
-                    
-                    <p>Нажмите кнопку ниже чтобы открыть медитацию на RUTUBE:</p>
-                    
-                    <a href="{video_url}" class="btn" target="_blank">🎬 Смотреть на RUTUBE</a>
-                    
-                    <div style="margin-top: 30px;">
-                        <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
-                    </div>
-                </div>
-                
-                <script>
-                    // Автоматическое перенаправление через 3 секунды
-                    setTimeout(() => {{
-                        window.open('{video_url}', '_blank');
-                    }}, 3000);
-                </script>
-            </body>
-            </html>
-            """
+        # Для YouTube используем оригинальный подход со сдвигом
+        # Для RUTUBE используем обычное отображение с усиленным скрытием элементов
+        is_youtube = platform == "youtube"
         
-        # Для YouTube используем оригинальный подход
-        logging.info(f"✅ Serving YouTube video for user {link_data['user_id']}")
+        if is_youtube:
+            iframe_style = "position: absolute; top: -60px; left: 0; width: 100%; height: calc(100% + 120px); border: none;"
+        else:
+            iframe_style = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
 
         html_content = f"""
         <!DOCTYPE html>
@@ -238,6 +149,7 @@ def secure_video_player(link_hash):
                     margin: 20px 0;
                     overflow: hidden;
                     border-radius: 10px;
+                    background: #000;
                 }}
                 .video-container {{
                     position: relative;
@@ -245,14 +157,7 @@ def secure_video_player(link_hash):
                     height: 0;
                     padding-bottom: 56.25%;
                     background: #000;
-                }}
-                iframe {{
-                    position: absolute;
-                    top: -60px;
-                    left: 0;
-                    width: 100%;
-                    height: calc(100% + 120px);
-                    border: none;
+                    overflow: hidden;
                 }}
                 .video-mask {{
                     position: absolute;
@@ -261,7 +166,7 @@ def secure_video_player(link_hash):
                     width: 100%;
                     height: 100%;
                     pointer-events: none;
-                    z-index: 10;
+                    z-index: 100;
                     background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
                 }}
                 .info {{
@@ -281,11 +186,33 @@ def secure_video_player(link_hash):
                     margin: 10px;
                     display: inline-block;
                 }}
+                .platform-badge {{
+                    background: #667eea;
+                    color: white;
+                    padding: 5px 15px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    margin-bottom: 15px;
+                    display: inline-block;
+                }}
+                
+                /* Стили для скрытия элементов RUTUBE */
+                .rutube-overlay {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 50;
+                    pointer-events: none;
+                }}
             </style>
         </head>
         <body>
             <div class="container">
                 <h1>🐚 Медитация «Дары Моря»</h1>
+                <div class="platform-badge">{platform.upper()}</div>
+                
                 <div class="info">
                     <p><strong>⏰ Доступно до:</strong> {expires_time}</p>
                 </div>
@@ -293,12 +220,14 @@ def secure_video_player(link_hash):
                 <div class="video-wrapper">
                     <div class="video-container">
                         <iframe src="{video_url}" 
+                            style="{iframe_style}"
                             frameborder="0" 
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowfullscreen
                             id="video-player">
                         </iframe>
                         <div class="video-mask"></div>
+                        <div class="rutube-overlay"></div>
                     </div>
                 </div>
                 <div style="margin-top: 20px;">
@@ -308,45 +237,171 @@ def secure_video_player(link_hash):
             
             <script>
             // Скрываем элементы YouTube
-                function hideYouTubeElements() {{
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        .ytp-chrome-top,
-                        .ytp-title-link,
-                        .ytp-title-channel,
-                        .ytp-share-button,
-                        .ytp-copylink-button,
-                        .ytp-show-cards-title,
-                        .ytp-pause-overlay,
-                        .ytp-youtube-button,     
-                        .ytp-button.ytp-youtube-button {{  
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                        .ytp-watermark {{
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                        
-                        /* Скрываем верхнюю панель */
-                        .ytp-chrome-top {{
-                            height: 0 !important;
-                            min-height: 0 !important;
-                            padding: 0 !important;
-                        }}
-                    `;
-                    document.head.appendChild(style);
+            function hideYouTubeElements() {{
+                const style = document.createElement('style');
+                style.textContent = `
+                    .ytp-chrome-top,
+                    .ytp-title-link,
+                    .ytp-title-channel,
+                    .ytp-share-button,
+                    .ytp-copylink-button,
+                    .ytp-show-cards-title,
+                    .ytp-pause-overlay,
+                    .ytp-youtube-button,     
+                    .ytp-button.ytp-youtube-button {{  
+                        display: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                    }}
+                    .ytp-watermark {{
+                        display: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                    }}
+                    
+                    .ytp-chrome-top {{
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        padding: 0 !important;
+                    }}
+                `;
+                document.head.appendChild(style);
+            }}
+            
+            // Усиленное скрытие элементов RUTUBE
+            function hideRutubeElements() {{
+                // Добавляем стили для полного скрытия
+                const style = document.createElement('style');
+                style.textContent = `
+                    /* Скрываем ВСЕ возможные элементы RUTUBE */
+                    [class*="control"],
+                    [class*="panel"],
+                    [class*="button"],
+                    [class*="logo"],
+                    [class*="watermark"],
+                    [class*="header"],
+                    [class*="footer"],
+                    [class*="toolbar"],
+                    [class*="menu"],
+                    [id*="control"],
+                    [id*="panel"],
+                    [id*="button"],
+                    [id*="logo"],
+                    .video-controls,
+                    .player-controls,
+                    .controls-panel,
+                    .top-panel,
+                    .bottom-panel,
+                    .rutube-player__controls,
+                    .video-controls__panel,
+                    .logo,
+                    .rutube-logo,
+                    .player-logo,
+                    .watermark {{
+                        display: none !important;
+                        opacity: 0 !important;
+                        visibility: hidden !important;
+                        pointer-events: none !important;
+                    }}
+                    
+                    /* Скрываем overlay элементы */
+                    .video-page__control-panel,
+                    .video-controls,
+                    .video-page__header,
+                    .video-page__footer {{
+                        display: none !important;
+                    }}
+                    
+                    /* Делаем iframe на весь экран */
+                    body, html {{
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: hidden !important;
+                    }}
+                    
+                    .video-container, .video-wrapper {{
+                        border: none !important;
+                        outline: none !important;
+                    }}
+                `;
+                document.head.appendChild(style);
+                
+                // Агрессивное скрытие через JavaScript
+                function aggressivelyHideRutube() {{
+                    // Скрываем все элементы с определенными классами/ID
+                    const selectors = [
+                        '[class*="control"]', '[class*="panel"]', '[class*="button"]',
+                        '[class*="logo"]', '[class*="watermark"]', '[class*="header"]',
+                        '[class*="footer"]', '[class*="toolbar"]', '[class*="menu"]',
+                        '[id*="control"]', '[id*="panel"]', '[id*="button"]', '[id*="logo"]',
+                        '.video-controls', '.player-controls', '.controls-panel',
+                        '.top-panel', '.bottom-panel', '.rutube-player__controls',
+                        '.video-controls__panel', '.logo', '.rutube-logo', '.player-logo',
+                        '.watermark', '.video-page__control-panel', '.video-page__header',
+                        '.video-page__footer'
+                    ];
+                    
+                    selectors.forEach(selector => {{
+                        const elements = document.querySelectorAll(selector);
+                        elements.forEach(el => {{
+                            if (el) {{
+                                el.style.display = 'none';
+                                el.style.opacity = '0';
+                                el.style.visibility = 'hidden';
+                                el.style.pointerEvents = 'none';
+                                el.remove(); // Полностью удаляем элемент
+                            }}
+                        }});
+                    }});
+                    
+                    // Скрываем элементы внутри iframe
+                    const iframe = document.getElementById('video-player');
+                    if (iframe && iframe.contentDocument) {{
+                        selectors.forEach(selector => {{
+                            const elements = iframe.contentDocument.querySelectorAll(selector);
+                            elements.forEach(el => {{
+                                if (el) {{
+                                    el.style.display = 'none';
+                                    el.style.opacity = '0';
+                                    el.style.visibility = 'hidden';
+                                    el.style.pointerEvents = 'none';
+                                }}
+                            }});
+                        }});
+                    }}
                 }}
                 
-                // Ждем загрузки iframe
-                document.getElementById('video-player').addEventListener('load', function() {{
-                    setTimeout(hideYouTubeElements, 2000);
-                }});
+                // Запускаем агрессивное скрытие несколько раз
+                aggressivelyHideRutube();
+                setTimeout(aggressivelyHideRutube, 1000);
+                setTimeout(aggressivelyHideRutube, 3000);
+                setInterval(aggressivelyHideRutube, 5000);
+            }}
+            
+            // Определяем платформу и применяем скрипт
+            function initVideoPlayer() {{
+                const iframe = document.getElementById('video-player');
+                if (!iframe) return;
                 
-                // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
-                document.addEventListener('click', hideYouTubeElements);
+                const iframeSrc = iframe.src;
+                
+                if (iframeSrc.includes('youtube')) {{
+                    setTimeout(hideYouTubeElements, 2000);
+                    setInterval(hideYouTubeElements, 5000);
+                }} else if (iframeSrc.includes('rutube')) {{
+                    setTimeout(hideRutubeElements, 1000);
+                    setInterval(hideRutubeElements, 3000);
+                }}
+            }}
+            
+            // Запускаем при загрузке
+            document.getElementById('video-player').addEventListener('load', initVideoPlayer);
+            setTimeout(initVideoPlayer, 1000);
+            
+            // Скрываем при любом взаимодействии
+            document.addEventListener('click', initVideoPlayer);
+            document.addEventListener('mousemove', initVideoPlayer);
+            document.addEventListener('touchstart', initVideoPlayer);
             </script>
         </body>
         </html>
