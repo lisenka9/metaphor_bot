@@ -9,12 +9,12 @@ class SecureVideoSystem:
     def __init__(self, base_url, db):
         self.base_url = base_url
         self.db = db
-        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA"
+        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1"
         self.rutube_url = "https://rutube.ru/video/private/af23160e9d682ffcb8c9819e69fedd48/?p=1p2eMSt-NHUeMHLo32SLcQ"
         logging.info("🔧 Video system initialized with YouTube and RUTUBE links")
     
-    def generate_secure_link(self, user_id: int, platform: str = "youtube") -> str:
-        """Генерирует защищенную ссылку с отложенным временем начала"""
+    def generate_secure_link(self, user_id: int, platform: str = "youtube", base_hash: str = None) -> str:
+        """Генерирует защищенную ссылку с общим идентификатором доступа"""
         try:
             # Определяем тип доступа
             subscription = self.db.get_user_subscription(user_id)
@@ -32,33 +32,33 @@ class SecureVideoSystem:
                     has_subscription = True
                     expires_at = datetime.combine(sub_date, datetime.max.time())
             
-            # Для пользователей без подписки время начинается при первом переходе
-            if not has_subscription:
-                # Создаем ссылку, которая при первом переходе установит время начала
-                expires_at = None  # Будет установлено при первом переходе
+            # Используем общий base_hash или создаем новый
+            if not base_hash:
+                base_hash = hashlib.sha256(f"{user_id}_{secrets.token_hex(8)}".encode()).hexdigest()[:16]
             
-            # Генерируем уникальный хеш
-            unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
+            # Создаем уникальный хеш для каждой платформы, но с общим base_hash
+            unique_string = f"{base_hash}_{platform}_{user_id}"
             link_hash = hashlib.sha256(unique_string.encode()).hexdigest()[:20]
             
             # Выбираем платформу
             video_url = self.youtube_url if platform == "youtube" else self.rutube_url
             
-            # Сохраняем в базу данных с информацией о платформе
+            # Сохраняем в базу данных с информацией о платформе и общем идентификаторе
             success = self.db.save_video_link(
                 link_hash, 
                 user_id, 
                 video_url, 
                 expires_at,
                 platform,
-                has_subscription
+                has_subscription,
+                base_hash  # Передаем общий идентификатор
             )
             
             if not success:
                 logging.error("❌ Failed to save video link to database")
                 return None
             
-            logging.info(f"✅ Generated secure {platform} link for user {user_id}, has_subscription: {has_subscription}")
+            logging.info(f"✅ Generated secure {platform} link for user {user_id}, base_hash: {base_hash}")
             
             # Возвращаем ссылку на наш защищенный плеер
             secure_url = f"{self.base_url}/secure-video/{link_hash}"
@@ -67,7 +67,7 @@ class SecureVideoSystem:
         except Exception as e:
             logging.error(f"❌ Error generating secure link: {e}")
             return None
-    
+
     def validate_link(self, link_hash: str) -> tuple:
         """Проверяет валидность ссылки и устанавливает время начала для бесплатных пользователей"""
         link_data = self.db.get_video_link(link_hash)

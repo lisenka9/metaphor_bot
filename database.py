@@ -1283,7 +1283,7 @@ class DatabaseManager:
             
             # Сохраняем в обе колонки для совместимости
             cursor.execute('''
-                INSERT INTO video_links (link_hash, user_id, yandex_link, video_url, platform, has_subscription, expires_at)
+                INSERT INTO video_links (link_hash, user_id, yandex_link, video_url, platform, has_subscription, expires_at, base_hash)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (link_hash) 
                 DO UPDATE SET 
@@ -1292,7 +1292,7 @@ class DatabaseManager:
                     platform = EXCLUDED.platform,
                     has_subscription = EXCLUDED.has_subscription,
                     expires_at = EXCLUDED.expires_at
-            ''', (link_hash, user_id, video_url, video_url, platform, has_subscription, expires_at))
+            ''', (link_hash, user_id, video_url, video_url, platform, has_subscription, expires_at, base_hash))
             
             conn.commit()
             logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}")
@@ -1435,5 +1435,84 @@ class DatabaseManager:
         finally:
             conn.close()
     
+    def create_meditation_access(self, user_id: int, base_hash: str) -> bool:
+        """Создает запись о доступе к медитации с общим временем"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Создаем таблицу для управления доступом если её нет
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS meditation_access (
+                    base_hash TEXT PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    access_started_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Создаем запись о доступе (время еще не установлено)
+            cursor.execute('''
+                INSERT INTO meditation_access (base_hash, user_id)
+                VALUES (%s, %s)
+                ON CONFLICT (base_hash) DO NOTHING
+            ''', (base_hash, user_id))
+            
+            conn.commit()
+            logging.info(f"✅ Meditation access created for user {user_id}, base_hash: {base_hash}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error creating meditation access: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def start_meditation_access(self, base_hash: str) -> bool:
+        """Запускает отсчет времени для общего доступа к медитации"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Устанавливаем время начала и время окончания (1 час)
+            access_started = datetime.now()
+            expires_at = access_started + timedelta(hours=1)
+            
+            cursor.execute('''
+                UPDATE meditation_access 
+                SET access_started_at = %s, expires_at = %s
+                WHERE base_hash = %s AND access_started_at IS NULL
+            ''', (access_started, expires_at, base_hash))
+            
+            # Также обновляем все связанные видео ссылки
+            cursor.execute('''
+                UPDATE video_links 
+                SET access_started_at = %s, expires_at = %s
+                WHERE link_hash IN (
+                    SELECT link_hash FROM video_links 
+                    WHERE user_id = (
+                        SELECT user_id FROM meditation_access WHERE base_hash = %s
+                    ) AND access_started_at IS NULL
+                )
+            ''', (access_started, expires_at, base_hash))
+            
+            conn.commit()
+            success = cursor.rowcount > 0
+            
+            if success:
+                logging.info(f"✅ Meditation access started for base_hash {base_hash}, expires at {expires_at}")
+            else:
+                logging.warning(f"⚠️ Meditation access already started for base_hash {base_hash}")
+                
+            return success
+            
+        except Exception as e:
+            logging.error(f"❌ Error starting meditation access: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

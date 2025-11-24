@@ -3925,7 +3925,10 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 • YouTube 
 • RUTUBE 
 
-⚠️ *Важно:* Ссылки персональные и защищены. Для пользователей без подписки отсчёт времени начинается при первом переходе по ссылке.
+⚠️ *Важно:* 
+• Ссылки персональные и защищены
+• Для пользователей без подписки отсчёт времени начинается при первом переходе по ЛЮБОЙ из ссылок
+• После начала отсчёта обе ссылки будут активны 1 час
 """
     
     logging.info(f"✅ Sending meditation links to user {user.id}")
@@ -3964,52 +3967,67 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
     # Показываем "загрузка"
     loading_msg = await query.message.reply_text("🔄 Подготавливаем вашу медитацию...")
     
-    # Генерируем защищенную ссылку
-    video_url = video_system.generate_secure_link(user.id)
+    # Получаем информацию о подписке для текста
+    subscription = db.get_user_subscription(user.id)
+    has_active_subscription = False
+    subscription_text = ""
     
-    if not video_url:
+    if subscription and subscription[1]:
+        sub_end = subscription[1]
+        if hasattr(sub_end, 'date'):
+            has_active_subscription = sub_end.date() >= datetime.now().date()
+            if has_active_subscription:
+                subscription_text = f"\n💎 *Ваша подписка активна до:* {sub_end.strftime('%d.%m.%Y')}"
+            else:
+                subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+        else:
+            subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+    else:
+        subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+    
+    # Генерируем отдельные ссылки для YouTube и RUTUBE с ОБЩИМ идентификатором доступа
+    # Используем общий base_hash для обеих платформ, чтобы время доступа было синхронизировано
+    base_hash = hashlib.sha256(f"{user.id}_{secrets.token_hex(8)}".encode()).hexdigest()[:16]
+    
+    youtube_link = video_system.generate_secure_link(user.id, "youtube", base_hash)
+    rutube_link = video_system.generate_secure_link(user.id, "rutube", base_hash)
+    
+    if not youtube_link or not rutube_link:
         await loading_msg.edit_text(
             "❌ Ошибка при подготовке медитации. Попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
         )
         return
     
-    # ✅ ЗАПИСЫВАЕМ ФАКТ ПРОСМОТРА
-    db.record_meditation_watch(user.id)
-    
-    # Получаем информацию о подписке
-    subscription = db.get_user_subscription(user.id)
-    has_subscription = False
-    expires_text = "⏰ Ссылка действительна 1 час"
-    
-    if subscription and subscription[1]:
-        sub_end = subscription[1]
-        if hasattr(sub_end, 'date'):
-            has_subscription = sub_end.date() >= datetime.now().date()
-            if has_subscription:
-                expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
+    # ✅ ЗАПИСЫВАЕМ ФАКТ СОЗДАНИЯ ДОСТУПА (но не просмотра - просмотр запишется при первом переходе)
+    # Для бесплатных пользователей создаем запись о доступе с общим временем
+    if not has_active_subscription:
+        db.create_meditation_access(user.id, base_hash)
     
     meditation_text = f"""
 🐚 *Медитация «Дары Моря»*
 
-{expires_text}
+Погрузитесь в умиротворяющую атмосферу морской медитации, которая поможет вам найти внутренний покой и гармонию.
 
-Ваша персональная ссылка готова!
+{subscription_text}
 
-*Инструкция:*
-1. Нажмите «🎬 Смотреть медитацию» ниже  
-2. Медитация откроется в браузере
+✨ *Доступные платформы:*
+• YouTube 
+• RUTUBE 
 
-⚠️ Ссылка защищена и персональна
+⚠️ *Важно:* 
+• Ссылки персональные и защищены
+• Для пользователей без подписки отсчёт времени начинается при первом переходе по ЛЮБОЙ из ссылок
+• После начала отсчёта обе ссылки будут активны 1 час
 """
     
     await loading_msg.edit_text(
         meditation_text,
         parse_mode='Markdown',
-        reply_markup=keyboard.get_meditation_link_keyboard(video_url),
+        reply_markup=keyboard.get_meditation_platforms_keyboard(youtube_link, rutube_link),
         disable_web_page_preview=True
     )
-    
+
 async def update_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновляет таблицу video_links (только для админов)"""
     user = update.effective_user
