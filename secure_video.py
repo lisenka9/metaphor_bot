@@ -21,7 +21,7 @@ class SecureVideoSystem:
             "fs=0",
             "modestbranding=1",     # Минимум лого YouTube
             "showinfo=0",           # Скрыть информацию
-            "controls=1",           
+            "controls=0",           
             "iv_load_policy=3",     # Скрыть аннотации
             "playsinline=1",
             "cc_load_policy=0",     # Скрыть субтитры
