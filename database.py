@@ -1266,16 +1266,14 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
-            # Сначала обновляем структуру таблицы
-            self.update_video_links_table()
-            
-            # Создаем таблицу для видео ссылок с дополнительными полями (если не существует)
+            # Временное решение: используем обе колонки
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS video_links (
                     link_hash TEXT PRIMARY KEY,
                     user_id BIGINT REFERENCES users(user_id),
-                    video_url TEXT NOT NULL,
-                    platform TEXT NOT NULL,
+                    yandex_link TEXT,  -- Сделали nullable
+                    video_url TEXT,
+                    platform TEXT,
                     has_subscription BOOLEAN DEFAULT FALSE,
                     access_started_at TIMESTAMP,
                     expires_at TIMESTAMP,
@@ -1283,20 +1281,21 @@ class DatabaseManager:
                 )
             ''')
             
-            # Сохраняем ссылку
+            # Сохраняем в обе колонки для совместимости
             cursor.execute('''
-                INSERT INTO video_links (link_hash, user_id, video_url, platform, has_subscription, expires_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO video_links (link_hash, user_id, yandex_link, video_url, platform, has_subscription, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (link_hash) 
                 DO UPDATE SET 
+                    yandex_link = EXCLUDED.yandex_link,
                     video_url = EXCLUDED.video_url,
                     platform = EXCLUDED.platform,
                     has_subscription = EXCLUDED.has_subscription,
                     expires_at = EXCLUDED.expires_at
-            ''', (link_hash, user_id, video_url, platform, has_subscription, expires_at))
+            ''', (link_hash, user_id, video_url, video_url, platform, has_subscription, expires_at))
             
             conn.commit()
-            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}, subscription: {has_subscription}")
+            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}")
             return True
             
         except Exception as e:
@@ -1379,46 +1378,62 @@ class DatabaseManager:
             conn.close()
 
     def update_video_links_table(self):
-        """Обновляет структуру таблицы video_links"""
+        """Полностью пересоздает таблицу video_links с новой структурой"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            # Добавляем недостающие колонки
+            # Создаем временную таблицу с новой структурой
             cursor.execute('''
-                ALTER TABLE video_links 
-                ADD COLUMN IF NOT EXISTS video_url TEXT,
-                ADD COLUMN IF NOT EXISTS platform TEXT,
-                ADD COLUMN IF NOT EXISTS has_subscription BOOLEAN DEFAULT FALSE,
-                ADD COLUMN IF NOT EXISTS access_started_at TIMESTAMP
+                CREATE TABLE IF NOT EXISTS video_links_new (
+                    link_hash TEXT PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    video_url TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    has_subscription BOOLEAN DEFAULT FALSE,
+                    access_started_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
             ''')
             
-            # Если есть старая колонка yandex_link, переносим данные
+            # Переносим данные из старой таблицы если она существует
             cursor.execute('''
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'video_links' AND column_name = 'yandex_link'
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_name = 'video_links'
             ''')
             
-            has_yandex_column = cursor.fetchone() is not None
+            has_old_table = cursor.fetchone() is not None
             
-            if has_yandex_column:
+            if has_old_table:
+                # Копируем данные из старой таблицы
                 cursor.execute('''
-                    UPDATE video_links 
-                    SET video_url = yandex_link 
-                    WHERE video_url IS NULL AND yandex_link IS NOT NULL
+                    INSERT INTO video_links_new (link_hash, user_id, video_url, expires_at, created_at)
+                    SELECT 
+                        link_hash, 
+                        user_id,
+                        COALESCE(video_url, yandex_link) as video_url,
+                        expires_at,
+                        created_at
+                    FROM video_links 
+                    WHERE link_hash NOT IN (SELECT link_hash FROM video_links_new)
                 ''')
-                logging.info("✅ Migrated data from yandex_link to video_url")
+                logging.info("✅ Migrated data to new table structure")
+            
+            # Переименовываем таблицы
+            cursor.execute('DROP TABLE IF EXISTS video_links_old')
+            cursor.execute('ALTER TABLE IF EXISTS video_links RENAME TO video_links_old')
+            cursor.execute('ALTER TABLE video_links_new RENAME TO video_links')
             
             conn.commit()
-            logging.info("✅ Video links table updated successfully")
+            logging.info("✅ Video links table recreated with new structure")
             
         except Exception as e:
-            logging.error(f"❌ Error updating video links table: {e}")
+            logging.error(f"❌ Error recreating video links table: {e}")
             conn.rollback()
         finally:
             conn.close()
-
     
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()
