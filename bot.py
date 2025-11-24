@@ -139,6 +139,8 @@ def secure_video_player(link_hash):
                     position: relative;
                     width: 100%;
                     margin: 20px 0;
+                    overflow: hidden;
+                    border-radius: 10px;
                 }}
                 .video-container {{
                     position: relative;
@@ -146,44 +148,24 @@ def secure_video_player(link_hash):
                     height: 0;
                     padding-bottom: 56.25%;
                     background: #000;
-                    border-radius: 10px;
-                    overflow: hidden;
-                }}
-                .video-overlay {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    pointer-events: none;
-                    z-index: 100;
-                }}
-                .hide-top-elements {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 80px;
-                    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
-                    pointer-events: none;
-                }}
-                .hide-bottom-elements {{
-                    position: absolute;
-                    bottom: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 120px;
-                    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
-                    pointer-events: none;
                 }}
                 iframe {{
                     position: absolute;
+                    top: -60px; /* Сдвигаем вверх чтобы скрыть верхнюю панель */
+                    left: 0;
+                    width: 100%;
+                    height: calc(100% + 120px); /* Увеличиваем высоту для компенсации сдвига */
+                    border: none;
+                }}
+                .video-mask {{
+                    position: absolute;
                     top: 0;
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    border: none;
-                    z-index: 1;
+                    pointer-events: none;
+                    z-index: 10;
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
                 }}
                 .info {{
                     background: #f8f9fa;
@@ -207,223 +189,61 @@ def secure_video_player(link_hash):
         <body>
             <div class="container">
                 <h1>🐚 Медитация «Дары Моря»</h1>
-                
                 <div class="info">
-                    <p><strong>⏰ Доступно до:</strong> {expires_time}</p>
+                    <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
                 </div>
                 
                 <div class="video-wrapper">
                     <div class="video-container">
-                        <iframe id="youtube-player"
-                                src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen>
+                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen
+                            id="video-player">
                         </iframe>
-                        <div class="video-overlay">
-                            <div class="hide-top-elements"></div>
-                            <div class="hide-bottom-elements"></div>
-                        </div>
+                        <div class="video-mask"></div>
                     </div>
                 </div>
-                
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
             
-            <script src="https://www.youtube.com/iframe_api"></script>
             <script>
-                var player;
-                
-                function onYouTubeIframeAPIReady() {{
-                    player = new YT.Player('youtube-player', {{
-                        events: {{
-                            'onReady': onPlayerReady,
-                            'onStateChange': onPlayerStateChange
-                        }}
-                    }});
-                }}
-                
-                function onPlayerReady(event) {{
-                    // Скрываем элементы при загрузке
-                    hideYouTubeElements();
-                    
-                    // Запускаем видео
-                    event.target.playVideo();
-                }}
-                
-                function onPlayerStateChange(event) {{
-                    // При изменении состояния также скрываем элементы
-                    hideYouTubeElements();
-                }}
-                
+            // Скрываем элементы YouTube
                 function hideYouTubeElements() {{
-                    // Создаем стили для скрытия элементов YouTube
                     const style = document.createElement('style');
-                    style.id = 'youtube-hider';
                     style.textContent = `
-                        /* Полностью скрываем верхнюю панель */
-                        .ytp-chrome-top {{
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                        
-                        /* Скрываем все кнопки в верхней части */
-                        .ytp-title-channel,
+                        .ytp-chrome-top,
                         .ytp-title-link,
-                        .ytp-title-text,
+                        .ytp-title-channel,
                         .ytp-share-button,
                         .ytp-copylink-button,
-                        .ytp-youtube-button,
-                        .ytp-watch-later-button,
-                        .ytp-button.ytp-copylink-button,
-                        .ytp-button.ytp-share-button {{
+                        .ytp-show-cards-title,
+                        .ytp-pause-overlay,
+                        .ytp-watermark {{
                             display: none !important;
-                            width: 0 !important;
-                            height: 0 !important;
                             opacity: 0 !important;
                             visibility: hidden !important;
                         }}
                         
-                        /* Скрываем overlay элементы */
-                        .ytp-pause-overlay,
-                        .ytp-watermark,
-                        .ytp-ce-element {{
-                            display: none !important;
-                        }}
-                        
-                        /* Скрываем информацию о канале и рекомендации */
-                        .ytp-show-cards-title,
-                        .ytp-ce-element {{
-                            display: none !important;
-                        }}
-                        
-                        /* Скрываем меню share */
-                        .ytp-popup.ytp-share-panel,
-                        .ytp-share-button[aria-label*="копир"],
-                        .ytp-share-button[aria-label*="share"],
-                        .ytp-copylink-button,
-                        .ytp-watch-later-button {{
-                            display: none !important;
-                        }}
-                        
-                        /* Скрываем нижнюю панель управления */
-                        .ytp-chrome-bottom {{
-                            opacity: 0 !important;
-                            transition: opacity 0.3s !important;
-                        }}
-                        
-                        /* Показываем панель управления только при наведении */
-                        .video-container:hover .ytp-chrome-bottom {{
-                            opacity: 1 !important;
-                        }}
-                        
-                        /* Скрываем лого YouTube */
-                        .ytp-youtube-button {{
-                            display: none !important;
-                        }}
-                        
-                        /* Скрываем иконку автора (канала) */
-                        .ytp-title-channel-logo {{
-                            display: none !important;
-                        }}
-                        
-                        /* Скрываем все текстовые заголовки */
-                        .ytp-title-link,
-                        .ytp-title-text,
-                        .ytp-title-fullerscreen {{
-                            display: none !important;
-                        }}
-                        
-                        /* Дополнительные меры для скрытия элементов */
-                        .ytp-chrome-top-buttons {{
-                            display: none !important;
-                        }}
-                        
-                        /* Скрываем кнопку меню (три точки) */
-                        .ytp-button.ytp-overflow-button {{
-                            display: none !important;
+                        /* Скрываем верхнюю панель */
+                        .ytp-chrome-top {{
+                            height: 0 !important;
+                            min-height: 0 !important;
+                            padding: 0 !important;
                         }}
                     `;
-                    
-                    // Удаляем старые стили если есть
-                    const oldStyle = document.getElementById('youtube-hider');
-                    if (oldStyle) oldStyle.remove();
-                    
                     document.head.appendChild(style);
-                    
-                    // Дополнительные меры через JavaScript
-                    setTimeout(() => {{
-                        // Скрываем элементы через DOM
-                        const iframe = document.getElementById('youtube-player');
-                        if (!iframe) return;
-                        
-                        try {{
-                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            
-                            // Скрываем все кнопки в верхней части
-                            const topButtons = iframeDoc.querySelectorAll('.ytp-chrome-top, .ytp-chrome-top-buttons, .ytp-title, .ytp-share-button, .ytp-copylink-button');
-                            topButtons.forEach(el => {{
-                                el.style.display = 'none';
-                                el.style.opacity = '0';
-                                el.style.visibility = 'hidden';
-                            }});
-                            
-                            // Скрываем элементы меню
-                            const menuButtons = iframeDoc.querySelectorAll('.ytp-button.ytp-overflow-button, .ytp-popup');
-                            menuButtons.forEach(el => {{
-                                el.style.display = 'none';
-                            }});
-                            
-                        }} catch (e) {{
-                            // Cross-origin ограничения, используем только CSS
-                        }}
-                    }}, 1000);
                 }}
                 
-                // Более агрессивное скрытие элементов
-                function aggressiveHide() {{
-                    hideYouTubeElements();
-                    
-                    // Дополнительно скрываем через инъекцию стилей в iframe
-                    const iframe = document.getElementById('youtube-player');
-                    if (iframe && iframe.contentWindow) {{
-                        try {{
-                            const style = iframe.contentDocument.createElement('style');
-                            style.textContent = `
-                                .ytp-chrome-top {{ display: none !important; }}
-                                .ytp-title {{ display: none !important; }}
-                                .ytp-share-button {{ display: none !important; }}
-                                .ytp-copylink-button {{ display: none !important; }}
-                                .ytp-overflow-button {{ display: none !important; }}
-                                .ytp-chrome-top-buttons {{ display: none !important; }}
-                            `;
-                            iframe.contentDocument.head.appendChild(style);
-                        }} catch (e) {{
-                            // Игнорируем cross-origin ошибки
-                        }}
-                    }}
-                }}
-                
-                // Периодически скрываем элементы (на случай появления)
-                setInterval(hideYouTubeElements, 2000);
-                setInterval(aggressiveHide, 5000);
-                
-                // Скрываем при любом взаимодействии
-                document.addEventListener('mousemove', hideYouTubeElements);
-                document.addEventListener('click', hideYouTubeElements);
-                
-                // Скрываем правый клик на видео
-                document.addEventListener('contextmenu', function(e) {{
-                    if (e.target.closest('.video-container')) {{
-                        e.preventDefault();
-                    }}
+                // Ждем загрузки iframe
+                document.getElementById('video-player').addEventListener('load', function() {{
+                    setTimeout(hideYouTubeElements, 2000);
                 }});
                 
-                // Скрываем элементы сразу при загрузке
-                window.addEventListener('load', hideYouTubeElements);
+                // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
+                document.addEventListener('click', hideYouTubeElements);
             </script>
         </body>
         </html>
