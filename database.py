@@ -1260,8 +1260,8 @@ class DatabaseManager:
             conn.close()
 
     def save_video_link(self, link_hash: str, user_id: int, video_url: str, 
-                   expires_at: datetime, platform: str, has_subscription: bool) -> bool:
-        """Сохраняет информацию о видео ссылке в базу"""
+                   expires_at: datetime, platform: str, has_subscription: bool, base_hash: str = None) -> bool:
+        """Сохраняет информацию о видео ссылке в базу с общим идентификатором"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -1277,25 +1277,26 @@ class DatabaseManager:
                     has_subscription BOOLEAN DEFAULT FALSE,
                     access_started_at TIMESTAMP,
                     expires_at TIMESTAMP,
+                    base_hash TEXT,  -- Добавляем колонку для общего идентификатора
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
-            # Сохраняем в обе колонки для совместимости
             cursor.execute('''
                 INSERT INTO video_links (link_hash, user_id, yandex_link, video_url, platform, has_subscription, expires_at, base_hash)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (link_hash) 
                 DO UPDATE SET 
                     yandex_link = EXCLUDED.yandex_link,
                     video_url = EXCLUDED.video_url,
                     platform = EXCLUDED.platform,
                     has_subscription = EXCLUDED.has_subscription,
-                    expires_at = EXCLUDED.expires_at
+                    expires_at = EXCLUDED.expires_at,
+                    base_hash = EXCLUDED.base_hash
             ''', (link_hash, user_id, video_url, video_url, platform, has_subscription, expires_at, base_hash))
             
             conn.commit()
-            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}")
+            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}, base_hash: {base_hash}")
             return True
             
         except Exception as e:
