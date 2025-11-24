@@ -13,10 +13,30 @@ class SecureVideoSystem:
         # YouTube с оригинальными настройками
         self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1"
         
-        # RUTUBE - используем embed ссылку с минимальными параметрами
-        self.rutube_url = "https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48"
+        # Для RUTUBE будем использовать Video.js с прямой ссылкой
+        self.rutube_video_id = "af23160e9d682ffcb8c9819e69fedd48"
         
         logging.info("🔧 Video system initialized")
+    
+    def get_rutube_direct_url(self):
+        """Пытается получить прямую ссылку на видео RUTUBE"""
+        try:
+            # Пробуем получить информацию о видео через RUTUBE API
+            api_url = f"https://rutube.ru/api/play/options/{self.rutube_video_id}/?video_type=embed"
+            response = requests.get(api_url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Ищем прямую ссылку на видео в ответе
+                if 'video_balancer' in data and 'mp4' in data['video_balancer']:
+                    return data['video_balancer']['mp4']
+                
+            logging.warning("❌ Could not get direct RUTUBE URL, using fallback")
+            return None
+            
+        except Exception as e:
+            logging.error(f"❌ Error getting RUTUBE direct URL: {e}")
+            return None
     
     def generate_secure_link(self, user_id: int, platform: str = "youtube") -> str:
         """Генерирует защищенную ссылку"""
@@ -42,7 +62,11 @@ class SecureVideoSystem:
             link_hash = hashlib.sha256(unique_string.encode()).hexdigest()[:20]
             
             # Выбираем платформу
-            video_url = self.youtube_url if platform == "youtube" else self.rutube_url
+            if platform == "youtube":
+                video_url = self.youtube_url
+            else:
+                # Для RUTUBE сохраняем ID видео, а URL будет генерироваться в HTML
+                video_url = f"rutube:{self.rutube_video_id}"
             
             # Сохраняем в базу данных
             success = self.db.save_video_link(
