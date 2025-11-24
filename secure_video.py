@@ -9,35 +9,17 @@ class SecureVideoSystem:
     def __init__(self, base_url, db):
         self.base_url = base_url
         self.db = db
-        self.yandex_token = os.environ.get('YANDEX_DISK_TOKEN')
-        self.meditation_path = "/meditation.MOV"
-        logging.info(f"🔧 Video system initialized with token: {'✅' if self.yandex_token else '❌'}")
+        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA"
+        self.rutube_url = "https://rutube.ru/video/private/af23160e9d682ffcb8c9819e69fedd48/?p=1p2eMSt-NHUeMHLo32SLcQ"
+        logging.info("🔧 Video system initialized with YouTube and RUTUBE links")
     
-    def get_yandex_download_link(self) -> str:
-        youtube_id = "qBqIO-_OsgA"  
-        params = [
-            "autoplay=1",
-            "rel=0",                # Скрыть похожие видео
-            "fs=0",
-            "modestbranding=1",     # Минимум лого YouTube
-            "showinfo=0",           # Скрыть информацию
-            "controls=0",           
-            "iv_load_policy=3",     # Скрыть аннотации
-            "playsinline=1",
-            "cc_load_policy=0",     # Скрыть субтитры
-            "color=white",
-            "hl=ru",
-            "enablejsapi=1",        # Включить API для контроля
-            "widgetid=1"
-        ]
-        return f"https://www.youtube.com/embed/{youtube_id}?{'&'.join(params)}"
-
-    def generate_secure_link(self, user_id: int) -> str:
-        """Генерирует защищенную ссылку через прокси"""
+    def generate_secure_link(self, user_id: int, platform: str = "youtube") -> str:
+        """Генерирует защищенную ссылку с отложенным временем начала"""
         try:
-            # Определяем срок действия
+            # Определяем тип доступа
             subscription = self.db.get_user_subscription(user_id)
-            expires_at = datetime.now() + timedelta(hours=1)  # По умолчанию 1 час
+            has_subscription = False
+            expires_at = None
             
             if subscription and subscription[1]:
                 subscription_end = subscription[1]
@@ -47,29 +29,39 @@ class SecureVideoSystem:
                     sub_date = subscription_end
                 
                 if sub_date >= datetime.now().date():
+                    has_subscription = True
                     expires_at = datetime.combine(sub_date, datetime.max.time())
             
+            # Для пользователей без подписки время начинается при первом переходе
+            if not has_subscription:
+                # Создаем ссылку, которая при первом переходе установит время начала
+                expires_at = None  # Будет установлено при первом переходе
+            
             # Генерируем уникальный хеш
-            unique_string = f"{user_id}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
+            unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
             link_hash = hashlib.sha256(unique_string.encode()).hexdigest()[:20]
             
-            # Получаем свежую ссылку на Яндекс Диск
-            yandex_link = self.get_yandex_download_link()
-            if not yandex_link:
-                logging.error("❌ Failed to get Yandex download link")
-                return None
+            # Выбираем платформу
+            video_url = self.youtube_url if platform == "youtube" else self.rutube_url
             
-            # Сохраняем в базу данных
-            success = self.db.save_video_link(link_hash, user_id, yandex_link, expires_at)
+            # Сохраняем в базу данных с информацией о платформе
+            success = self.db.save_video_link(
+                link_hash, 
+                user_id, 
+                video_url, 
+                expires_at,
+                platform,
+                has_subscription
+            )
+            
             if not success:
                 logging.error("❌ Failed to save video link to database")
                 return None
             
-            logging.info(f"✅ Generated secure link for user {user_id}, expires: {expires_at}")
+            logging.info(f"✅ Generated secure {platform} link for user {user_id}, has_subscription: {has_subscription}")
             
             # Возвращаем ссылку на наш защищенный плеер
             secure_url = f"{self.base_url}/secure-video/{link_hash}"
-            logging.info(f"🔗 Secure URL: {secure_url}")
             return secure_url
         
         except Exception as e:
@@ -77,12 +69,18 @@ class SecureVideoSystem:
             return None
     
     def validate_link(self, link_hash: str) -> tuple:
-        """Проверяет валидность ссылки через базу данных"""
+        """Проверяет валидность ссылки и устанавливает время начала для бесплатных пользователей"""
         link_data = self.db.get_video_link(link_hash)
         if not link_data:
             return False, None
         
-        return True, link_data['yandex_link']
+        # Если у пользователя нет подписки и время еще не установлено, устанавливаем его
+        if not link_data['has_subscription'] and not link_data['access_started_at']:
+            success = self.db.start_video_access(link_hash)
+            if not success:
+                return False, None
+        
+        return True, link_data
 
 def get_video_system_safe():
     """Безопасно получает video_system"""

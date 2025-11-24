@@ -372,3 +372,12 @@ def get_meditation_limited_keyboard():
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_meditation_platforms_keyboard(youtube_link: str, rutube_link: str):
+    """Клавиатура с выбором платформы для медитации"""
+    keyboard = [
+        [InlineKeyboardButton("🎬 Смотреть на YouTube", url=youtube_link)],
+        [InlineKeyboardButton("🎬 Смотреть на RUTUBE", url=rutube_link)],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)

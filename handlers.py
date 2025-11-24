@@ -3874,18 +3874,6 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user = update.effective_user
     logging.info(f"🔧 Meditation command called by user {user.id}")
     
-    # Проверяем доступ
-    can_watch, reason = db.can_watch_meditation(user.id)
-    logging.info(f"🔧 User {user.id} can watch: {can_watch}, reason: {reason}")
-    
-    if not can_watch:
-        await update.message.reply_text(
-            f"❌ {reason}",
-            reply_markup=keyboard.get_meditation_limited_keyboard(),
-            parse_mode='Markdown'
-        )
-        return
-    
     # Создаем video_system при каждом вызове
     video_system = get_video_system_safe()
     
@@ -3897,55 +3885,54 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Показываем "загрузка"
-    loading_msg = await update.message.reply_text("🔄 Подготавливаем вашу медитацию...")
-    
-    # Генерируем защищенную ссылку
-    logging.info(f"🔧 Generating secure link for user {user.id}")
-    video_url = video_system.generate_secure_link(user.id)
-    
-    if not video_url:
-        logging.error(f"❌ Failed to generate video URL for user {user.id}")
-        await loading_msg.edit_text(
-            "❌ Ошибка при подготовке медитации. Попробуйте позже.",
-            reply_markup=keyboard.get_main_menu_keyboard()
-        )
-        return
-    
-    # ✅ ЗАПИСЫВАЕМ ФАКТ ПРОСМОТРА
-    db.record_meditation_watch(user.id)
-    
     # Получаем информацию о подписке для текста
     subscription = db.get_user_subscription(user.id)
     has_active_subscription = False
-    expires_text = "⏰ Ссылка действительна 1 час"
+    subscription_text = ""
     
     if subscription and subscription[1]:
         sub_end = subscription[1]
         if hasattr(sub_end, 'date'):
             has_active_subscription = sub_end.date() >= datetime.now().date()
             if has_active_subscription:
-                expires_text = f"🔐 Доступно до: {sub_end.strftime('%d.%m.%Y')}"
+                subscription_text = f"\n💎 *Ваша подписка активна до:* {sub_end.strftime('%d.%m.%Y')}"
+            else:
+                subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+        else:
+            subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+    else:
+        subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+    
+    # Генерируем отдельные ссылки для YouTube и RUTUBE
+    youtube_link = video_system.generate_secure_link(user.id, "youtube")
+    rutube_link = video_system.generate_secure_link(user.id, "rutube")
+    
+    if not youtube_link or not rutube_link:
+        await update.message.reply_text(
+            "❌ Ошибка при подготовке медитации. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
+        return
     
     meditation_text = f"""
 🐚 *Медитация «Дары Моря»*
 
-{expires_text}
+Погрузитесь в умиротворяющую атмосферу морской медитации, которая поможет вам найти внутренний покой и гармонию.
 
-Ваша персональная ссылка готова!
+{subscription_text}
 
-*Инструкция:*
-1. Нажмите «🎬 Смотреть медитацию» ниже  
-2. Медитация откроется в браузере
+✨ *Доступные платформы:*
+• YouTube 
+• RUTUBE 
 
-⚠️ Ссылка персональна и защищена
+⚠️ *Важно:* Ссылки персональные и защищены. Для пользователей без подписки отсчёт времени начинается при первом переходе по ссылке.
 """
     
-    logging.info(f"✅ Sending meditation link to user {user.id}: {video_url}")
-    await loading_msg.edit_text(
+    logging.info(f"✅ Sending meditation links to user {user.id}")
+    await update.message.reply_text(
         meditation_text,
         parse_mode='Markdown',
-        reply_markup=keyboard.get_meditation_link_keyboard(video_url),
+        reply_markup=keyboard.get_meditation_platforms_keyboard(youtube_link, rutube_link),
         disable_web_page_preview=True
     )
 

@@ -1224,70 +1224,7 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def save_video_link(self, link_hash: str, user_id: int, yandex_link: str, expires_at: datetime) -> bool:
-        """Сохраняет информацию о видео ссылке в базу"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        try:
-            # Создаем таблицу для видео ссылок
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS video_links (
-                    link_hash TEXT PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),
-                    yandex_link TEXT NOT NULL,
-                    expires_at TIMESTAMP NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Сохраняем ссылку
-            cursor.execute('''
-                INSERT INTO video_links (link_hash, user_id, yandex_link, expires_at)
-                VALUES (%s, %s, %s, %s)
-            ''', (link_hash, user_id, yandex_link, expires_at))
-            
-            conn.commit()
-            logging.info(f"✅ Video link saved for user {user_id}, hash: {link_hash}")
-            return True
-            
-        except Exception as e:
-            logging.error(f"❌ Error saving video link: {e}")
-            conn.rollback()
-            return False
-        finally:
-            conn.close()
-
-    def get_video_link(self, link_hash: str):
-        """Получает информацию о видео ссылке из базы"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('''
-                SELECT user_id, yandex_link, expires_at 
-                FROM video_links 
-                WHERE link_hash = %s
-            ''', (link_hash,))
-            
-            result = cursor.fetchone()
-            if result:
-                user_id, yandex_link, expires_at = result
-                # Проверяем срок действия
-                if datetime.now() > expires_at:
-                    # Удаляем просроченную ссылку
-                    cursor.execute('DELETE FROM video_links WHERE link_hash = %s', (link_hash,))
-                    conn.commit()
-                    return None
-                return {'user_id': user_id, 'yandex_link': yandex_link, 'expires_at': expires_at}
-            return None
-            
-        except Exception as e:
-            logging.error(f"❌ Error getting video link: {e}")
-            return None
-        finally:
-            conn.close()
-
+    
     def cleanup_expired_video_links(self):
         """Очищает просроченные видео ссылки"""
         conn = self.get_connection()
@@ -1304,5 +1241,117 @@ class DatabaseManager:
             return 0
         finally:
             conn.close()
+
+    def save_video_link(self, link_hash: str, user_id: int, video_url: str, 
+                    expires_at: datetime, platform: str, has_subscription: bool) -> bool:
+        """Сохраняет информацию о видео ссылке в базу"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Создаем таблицу для видео ссылок с дополнительными полями
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS video_links (
+                    link_hash TEXT PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    video_url TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    has_subscription BOOLEAN DEFAULT FALSE,
+                    access_started_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Сохраняем ссылку
+            cursor.execute('''
+                INSERT INTO video_links (link_hash, user_id, video_url, platform, has_subscription, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (link_hash, user_id, video_url, platform, has_subscription, expires_at))
+            
+            conn.commit()
+            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}, subscription: {has_subscription}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error saving video link: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def start_video_access(self, link_hash: str) -> bool:
+        """Устанавливает время начала доступа для бесплатных пользователей"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Устанавливаем время начала и время окончания (1 час)
+            access_started = datetime.now()
+            expires_at = access_started + timedelta(hours=1)
+            
+            cursor.execute('''
+                UPDATE video_links 
+                SET access_started_at = %s, expires_at = %s
+                WHERE link_hash = %s AND access_started_at IS NULL
+            ''', (access_started, expires_at, link_hash))
+            
+            conn.commit()
+            success = cursor.rowcount > 0
+            
+            if success:
+                logging.info(f"✅ Video access started for link {link_hash}, expires at {expires_at}")
+            else:
+                logging.warning(f"⚠️ Video access already started for link {link_hash}")
+                
+            return success
+            
+        except Exception as e:
+            logging.error(f"❌ Error starting video access: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def get_video_link(self, link_hash: str):
+        """Получает информацию о видео ссылке из базы"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT user_id, video_url, platform, has_subscription, access_started_at, expires_at 
+                FROM video_links 
+                WHERE link_hash = %s
+            ''', (link_hash,))
+            
+            result = cursor.fetchone()
+            if result:
+                user_id, video_url, platform, has_subscription, access_started_at, expires_at = result
+                
+                # Проверяем срок действия
+                if expires_at and datetime.now() > expires_at:
+                    # Удаляем просроченную ссылку
+                    cursor.execute('DELETE FROM video_links WHERE link_hash = %s', (link_hash,))
+                    conn.commit()
+                    return None
+                    
+                return {
+                    'user_id': user_id, 
+                    'video_url': video_url, 
+                    'platform': platform,
+                    'has_subscription': has_subscription,
+                    'access_started_at': access_started_at,
+                    'expires_at': expires_at
+                }
+            return None
+            
+        except Exception as e:
+            logging.error(f"❌ Error getting video link: {e}")
+            return None
+        finally:
+            conn.close()
+
+            
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

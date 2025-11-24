@@ -67,9 +67,11 @@ def payment_callback():
 
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
-    """Безопасный видео-плеер с ограниченным доступом"""
+    """Безопасный видео-плеер с отложенным временем начала"""
     try:
         logging.info(f"🔧 Secure video requested for hash: {link_hash}")
+        
+        # Получаем данные ссылки
         link_data = db.get_video_link(link_hash)
         
         if not link_data:
@@ -84,24 +86,44 @@ def secure_video_player(link_hash):
             </html>
             """, 404
         
-        # Проверяем срок действия
-        if datetime.now() > link_data['expires_at']:
-            logging.info(f"❌ Link expired: {link_hash}")
-            db.cleanup_expired_video_links()
-            return """
-            <html>
-                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                    <h2>❌ Срок действия ссылки истёк</h2>
-                    <p>Получите новую ссылку в боте.</p>
-                    <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
-                </body>
-            </html>
-            """, 403
+        # Для бесплатных пользователей проверяем, начался ли доступ
+        if not link_data['has_subscription']:
+            if not link_data['access_started_at']:
+                # Это первый переход - время начнет отсчитываться после валидации
+                logging.info(f"🔄 First access for free user, link: {link_hash}")
+            else:
+                # Проверяем не истекло ли время
+                if datetime.now() > link_data['expires_at']:
+                    logging.info(f"❌ Link expired: {link_hash}")
+                    db.cleanup_expired_video_links()
+                    return """
+                    <html>
+                        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                            <h2>❌ Время доступа истекло</h2>
+                            <p>Бесплатный доступ действителен в течение 1 часа с момента первого просмотра.</p>
+                            <p>Получите новую ссылку в боте.</p>
+                            <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                        </body>
+                    </html>
+                    """, 403
         
-        yandex_link = link_data['yandex_link']
-        expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
-        logging.info(f"✅ Serving video for user {link_data['user_id']}: {yandex_link}")
-
+        video_url = link_data['video_url']
+        platform = link_data['platform']
+        
+        # Форматируем информацию о времени доступа
+        if link_data['has_subscription']:
+            expires_time = link_data['expires_at'].strftime('%d.%m.%Y') if link_data['expires_at'] else "неограниченно"
+            access_info = f"🔐 Доступно по подписке до: {expires_time}"
+        else:
+            if link_data['access_started_at']:
+                expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
+                access_info = f"⏰ Доступно до: {expires_time}"
+            else:
+                access_info = "⏰ Доступ откроется при первом просмотре (1 час)"
+        
+        logging.info(f"✅ Serving {platform} video for user {link_data['user_id']}")
+        
+        # HTML контент с улучшенным плеером
         html_content = f"""
         <!DOCTYPE html>
         <html lang="ru">
@@ -134,6 +156,15 @@ def secure_video_player(link_hash):
                     color: #333;
                     margin-bottom: 20px;
                 }}
+                .platform-badge {{
+                    background: #667eea;
+                    color: white;
+                    padding: 5px 15px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    margin-bottom: 15px;
+                    display: inline-block;
+                }}
                 .video-wrapper {{
                     position: relative;
                     width: 100%;
@@ -150,21 +181,11 @@ def secure_video_player(link_hash):
                 }}
                 iframe {{
                     position: absolute;
-                    top: -60px; /* Сдвигаем вверх чтобы скрыть верхнюю панель */
-                    left: 0;
-                    width: 100%;
-                    height: calc(100% + 120px); /* Увеличиваем высоту для компенсации сдвига */
-                    border: none;
-                }}
-                .video-mask {{
-                    position: absolute;
                     top: 0;
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    pointer-events: none;
-                    z-index: 10;
-                    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
+                    border: none;
                 }}
                 .info {{
                     background: #f8f9fa;
@@ -188,68 +209,27 @@ def secure_video_player(link_hash):
         <body>
             <div class="container">
                 <h1>🐚 Медитация «Дары Моря»</h1>
+                <div class="platform-badge">{platform.upper()}</div>
+                
                 <div class="info">
-                    <p><strong>⏰ Доступно до:</strong> {link_data['expires_at'].strftime('%d.%m.%Y %H:%M')}</p>
+                    <p><strong>{access_info}</strong></p>
                 </div>
                 
                 <div class="video-wrapper">
                     <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1" 
+                        <iframe src="{video_url}" 
                             frameborder="0" 
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowfullscreen
                             id="video-player">
                         </iframe>
-                        <div class="video-mask"></div>
                     </div>
                 </div>
+                
                 <div style="margin-top: 20px;">
                     <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
                 </div>
             </div>
-            
-            <script>
-            // Скрываем элементы YouTube
-                function hideYouTubeElements() {{
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        .ytp-chrome-top,
-                        .ytp-title-link,
-                        .ytp-title-channel,
-                        .ytp-share-button,
-                        .ytp-copylink-button,
-                        .ytp-show-cards-title,
-                        .ytp-pause-overlay,
-                        .ytp-youtube-button,     
-                        .ytp-button.ytp-youtube-button {{  
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                        .ytp-watermark {{
-                            display: none !important;
-                            opacity: 0 !important;
-                            visibility: hidden !important;
-                        }}
-                        
-                        /* Скрываем верхнюю панель */
-                        .ytp-chrome-top {{
-                            height: 0 !important;
-                            min-height: 0 !important;
-                            padding: 0 !important;
-                        }}
-                    `;
-                    document.head.appendChild(style);
-                }}
-                
-                // Ждем загрузки iframe
-                document.getElementById('video-player').addEventListener('load', function() {{
-                    setTimeout(hideYouTubeElements, 2000);
-                }});
-                
-                // Также пытаемся скрыть при клике (на случай если элементы появляются позже)
-                document.addEventListener('click', hideYouTubeElements);
-            </script>
         </body>
         </html>
         """
