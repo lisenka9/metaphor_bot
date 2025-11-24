@@ -9,8 +9,13 @@ class SecureVideoSystem:
     def __init__(self, base_url, db):
         self.base_url = base_url
         self.db = db
-        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1"
-        self.rutube_url = "https://rutube.ru/video/private/af23160e9d682ffcb8c9819e69fedd48/?p=1p2eMSt-NHUeMHLo32SLcQ"
+        
+        # YouTube с максимально скрытыми элементами
+        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&cc_load_policy=0&color=white&hl=ru&enablejsapi=1&widgetid=1&origin=https://your-bot-url.render.com"
+        
+        # RUTUBE - проверьте что видео действительно доступно по этой ссылке
+        self.rutube_url = "https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48"
+        
         logging.info("🔧 Video system initialized with YouTube and RUTUBE links")
     
     def generate_secure_link(self, user_id: int, platform: str = "youtube") -> str:
@@ -47,7 +52,6 @@ class SecureVideoSystem:
                 expires_at,
                 platform,
                 has_subscription
-                # Пока не передаем base_hash для стабильности
             )
             
             if not success:
@@ -63,20 +67,6 @@ class SecureVideoSystem:
         except Exception as e:
             logging.error(f"❌ Error generating secure link: {e}")
             return None
-
-    def validate_link(self, link_hash: str) -> tuple:
-        """Проверяет валидность ссылки и устанавливает время начала для бесплатных пользователей"""
-        link_data = self.db.get_video_link(link_hash)
-        if not link_data:
-            return False, None
-        
-        # Если у пользователя нет подписки и время еще не установлено, устанавливаем его
-        if not link_data['has_subscription'] and not link_data['access_started_at']:
-            success = self.db.start_video_access(link_hash)
-            if not success:
-                return False, None
-        
-        return True, link_data
 
 def get_video_system_safe():
     """Безопасно получает video_system"""

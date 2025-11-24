@@ -67,7 +67,7 @@ def payment_callback():
 
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
-    """Безопасный видео-плеер с синхронизированным временем доступа"""
+    """Безопасный видео-плеер с улучшенным отображением"""
     try:
         logging.info(f"🔧 Secure video requested for hash: {link_hash}")
         
@@ -88,6 +88,7 @@ def secure_video_player(link_hash):
         
         user_id = link_data['user_id']
         platform = link_data['platform']
+        video_url = link_data['video_url']
         
         # Для бесплатных пользователей проверяем и синхронизируем доступ
         if not link_data['has_subscription']:
@@ -96,8 +97,6 @@ def secure_video_player(link_hash):
                 success = db.start_all_user_video_access(user_id)
                 if success:
                     logging.info(f"🔄 Started video access for all user {user_id} links")
-                else:
-                    logging.error(f"❌ Failed to start video access for user {user_id}")
             
             # Проверяем не истекло ли время
             if link_data['expires_at'] and datetime.now() > link_data['expires_at']:
@@ -114,8 +113,6 @@ def secure_video_player(link_hash):
                 </html>
                 """, 403
         
-        video_url = link_data['video_url']
-        
         # Форматируем информацию о времени доступа
         if link_data['has_subscription']:
             expires_time = link_data['expires_at'].strftime('%d.%m.%Y') if link_data['expires_at'] else "неограниченно"
@@ -129,122 +126,249 @@ def secure_video_player(link_hash):
         
         logging.info(f"✅ Serving {platform} video for user {user_id}")
         
-        # HTML контент с улучшенным плеером
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Медитация «Дары Моря»</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    margin: 0;
-                    padding: 20px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                }}
-                .container {{
-                    background: white;
-                    border-radius: 15px;
-                    padding: 30px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                    max-width: 800px;
-                    width: 90%;
-                    text-align: center;
-                }}
-                h1 {{
-                    color: #333;
-                    margin-bottom: 20px;
-                }}
-                .platform-badge {{
-                    background: #667eea;
-                    color: white;
-                    padding: 5px 15px;
-                    border-radius: 20px;
-                    font-size: 14px;
-                    margin-bottom: 15px;
-                    display: inline-block;
-                }}
-                .video-wrapper {{
-                    position: relative;
-                    width: 100%;
-                    margin: 20px 0;
-                    overflow: hidden;
-                    border-radius: 10px;
-                }}
-                .video-container {{
-                    position: relative;
-                    width: 100%;
-                    height: 0;
-                    padding-bottom: 56.25%;
-                    background: #000;
-                }}
-                iframe {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border: none;
-                }}
-                .info {{
-                    background: #f8f9fa;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 20px 0;
-                    text-align: left;
-                }}
-                .btn {{
-                    background: #667eea;
-                    color: white;
-                    padding: 12px 30px;
-                    text-decoration: none;
-                    border-radius: 25px;
-                    font-weight: bold;
-                    margin: 10px;
-                    display: inline-block;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🐚 Медитация «Дары Моря»</h1>
-                <div class="platform-badge">{platform.upper()}</div>
-                
-                <div class="info">
-                    <p><strong>{access_info}</strong></p>
-                </div>
-                
-                <div class="video-wrapper">
-                    <div class="video-container">
-                        <iframe src="{video_url}" 
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen
-                            id="video-player">
-                        </iframe>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <a href="https://t.me/MetaphorCardsSeaBot" class="btn">Вернуться в бота</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        # Генерируем HTML в зависимости от платформы
+        if platform == "youtube":
+            html_content = generate_youtube_html(video_url, platform, access_info)
+        else:
+            html_content = generate_rutube_html(video_url, platform, access_info)
         
         return html_content
         
     except Exception as e:
         logging.error(f"❌ Error in secure video: {e}")
         return "❌ Ошибка загрузки видео", 500
+
+def generate_youtube_html(video_url: str, platform: str, access_info: str) -> str:
+    """Генерирует HTML для YouTube с максимально скрытыми элементами"""
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Медитация «Дары Моря»</title>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                background: #000;
+                font-family: Arial, sans-serif;
+                overflow: hidden;
+            }}
+            .container {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+            }}
+            .video-container {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+            }}
+            iframe {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }}
+            .info-overlay {{
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background: rgba(0,0,0,0.7);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                font-size: 12px;
+                z-index: 1000;
+                max-width: 300px;
+            }}
+            .back-btn {{
+                position: absolute;
+                bottom: 20px;
+                right: 20px;
+                background: #667eea;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 20px;
+                font-size: 14px;
+                z-index: 1000;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="info-overlay">
+                <strong>🐚 Медитация «Дары Моря»</strong><br>
+                {platform.upper()} • {access_info}
+            </div>
+            
+            <div class="video-container">
+                <iframe src="{video_url}" 
+                    frameborder="0" 
+                    allow="autoplay; encrypted-media" 
+                    allowfullscreen
+                    id="video-player">
+                </iframe>
+            </div>
+            
+            <a href="https://t.me/MetaphorCardsSeaBot" class="back-btn">Вернуться в бота</a>
+        </div>
+        
+        <script>
+            // Дополнительные скрипты для скрытия элементов YouTube
+            function hideYouTubeElements() {{
+                try {{
+                    // Скрываем элементы через стили
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .ytp-chrome-top,
+                        .ytp-title-link,
+                        .ytp-title-channel,
+                        .ytp-share-button,
+                        .ytp-copylink-button,
+                        .ytp-show-cards-title,
+                        .ytp-pause-overlay,
+                        .ytp-youtube-button,
+                        .ytp-button.ytp-youtube-button,
+                        .ytp-watermark,
+                        .ytp-chrome-bottom {{
+                            display: none !important;
+                            opacity: 0 !important;
+                            visibility: hidden !important;
+                        }}
+                    `;
+                    document.head.appendChild(style);
+                    
+                    // Периодически скрываем появляющиеся элементы
+                    setInterval(() => {{
+                        const elements = document.querySelectorAll([
+                            '.ytp-chrome-top',
+                            '.ytp-title-link', 
+                            '.ytp-watermark',
+                            '.ytp-chrome-bottom'
+                        ].join(','));
+                        
+                        elements.forEach(el => {{
+                            if (el) {{
+                                el.style.display = 'none';
+                                el.style.opacity = '0';
+                                el.style.visibility = 'hidden';
+                            }}
+                        }});
+                    }}, 1000);
+                    
+                }} catch (e) {{
+                    console.log('YouTube elements hiding error:', e);
+                }}
+            }}
+            
+            // Запускаем скрытие элементов
+            document.getElementById('video-player').addEventListener('load', hideYouTubeElements);
+            setTimeout(hideYouTubeElements, 2000);
+            setInterval(hideYouTubeElements, 5000);
+        </script>
+    </body>
+    </html>
+    """
+
+def generate_rutube_html(video_url: str, platform: str, access_info: str) -> str:
+    """Генерирует HTML для RUTUBE"""
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Медитация «Дары Моря»</title>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                background: #000;
+                font-family: Arial, sans-serif;
+                overflow: hidden;
+            }}
+            .container {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+            }}
+            .video-container {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+            }}
+            iframe {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }}
+            .info-overlay {{
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background: rgba(0,0,0,0.7);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                font-size: 12px;
+                z-index: 1000;
+                max-width: 300px;
+            }}
+            .back-btn {{
+                position: absolute;
+                bottom: 20px;
+                right: 20px;
+                background: #667eea;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 20px;
+                font-size: 14px;
+                z-index: 1000;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="info-overlay">
+                <strong>🐚 Медитация «Дары Моря»</strong><br>
+                {platform.upper()} • {access_info}
+            </div>
+            
+            <div class="video-container">
+                <iframe src="{video_url}" 
+                    frameborder="0" 
+                    allow="autoplay; encrypted-media" 
+                    allowfullscreen
+                    id="video-player">
+                </iframe>
+            </div>
+            
+            <a href="https://t.me/MetaphorCardsSeaBot" class="back-btn">Вернуться в бота</a>
+        </div>
+    </body>
+    </html>
+    """
 
 def handle_payment_notification(event_data):
     """Обрабатывает уведомление о платеже"""
