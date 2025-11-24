@@ -11,10 +11,10 @@ class SecureVideoSystem:
         self.db = db
         
         # YouTube с минимальными настройками (только скрытие значков)
-        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0"
+        self.youtube_url = "https://www.youtube.com/embed/qBqIO-_OsgA?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=0&fs=0"
         
         # RUTUBE
-        self.rutube_url = "https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48"
+        self.rutube_url = "https://rutube.ru/play/embed/af23160e9d682ffcb8c9819e69fedd48?autoplay=1&controls=0"
         
         logging.info("🔧 Video system initialized with clean YouTube and RUTUBE links")
     
