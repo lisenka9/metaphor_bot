@@ -3985,12 +3985,10 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
     else:
         subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
     
-    # Генерируем отдельные ссылки для YouTube и RUTUBE с ОБЩИМ идентификатором доступа
-    # Используем общий base_hash для обеих платформ, чтобы время доступа было синхронизировано
-    base_hash = hashlib.sha256(f"{user.id}_{secrets.token_hex(8)}".encode()).hexdigest()[:16]
-    
-    youtube_link = video_system.generate_secure_link(user.id, "youtube", base_hash)
-    rutube_link = video_system.generate_secure_link(user.id, "rutube", base_hash)
+    # Генерируем отдельные ссылки для YouTube и RUTUBE
+    # Временно убираем сложную логику с base_hash для стабильности
+    youtube_link = video_system.generate_secure_link(user.id, "youtube")
+    rutube_link = video_system.generate_secure_link(user.id, "rutube")
     
     if not youtube_link or not rutube_link:
         await loading_msg.edit_text(
@@ -3998,11 +3996,6 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard.get_main_menu_keyboard()
         )
         return
-    
-    # ✅ ЗАПИСЫВАЕМ ФАКТ СОЗДАНИЯ ДОСТУПА (но не просмотра - просмотр запишется при первом переходе)
-    # Для бесплатных пользователей создаем запись о доступе с общим временем
-    if not has_active_subscription:
-        db.create_meditation_access(user.id, base_hash)
     
     meditation_text = f"""
 🐚 *Медитация «Дары Моря»*
@@ -4027,19 +4020,3 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard.get_meditation_platforms_keyboard(youtube_link, rutube_link),
         disable_web_page_preview=True
     )
-
-async def update_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обновляет таблицу video_links (только для админов)"""
-    user = update.effective_user
-    
-    if user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ У вас нет прав для этой команды")
-        return
-    
-    try:
-        db.update_video_links_table()
-        await update.message.reply_text("✅ Таблица video_links обновлена!")
-        
-    except Exception as e:
-        logging.error(f"❌ Error updating video table: {e}")
-        await update.message.reply_text(f"❌ Ошибка: {e}")

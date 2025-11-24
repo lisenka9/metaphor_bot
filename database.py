@@ -1515,5 +1515,34 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
+
+    def start_all_user_video_access(self, user_id: int) -> bool:
+        """Запускает отсчет времени для ВСЕХ видео ссылок пользователя одновременно"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Устанавливаем время начала и время окончания (1 час) для всех ссылок пользователя
+            access_started = datetime.now()
+            expires_at = access_started + timedelta(hours=1)
+            
+            cursor.execute('''
+                UPDATE video_links 
+                SET access_started_at = %s, expires_at = %s
+                WHERE user_id = %s AND access_started_at IS NULL AND has_subscription = FALSE
+            ''', (access_started, expires_at, user_id))
+            
+            conn.commit()
+            updated_count = cursor.rowcount
+            logging.info(f"✅ Started video access for {updated_count} user {user_id} links, expires at {expires_at}")
+            
+            return updated_count > 0
+            
+        except Exception as e:
+            logging.error(f"❌ Error starting all user video access: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

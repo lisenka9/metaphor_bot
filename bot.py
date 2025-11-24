@@ -67,7 +67,7 @@ def payment_callback():
 
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
-    """Безопасный видео-плеер с отложенным временем начала"""
+    """Безопасный видео-плеер с синхронизированным временем доступа"""
     try:
         logging.info(f"🔧 Secure video requested for hash: {link_hash}")
         
@@ -86,29 +86,35 @@ def secure_video_player(link_hash):
             </html>
             """, 404
         
-        # Для бесплатных пользователей проверяем, начался ли доступ
+        user_id = link_data['user_id']
+        platform = link_data['platform']
+        
+        # Для бесплатных пользователей проверяем и синхронизируем доступ
         if not link_data['has_subscription']:
             if not link_data['access_started_at']:
-                # Это первый переход - время начнет отсчитываться после валидации
-                logging.info(f"🔄 First access for free user, link: {link_hash}")
-            else:
-                # Проверяем не истекло ли время
-                if datetime.now() > link_data['expires_at']:
-                    logging.info(f"❌ Link expired: {link_hash}")
-                    db.cleanup_expired_video_links()
-                    return """
-                    <html>
-                        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                            <h2>❌ Время доступа истекло</h2>
-                            <p>Бесплатный доступ действителен в течение 1 часа с момента первого просмотра.</p>
-                            <p>Получите новую ссылку в боте.</p>
-                            <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
-                        </body>
-                    </html>
-                    """, 403
+                # Это первый переход - запускаем отсчет для ВСЕХ ссылок этого пользователя
+                success = db.start_all_user_video_access(user_id)
+                if success:
+                    logging.info(f"🔄 Started video access for all user {user_id} links")
+                else:
+                    logging.error(f"❌ Failed to start video access for user {user_id}")
+            
+            # Проверяем не истекло ли время
+            if link_data['expires_at'] and datetime.now() > link_data['expires_at']:
+                logging.info(f"❌ Link expired: {link_hash}")
+                db.cleanup_expired_video_links()
+                return """
+                <html>
+                    <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                        <h2>❌ Время доступа истекло</h2>
+                        <p>Бесплатный доступ действителен в течение 1 часа с момента первого просмотра.</p>
+                        <p>Получите новую ссылку в боте.</p>
+                        <a href="https://t.me/MetaphorCardsSeaBot">Вернуться в бота</a>
+                    </body>
+                </html>
+                """, 403
         
         video_url = link_data['video_url']
-        platform = link_data['platform']
         
         # Форматируем информацию о времени доступа
         if link_data['has_subscription']:
@@ -121,7 +127,7 @@ def secure_video_player(link_hash):
             else:
                 access_info = "⏰ Доступ откроется при первом просмотре (1 час)"
         
-        logging.info(f"✅ Serving {platform} video for user {link_data['user_id']}")
+        logging.info(f"✅ Serving {platform} video for user {user_id}")
         
         # HTML контент с улучшенным плеером
         html_content = f"""
