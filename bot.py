@@ -17,6 +17,7 @@ import multiprocessing
 import signal
 import sys
 from datetime import datetime, timedelta
+from telegram import Update
 
 # Настройка логирования
 logging.basicConfig(
@@ -933,25 +934,8 @@ def ping_self():
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик ошибок"""
     try:
-        # Логируем саму ошибку
-        error_msg = f"Exception while handling an update: {context.error}"
-        logger.error(error_msg)
-        
-        # Логируем traceback для деталей
+        logger.error(f"Exception while handling an update: {context.error}")
         logger.error("Full traceback:", exc_info=context.error)
-        
-        # Безопасное получение информации о пользователе
-        user_info = "Unknown user"
-        if isinstance(update, Update):
-            if update.effective_user:
-                user_info = f"User {update.effective_user.id}"
-            elif update.callback_query and update.callback_query.from_user:
-                user_info = f"User {update.callback_query.from_user.id} (callback)"
-            elif update.message and update.message.from_user:
-                user_info = f"User {update.message.from_user.id} (message)"
-        
-        logger.error(f"Error context: {user_info}")
-        
     except Exception as e:
         logger.error(f"Error in error handler itself: {e}")
 

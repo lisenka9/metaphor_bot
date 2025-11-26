@@ -4149,9 +4149,11 @@ async def report_problem_command(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode='Markdown'
     )
 
-async def show_report_problem_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+async def show_report_problem_from_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает информацию о сообщении проблемы из кнопки меню"""
+    query = update.callback_query
     logging.info(f"🔧 show_report_problem_from_button called for user {query.from_user.id}")
+    
     report_text = """
 🆘 Сообщить о проблеме
 
@@ -4162,38 +4164,50 @@ async def show_report_problem_from_button(query, context: ContextTypes.DEFAULT_T
 Нажмите кнопку ниже чтобы начать описание проблемы:
 """
     
-    await query.message.reply_text(
-        report_text,
-        reply_markup=keyboard.get_report_problem_keyboard(),
-        parse_mode='Markdown'
-    )
+    try:
+        await query.message.reply_text(
+            report_text,
+            reply_markup=keyboard.get_report_problem_keyboard(),
+            parse_mode='Markdown'
+        )
+        logging.info(f"✅ Report problem message sent to user {query.from_user.id}")
+    except Exception as e:
+        logging.error(f"❌ Error in show_report_problem_from_button: {e}")
 
-async def start_report_form(query, context: ContextTypes.DEFAULT_TYPE):
+async def start_report_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы проблемы"""
+    query = update.callback_query
     logging.info(f"🔧 start_report_form called for user {query.from_user.id}")
-    # Убираем кнопку из предыдущего сообщения
-    await query.edit_message_reply_markup(reply_markup=None)
     
-    # Сохраняем состояние формы
-    context.user_data['report_form'] = {
-        'step': 1,
-        'user_id': query.from_user.id,
-        'username': query.from_user.username or query.from_user.first_name
-    }
-    
-    # Первый вопрос формы
-    question_text = """
+    try:
+        # Убираем кнопку из предыдущего сообщения
+        await query.edit_message_reply_markup(reply_markup=None)
+        
+        # Сохраняем состояние формы
+        context.user_data['report_form'] = {
+            'step': 1,
+            'user_id': query.from_user.id,
+            'username': query.from_user.username or query.from_user.first_name
+        }
+        
+        # Первый вопрос формы
+        question_text = """
 📝 Сообщение о проблеме
 
 Пожалуйста, опишите проблему, с которой вы столкнулись, или ваше предложение по улучшению бота.
 
 1. Опишите проблему или предложение максимально подробно:
 """
-    
-    await query.message.reply_text(
-        question_text,
-        parse_mode='Markdown'
-    )
+        
+        await query.message.reply_text(
+            question_text,
+            parse_mode='Markdown'
+        )
+        logging.info(f"✅ Report form started for user {query.from_user.id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in start_report_form: {e}")
+
 
 async def handle_report_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает ответы формы проблемы"""
