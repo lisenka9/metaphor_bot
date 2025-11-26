@@ -934,19 +934,26 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     """Обработчик ошибок"""
     try:
         # Логируем саму ошибку
-        logger.error(f"Exception while handling an update: {context.error}")
+        error_msg = f"Exception while handling an update: {context.error}"
+        logger.error(error_msg)
         
-        # Логируем дополнительную информацию об update если он есть
-        if update:
-            if hasattr(update, 'effective_user'):
-                logger.error(f"Error for user: {update.effective_user.id}")
-            elif hasattr(update, 'callback_query') and update.callback_query:
-                logger.error(f"Error in callback from user: {update.callback_query.from_user.id}")
-            elif hasattr(update, 'message') and update.message:
-                logger.error(f"Error in message from user: {update.message.from_user.id}")
-                
+        # Логируем traceback для деталей
+        logger.error("Full traceback:", exc_info=context.error)
+        
+        # Безопасное получение информации о пользователе
+        user_info = "Unknown user"
+        if isinstance(update, Update):
+            if update.effective_user:
+                user_info = f"User {update.effective_user.id}"
+            elif update.callback_query and update.callback_query.from_user:
+                user_info = f"User {update.callback_query.from_user.id} (callback)"
+            elif update.message and update.message.from_user:
+                user_info = f"User {update.message.from_user.id} (message)"
+        
+        logger.error(f"Error context: {user_info}")
+        
     except Exception as e:
-        logger.error(f"Error in error handler: {e}")
+        logger.error(f"Error in error handler itself: {e}")
 
 def run_bot_with_restart():
     """Запускает бота с автоматическим перезапуском при ошибках"""
