@@ -934,34 +934,19 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     """Обработчик ошибок"""
     try:
         # Логируем саму ошибку
-        error_msg = f"Exception while handling an update: {context.error}"
-        logger.error(error_msg)
+        logger.error(f"Exception while handling an update: {context.error}")
         
-        # Логируем traceback для детальной информации
-        logger.error(f"Traceback: {context.error.__traceback__}")
-        
-        # Получаем информацию о пользователе правильным способом
-        user_info = "Unknown user"
-        if isinstance(update, Update):
-            if update.effective_user:
-                user_info = f"User {update.effective_user.id} (@{update.effective_user.username or 'no_username'})"
-            elif update.callback_query and update.callback_query.from_user:
-                user_info = f"User {update.callback_query.from_user.id} (@{update.callback_query.from_user.username or 'no_username'}) from callback"
-            elif update.message and update.message.from_user:
-                user_info = f"User {update.message.from_user.id} (@{update.message.from_user.username or 'no_username'}) from message"
-        
-        logger.error(f"Error for: {user_info}")
-        
-        # Логируем тип update
+        # Логируем дополнительную информацию об update если он есть
         if update:
-            logger.error(f"Update type: {type(update)}")
-            if hasattr(update, 'callback_query') and update.callback_query:
-                logger.error(f"Callback data: {update.callback_query.data}")
+            if hasattr(update, 'effective_user'):
+                logger.error(f"Error for user: {update.effective_user.id}")
+            elif hasattr(update, 'callback_query') and update.callback_query:
+                logger.error(f"Error in callback from user: {update.callback_query.from_user.id}")
             elif hasattr(update, 'message') and update.message:
-                logger.error(f"Message text: {update.message.text}")
+                logger.error(f"Error in message from user: {update.message.from_user.id}")
                 
     except Exception as e:
-        logger.error(f"Error in error handler itself: {e}")
+        logger.error(f"Error in error handler: {e}")
 
 def run_bot_with_restart():
     """Запускает бота с автоматическим перезапуском при ошибках"""
