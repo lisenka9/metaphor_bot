@@ -69,14 +69,14 @@ class SecureVideoSystem:
             return None
 
     def get_video_system_safe():
-    """Безопасно получает video_system"""
-    try:
-        from config import BASE_URL
-        from database import db
-        
-        video_system = SecureVideoSystem(BASE_URL, db)
-        logging.info("✅ Video system created successfully")
-        return video_system
-    except Exception as e:
-        logging.error(f"❌ Error creating video system: {e}")
-        return None
+        """Безопасно получает video_system"""
+        try:
+            from config import BASE_URL
+            from database import db
+            
+            video_system = SecureVideoSystem(BASE_URL, db)
+            logging.info("✅ Video system created successfully")
+            return video_system
+        except Exception as e:
+            logging.error(f"❌ Error creating video system: {e}")
+            return None

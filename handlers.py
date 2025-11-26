@@ -4328,4 +4328,21 @@ async def debug_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+async def debug_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная команда для проверки кнопок сообщения о проблеме"""
+    user = update.effective_user
+    logging.info(f"🔧 DEBUG: debug_report called by user {user.id}")
     
+    # Простая тестовая клавиатура
+    keyboard = [
+        [InlineKeyboardButton("🆘 Тест: Сообщить о проблеме", callback_data="report_problem")],
+        [InlineKeyboardButton("📝 Тест: Написать о проблеме", callback_data="start_report_form")],
+        [InlineKeyboardButton("✅ Тест: Главное меню", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🔧 **ТЕСТ КНОПОК СООБЩЕНИЯ О ПРОБЛЕМЕ**\n\nНажмите любую кнопку:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )

@@ -932,7 +932,36 @@ def ping_self():
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик ошибок"""
-    logger.error(f"Exception while handling an update: {context.error}")
+    try:
+        # Логируем саму ошибку
+        error_msg = f"Exception while handling an update: {context.error}"
+        logger.error(error_msg)
+        
+        # Логируем traceback для детальной информации
+        logger.error(f"Traceback: {context.error.__traceback__}")
+        
+        # Получаем информацию о пользователе правильным способом
+        user_info = "Unknown user"
+        if isinstance(update, Update):
+            if update.effective_user:
+                user_info = f"User {update.effective_user.id} (@{update.effective_user.username or 'no_username'})"
+            elif update.callback_query and update.callback_query.from_user:
+                user_info = f"User {update.callback_query.from_user.id} (@{update.callback_query.from_user.username or 'no_username'}) from callback"
+            elif update.message and update.message.from_user:
+                user_info = f"User {update.message.from_user.id} (@{update.message.from_user.username or 'no_username'}) from message"
+        
+        logger.error(f"Error for: {user_info}")
+        
+        # Логируем тип update
+        if update:
+            logger.error(f"Update type: {type(update)}")
+            if hasattr(update, 'callback_query') and update.callback_query:
+                logger.error(f"Callback data: {update.callback_query.data}")
+            elif hasattr(update, 'message') and update.message:
+                logger.error(f"Message text: {update.message.text}")
+                
+    except Exception as e:
+        logger.error(f"Error in error handler itself: {e}")
 
 def run_bot_with_restart():
     """Запускает бота с автоматическим перезапуском при ошибках"""
@@ -1016,6 +1045,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("report", handlers.report_problem_command))
             application.add_handler(CommandHandler("reports", handlers.admin_reports))
             application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
+            application.add_handler(CommandHandler("debug_report", handlers.debug_report))
             
             application.add_handler(CallbackQueryHandler(
                 handlers.show_report_problem_from_button, 
