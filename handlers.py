@@ -1938,8 +1938,8 @@ async def show_subscribe_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 
 Выберите способ оплаты:
 
-🇷🇺 *Оплата из России* - через ЮKassa (рубли)
-🌍 *Международная оплата* - через PayPal (шекели)
+🇷🇺 *Оплата из России* (рубли)
+🌍 *Оплата из любой точки мира* (шекели)
 
 Обе системы обеспечивают безопасную оплату и мгновенную активацию подписки.
 """
@@ -2395,7 +2395,7 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
                 end_date_str = str(end_date)[:10]
             
             success_text = f"""
-✅ Оплата PayPal прошла успешно!
+✅ Оплата прошла успешно!
 
 Ваша премиум подписка активирована.
 
@@ -2433,7 +2433,7 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
                                 end_date_str = str(end_date)[:10]
                             
                             success_text = f"""
-✅ Оплата PayPal подтверждена!
+✅ Оплата подтверждена!
 
 Ваша премиум подписка активирована.
 
@@ -2449,7 +2449,7 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
                             return
                 
                 await update.message.reply_text(
-                    "⏳ Ваш платеж PayPal обрабатывается...\n\n"
+                    "⏳ Ваш платеж обрабатывается...\n\n"
                     "Подписка будет активирована в течение 1-2 минут.\n\n"
                     "Если прошло больше времени:\n"
                     "• Используйте команду /subscribe для проверки статуса\n"
@@ -2460,7 +2460,7 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
             except Exception as e:
                 logging.error(f"❌ Error checking PayPal payment: {e}")
                 await update.message.reply_text(
-                    "⏳ Ваш платеж PayPal обрабатывается...\n\n"
+                    "⏳ Ваш платеж обрабатывается...\n\n"
                     "Если подписка не активировалась в течение 5 минут, "
                     "пожалуйста, свяжитесь с поддержкой.",
                     reply_markup=keyboard.get_main_menu_keyboard()
@@ -2469,7 +2469,7 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
     # Обработка отмены оплаты через PayPal
     elif args[0] == 'paypal_cancel':
         await update.message.reply_text(
-            "❌ Оплата через PayPal была отменена.\n\n"
+            "❌ Оплата была отменена.\n\n"
             "Вы можете попробовать снова или выбрать другой способ оплаты.",
             reply_markup=keyboard.get_payment_method_keyboard()
         )
@@ -4660,7 +4660,7 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
 
 Стоимость: {price}₪
 
-Нажмите кнопку "💳 Оплатить через PayPal" для перехода к оплате.
+Нажмите кнопку "💳 Оплатить" для перехода к оплате.
 
 После успешной оплаты подписка активируется автоматически в течение 1-2 минут.
 
@@ -4678,7 +4678,7 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
     except Exception as e:
         logging.error(f"❌ Error in handle_paypal_subscription_selection: {e}")
         await query.message.reply_text(
-            "❌ Произошла ошибка при создании платежа PayPal. Попробуйте позже.",
+            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
         )
 
@@ -4706,7 +4706,7 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
     # Для статических ссылок PayPal просто сообщаем, что проверка в процессе
     if payment_id.startswith('paypal_'):
         await query.message.reply_text(
-            "⏳ Платеж PayPal обрабатывается...\n\n"
+            "⏳ Платеж обрабатывается...\n\n"
             "✅ Автоматическая проверка активна - подписка активируется сама при успешной оплате.\n"
             "Обычно это занимает 1-5 минут.\n\n"
             "Вы можете закрыть это окно и вернуться позже.",
@@ -4714,7 +4714,7 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
         )
     else:
         await query.message.reply_text(
-            "❌ Неизвестный тип платежа PayPal.",
+            "❌ Неизвестный тип платежа.",
             reply_markup=keyboard.get_paypal_subscription_keyboard()
         )
 

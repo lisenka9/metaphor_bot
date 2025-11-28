@@ -459,7 +459,7 @@ class PayPalPayment:
                     end_date_str = str(end_date)[:10]
             
             message_text = f"""
-    ✅ *Оплата PayPal подтверждена!*
+    ✅ *Оплата подтверждена!*
 
     💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 год')}" активирована.
 
