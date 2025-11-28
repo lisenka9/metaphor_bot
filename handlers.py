@@ -4637,21 +4637,18 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         price = PAYPAL_PRICES[subscription_type]
         duration = SUBSCRIPTION_NAMES[subscription_type]
         
-        # Создаем платеж через PayPal
-        from paypal_payment import paypal_processor
-        payment_url, payment_id = paypal_processor.create_payment(
-            amount=price,
-            description=f"Подписка {duration}",
-            user_id=user_id,
-            subscription_type=subscription_type
-        )
+        # ИСПОЛЬЗУЕМ СТАТИЧЕСКИЕ ССЫЛКИ PAYPAL (не ЮKassa!)
+        payment_url = PAYPAL_LINKS.get(subscription_type)
         
         if not payment_url:
             await query.message.reply_text(
-                "❌ Ошибка при создании платежа PayPal. Попробуйте позже.",
+                "❌ Ошибка: ссылка для оплаты PayPal не найдена. Свяжитесь с администратором.",
                 reply_markup=keyboard.get_main_menu_keyboard()
             )
             return
+        
+        # Генерируем простой payment_id для PayPal
+        payment_id = f"paypal_{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
         
         # Сохраняем в контексте
         context.user_data['paypal_payment_id'] = payment_id
@@ -4675,12 +4672,12 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
             parse_mode='Markdown'
         )
         
-        logging.info(f"✅ PayPal payment message sent for user {user_id}, payment_id: {payment_id}")
+        logging.info(f"✅ PayPal payment message sent for user {user_id}")
         
     except Exception as e:
         logging.error(f"❌ Error in handle_paypal_subscription_selection: {e}")
         await query.message.reply_text(
-            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
+            "❌ Произошла ошибка при создании платежа PayPal. Попробуйте позже.",
             reply_markup=keyboard.get_main_menu_keyboard()
         )
 
@@ -4694,7 +4691,7 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
     
     if not payment_id:
         await query.message.reply_text(
-            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
+            "❌ Не найден активный платеж PayPal. Пожалуйста, начните процесс заново.",
             reply_markup=keyboard.get_paypal_subscription_keyboard()
         )
         return
@@ -4705,37 +4702,19 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
         await handle_successful_payment(query, subscription)
         return
     
-    # Проверяем статус платежа через API
-    from paypal_payment import paypal_processor
-    payment_status = paypal_processor.check_payment_status(payment_id)
-    
-    if payment_status is True:
-        # Платеж подтвержден, активируем подписку
-        if paypal_processor.activate_subscription(payment_id):
-            subscription = db.get_user_subscription(user_id)
-            await handle_successful_payment(query, subscription)
-            
-            # Очищаем данные о платеже
-            if 'paypal_payment_id' in context.user_data:
-                del context.user_data['paypal_payment_id']
-        else:
-            await query.message.reply_text(
-                "❌ Ошибка при активации подписки. Свяжитесь с администратором.",
-                reply_markup=keyboard.get_main_menu_keyboard()
-            )
-            
-    elif payment_status is False:
+    # Для статических ссылок PayPal просто сообщаем, что проверка в процессе
+    if payment_id.startswith('paypal_'):
         await query.message.reply_text(
-            "❌ Платеж не прошел или был отменен. Попробуйте оплатить снова.",
-            reply_markup=keyboard.get_paypal_subscription_keyboard()
-        )
-    else:
-        # Платеж еще обрабатывается
-        await query.message.reply_text(
-            "⏳ Платеж еще обрабатывается...\n\n"
+            "⏳ Платеж PayPal обрабатывается...\n\n"
             "✅ Автоматическая проверка активна - подписка активируется сама при успешной оплате.\n"
+            "Обычно это занимает 1-5 минут.\n\n"
             "Вы можете закрыть это окно и вернуться позже.",
             reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id)
+        )
+    else:
+        await query.message.reply_text(
+            "❌ Неизвестный тип платежа PayPal.",
+            reply_markup=keyboard.get_paypal_subscription_keyboard()
         )
 
 async def handle_successful_payment(query, subscription):
