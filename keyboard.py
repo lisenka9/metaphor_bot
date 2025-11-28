@@ -397,3 +397,44 @@ def get_report_form_keyboard():
         [InlineKeyboardButton("❌ Отменить отправку", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+# keyboard.py - добавить новые функции
+
+def get_payment_method_keyboard():
+    """Клавиатура для выбора платежной системы"""
+    keyboard = [
+        [InlineKeyboardButton("🇷🇺 Оплата из России (ЮKassa)", callback_data="payment_yookassa")],
+        [InlineKeyboardButton("🌍 Международная оплата (PayPal)", callback_data="payment_paypal")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_paypal_subscription_keyboard():
+    """Клавиатура для выбора подписки PayPal"""
+    keyboard = [
+        [InlineKeyboardButton("1 месяц - 5.00₪", callback_data="paypal_month")],
+        [InlineKeyboardButton("3 месяца - 9.00₪", callback_data="paypal_3months")],
+        [InlineKeyboardButton("6 месяцев - 17.00₪", callback_data="paypal_6months")],
+        [InlineKeyboardButton("1 год - 35.00₪", callback_data="paypal_year")],
+        [InlineKeyboardButton("🔙 Назад к выбору оплаты", callback_data="subscribe")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_paypal_payment_keyboard(subscription_type: str, payment_url: str, payment_id: str):
+    """Клавиатура для оплаты через PayPal"""
+    keyboard = [
+        [InlineKeyboardButton("💳 Оплатить через PayPal", url=payment_url)],
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_paypal_{payment_id}")],
+        [InlineKeyboardButton("🔙 Назад к выбору тарифа", callback_data="payment_paypal")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_paypal_check_keyboard(subscription_type: str, payment_id: str):
+    """Клавиатура для проверки оплаты PayPal"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_paypal_{payment_id}")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)

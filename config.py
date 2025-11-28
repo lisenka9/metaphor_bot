@@ -16,6 +16,11 @@ BASE_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://metaphor-bot.onrender.
 YOOKASSA_SHOP_ID = os.environ.get("YOOKASSA_SHOP_ID", "")
 YOOKASSA_SECRET_KEY = os.environ.get("YOOKASSA_SECRET_KEY", "")
 
+# PayPal настройки
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "")
+PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "")
+PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID", "")
+
 # Ссылки для оплаты
 PAYMENT_LINKS = {
     "month": "https://yookassa.ru/my/i/aQY7xxKX30Fj/l",
@@ -24,12 +29,26 @@ PAYMENT_LINKS = {
     "year": "https://yookassa.ru/my/i/aQY86Y-FkTVZ/l"
 }
 
+PAYPAL_LINKS = {
+    "month": "https://www.paypal.com/ncp/payment/ELCKRCRLM9AV8",
+    "3months": "https://www.paypal.com/ncp/payment/MVWBB6P5ER5KE",
+    "6months": "https://www.paypal.com/ncp/payment/TLSQ2ZAGXMHNL", 
+    "year": "https://www.paypal.com/ncp/payment/PVLQ7RPTY7XKU"
+}
+
 # Цены подписок
 SUBSCRIPTION_PRICES = {
     "month": 99,
     "3months": 199,  
     "6months": 399,
     "year": 799
+}
+
+PAYPAL_PRICES = {
+    "month": 5.00,  # ILS
+    "3months": 9.00,  
+    "6months": 17.00,
+    "year": 35.00
 }
 
 SUBSCRIPTION_DURATIONS = {

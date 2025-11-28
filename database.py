@@ -1181,33 +1181,47 @@ class DatabaseManager:
 
     def can_watch_meditation(self, user_id: int) -> tuple:
         """Проверяет, может ли пользователь смотреть медитацию"""
-        # Проверяем подписку пользователя
-        subscription = self.get_user_subscription(user_id)
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
-        if subscription and subscription[1]:
-            # Если есть активная подписка - доступ всегда открыт
-            subscription_end = subscription[1]
-            if hasattr(subscription_end, 'date'):
-                sub_date = subscription_end.date()
-            else:
-                sub_date = subscription_end
+        try:
+            # Проверяем подписку пользователя
+            subscription = self.get_user_subscription(user_id)
             
-            if sub_date >= date.today():
-                return True, "✅ Доступ открыт по подписке"
-        
-        # Для бесплатных пользователей проверяем ОБЩЕЕ количество просмотров
-        cursor.execute('''
-            SELECT COUNT(*) FROM user_meditations 
-            WHERE user_id = %s
-        ''', (user_id,))
-        
-        total_watched = cursor.fetchone()[0]
-        
-        # Ограничиваем 1 бесплатным просмотром ВСЕГО
-        if total_watched >= 1:
-            return False, "❌ Вы уже использовали бесплатный доступ к медитации. Оформите подписку для неограниченного доступа!"
-        else:
-            return True, "✅ Можно смотреть медитацию (бесплатный доступ)"
+            if subscription and subscription[1]:
+                # Если есть активная подписка - доступ всегда открыт
+                subscription_end = subscription[1]
+                if hasattr(subscription_end, 'date'):
+                    sub_date = subscription_end.date()
+                else:
+                    sub_date = subscription_end
+                
+                if sub_date >= date.today():
+                    conn.close()
+                    return True, "✅ Доступ открыт по подписке"
+            
+            # Для бесплатных пользователей проверяем ОБЩЕЕ количество просмотров
+            cursor.execute('''
+                SELECT COUNT(*) FROM user_meditations 
+                WHERE user_id = %s
+            ''', (user_id,))
+            
+            total_watched = cursor.fetchone()[0]
+            
+            # Ограничиваем 1 бесплатным просмотром ВСЕГО
+            if total_watched >= 1:
+                conn.close()
+                return False, "❌ Вы уже использовали бесплатный доступ к медитации. Оформите подписку для неограниченного доступа!"
+            else:
+                conn.close()
+                return True, "✅ Можно смотреть медитацию (бесплатный доступ)"
+                
+        except Exception as e:
+            logging.error(f"❌ Error checking meditation access: {e}")
+            conn.close()
+            return False, "❌ Ошибка при проверке доступа к медитации"
+        finally:
+            conn.close()
 
     def record_meditation_watch(self, user_id: int) -> bool:
         """Записывает факт просмотра медитации"""
@@ -1240,7 +1254,6 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
-
     
     def cleanup_expired_video_links(self):
         """Очищает просроченные видео ссылки"""
@@ -1285,7 +1298,11 @@ class DatabaseManager:
                 )
             ''')
             
-            # Сохраняем ссылку БЕЗ base_hash пока
+            # Для пользователей без подписки устанавливаем срок 24 часа
+            if not has_subscription and expires_at is None:
+                expires_at = datetime.now() + timedelta(hours=24)
+            
+            # Сохраняем ссылку
             cursor.execute('''
                 INSERT INTO video_links (link_hash, user_id, yandex_link, video_url, platform, has_subscription, expires_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -1299,7 +1316,7 @@ class DatabaseManager:
             ''', (link_hash, user_id, video_url, video_url, platform, has_subscription, expires_at))
             
             conn.commit()
-            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}")
+            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}, expires: {expires_at}")
             return True
             
         except Exception as e:
@@ -1515,9 +1532,9 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
-            # Устанавливаем время начала и время окончания (1 час) для всех ссылок пользователя
+            # Устанавливаем время начала и время окончания (24 часа) для всех ссылок пользователя
             access_started = datetime.now()
-            expires_at = access_started + timedelta(hours=1)
+            expires_at = access_started + timedelta(hours=24)  # Изменено с 1 часа на 24 часа
             
             cursor.execute('''
                 UPDATE video_links 
@@ -1537,5 +1554,6 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

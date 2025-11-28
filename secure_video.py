@@ -37,6 +37,10 @@ class SecureVideoSystem:
                     has_subscription = True
                     expires_at = datetime.combine(sub_date, datetime.max.time())
             
+            # Для бесплатных пользователей устанавливаем 24 часа доступа
+            if not has_subscription:
+                expires_at = datetime.now() + timedelta(hours=24)  # Изменено с 1 часа на 24 часа
+            
             # Генерируем уникальный хеш
             unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
             link_hash = hashlib.sha256(unique_string.encode()).hexdigest()[:20]
@@ -58,7 +62,7 @@ class SecureVideoSystem:
                 logging.error("❌ Failed to save video link to database")
                 return None
             
-            logging.info(f"✅ Generated secure {platform} link for user {user_id}")
+            logging.info(f"✅ Generated secure {platform} link for user {user_id}, expires: {expires_at}")
             
             # Возвращаем ссылку на наш защищенный плеер
             secure_url = f"{self.base_url}/secure-video/{link_hash}"

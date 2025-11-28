@@ -312,6 +312,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("check_payment_"):
         await handle_payment_check(query, context)
 
+    elif query.data.startswith("payment_"):
+        await handle_payment_method_selection(query, context)
+        
+    elif query.data.startswith("paypal_"):
+        await handle_paypal_subscription_selection(update, context)
+    
+    elif query.data.startswith("check_paypal_"):
+        await handle_paypal_payment_check(query, context)
+
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
     # Убираем кнопку из предыдущего сообщения
@@ -1922,31 +1931,21 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_subscribe_from_button(query, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает подписку из кнопки меню"""
+    """Показывает выбор платежной системы"""
     subscription_text = """
 💎 Премиум подписка
 
-Откройте полный доступ к возможностям бота:
+Выберите способ оплаты:
 
-✨ Что входит:
-• 5 карт дня вместо 1
-• Послание дня (ежедневно)
-• Доступ к 3 техникам самопомощи «Архипелаг ресурсов»
-• Медитация «Дары моря»
+🇷🇺 *Оплата из России* - через ЮKassa (рубли)
+🌍 *Международная оплата* - через PayPal (шекели)
 
-🎯 Тарифы:
-• 1 месяц - 99₽
-• 3 месяца - 199₽ 
-• 6 месяцев - 399₽ 
-• 1 год - 799₽
-
-Выберите срок подписки:
+Обе системы обеспечивают безопасную оплату и мгновенную активацию подписки.
 """
-
     
     await query.message.reply_text(
         subscription_text,
-        reply_markup=keyboard.get_subscription_keyboard(),
+        reply_markup=keyboard.get_payment_method_keyboard(),
         parse_mode='Markdown'
     )
 
@@ -2332,21 +2331,41 @@ async def handle_payment_check(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
 async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает deep link после успешной оплаты"""
+    """Обрабатывает deep link после успешной оплаты подписки"""
     user = update.effective_user
     args = context.args
     
-    if args and args[0] == 'payment_success':
+    if not args:
+        return
+        
+    # Обработка успешной оплаты через ЮKassa
+    if args[0] == 'payment_success':
         # Проверяем, есть ли у пользователя активная подписка
         subscription = db.get_user_subscription(user.id)
         
         if subscription:
-            success_text = """
+            subscription_type, end_date = subscription
+            
+            # Форматируем дату окончания подписки
+            if hasattr(end_date, 'strftime'):
+                end_date_str = end_date.strftime('%d.%m.%Y')
+            else:
+                end_date_str = str(end_date)[:10]
+            
+            success_text = f"""
 ✅ Оплата прошла успешно!
 
 Ваша премиум подписка активирована.
 
-✨ Теперь вам доступны все премиум-функции!
+📅 Действует до: {end_date_str}
+
+✨ Теперь вам доступны все премиум-функции:
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Архипелаг ресурсов
+• Медитация «Дары Моря»
+
+Наслаждайтесь полным доступом! 💫
 """
             await update.message.reply_text(
                 success_text,
@@ -2356,9 +2375,122 @@ async def handle_start_with_payment(update: Update, context: ContextTypes.DEFAUL
         else:
             await update.message.reply_text(
                 "⏳ Ваш платеж обрабатывается...\n\n"
-                "Подписка будет активирована в течение 1-2 минут. "
-                "Если прошло больше времени, используйте команду /subscribe для проверки статуса.",
+                "Подписка будет активирована в течение 1-2 минут.\n\n"
+                "Если прошло больше времени:\n"
+                "• Используйте команду /subscribe для проверки статуса\n"
+                "• Или нажмите кнопку '🔄 Проверить оплату' в предыдущем сообщении",
                 reply_markup=keyboard.get_main_menu_keyboard()
+            )
+    
+    # Обработка успешной оплаты через PayPal
+    elif args[0].startswith('paypal_success_'):
+        payment_id = args[0].replace('paypal_success_', '')
+        
+        # Проверяем статус подписки
+        subscription = db.get_user_subscription(user.id)
+        
+        if subscription:
+            subscription_type, end_date = subscription
+            
+            # Форматируем дату окончания подписки
+            if hasattr(end_date, 'strftime'):
+                end_date_str = end_date.strftime('%d.%m.%Y')
+            else:
+                end_date_str = str(end_date)[:10]
+            
+            success_text = f"""
+✅ Оплата PayPal прошла успешно!
+
+Ваша премиум подписка активирована.
+
+📅 Действует до: {end_date_str}
+
+✨ Теперь вам доступны все премиум-функции:
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Архипелаг ресурсов
+• Медитация «Дары Моря»
+
+Наслаждайтесь полным доступом! 💫
+"""
+            await update.message.reply_text(
+                success_text,
+                reply_markup=keyboard.get_payment_success_keyboard(),
+                parse_mode='Markdown'
+            )
+        else:
+            # Проверяем статус PayPal платежа напрямую
+            try:
+                from paypal_payment import paypal_processor
+                payment_status = paypal_processor.check_payment_status(payment_id)
+                
+                if payment_status is True:
+                    # Активируем подписку
+                    if paypal_processor.activate_subscription(payment_id):
+                        subscription = db.get_user_subscription(user.id)
+                        if subscription:
+                            subscription_type, end_date = subscription
+                            
+                            if hasattr(end_date, 'strftime'):
+                                end_date_str = end_date.strftime('%d.%m.%Y')
+                            else:
+                                end_date_str = str(end_date)[:10]
+                            
+                            success_text = f"""
+✅ Оплата PayPal подтверждена!
+
+Ваша премиум подписка активирована.
+
+📅 Действует до: {end_date_str}
+
+✨ Теперь вам доступны все премиум-функции!
+"""
+                            await update.message.reply_text(
+                                success_text,
+                                reply_markup=keyboard.get_payment_success_keyboard(),
+                                parse_mode='Markdown'
+                            )
+                            return
+                
+                await update.message.reply_text(
+                    "⏳ Ваш платеж PayPal обрабатывается...\n\n"
+                    "Подписка будет активирована в течение 1-2 минут.\n\n"
+                    "Если прошло больше времени:\n"
+                    "• Используйте команду /subscribe для проверки статуса\n"
+                    "• Или нажмите кнопку '🔄 Проверить оплату' в предыдущем сообщении",
+                    reply_markup=keyboard.get_main_menu_keyboard()
+                )
+                
+            except Exception as e:
+                logging.error(f"❌ Error checking PayPal payment: {e}")
+                await update.message.reply_text(
+                    "⏳ Ваш платеж PayPal обрабатывается...\n\n"
+                    "Если подписка не активировалась в течение 5 минут, "
+                    "пожалуйста, свяжитесь с поддержкой.",
+                    reply_markup=keyboard.get_main_menu_keyboard()
+                )
+    
+    # Обработка отмены оплаты через PayPal
+    elif args[0] == 'paypal_cancel':
+        await update.message.reply_text(
+            "❌ Оплата через PayPal была отменена.\n\n"
+            "Вы можете попробовать снова или выбрать другой способ оплаты.",
+            reply_markup=keyboard.get_payment_method_keyboard()
+        )
+    
+    # Обработка успешной оплаты колоды (оставляем для полноты, но это отдельная функция)
+    elif args[0] == 'deck_purchase_success':
+        # Проверяем, есть ли у пользователя покупка колоды
+        if db.has_purchased_deck(user.id):
+            await send_deck_files(update, context, user.id)
+        else:
+            await update.message.reply_text(
+                "⏳ Ваш платеж за колоду обрабатывается...\n\n"
+                "Файлы будут отправлены в течение 1-2 минут.\n\n"
+                "Если прошло больше времени:\n"
+                "• Используйте команду /buy для проверки статуса\n"
+                "• Или нажмите кнопку '🔄 Проверить оплату' в предыдущем сообщении",
+                reply_markup=keyboard.get_buy_keyboard()
             )
 
 async def update_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3897,6 +4029,17 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user = update.effective_user
     logging.info(f"🔧 Meditation command called by user {user.id}")
     
+    # Проверяем доступ ДО создания видео системы
+    can_watch, reason = db.can_watch_meditation(user.id)
+    
+    if not can_watch:
+        await update.message.reply_text(
+            f"❌ {reason}",
+            reply_markup=keyboard.get_meditation_limited_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
+    
     # Создаем video_system при каждом вызове
     video_system = get_video_system_safe()
     
@@ -3908,7 +4051,7 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Получаем информацию о подписке для текста
+    # Получаем информацию о подписке
     subscription = db.get_user_subscription(user.id)
     has_active_subscription = False
     subscription_text = ""
@@ -3920,11 +4063,11 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if has_active_subscription:
                 subscription_text = f"\n💎 *Ваша подписка активна до:* {sub_end.strftime('%d.%m.%Y')}"
             else:
-                subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+                subscription_text = "\n⏰ *Бесплатный доступ:* 24 часа с момента первого просмотра"
         else:
-            subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+            subscription_text = "\n⏰ *Бесплатный доступ:* 24 часа с момента первого просмотра"
     else:
-        subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+        subscription_text = "\n⏰ *Бесплатный доступ:* 24 часа с момента первого просмотра"
     
     # Генерируем отдельные ссылки для YouTube и RUTUBE
     youtube_link = video_system.generate_secure_link(user.id, "youtube")
@@ -3951,7 +4094,7 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 ⚠️ *Важно:* 
 • Ссылки персональные и защищены
 • Для пользователей без подписки отсчёт времени начинается при первом переходе по ЛЮБОЙ из ссылок
-• Для пользователей без подписки после начала отсчёта обе ссылки будут активны 1 час
+• Для пользователей без подписки после начала отсчёта обе ссылки будут активны 24 часа
 """
     
     logging.info(f"✅ Sending meditation links to user {user.id}")
@@ -3967,7 +4110,7 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     await query.answer()
     
-    # Проверяем доступ
+    # Проверяем доступ ДО создания видео системы
     can_watch, reason = db.can_watch_meditation(user.id)
     
     if not can_watch:
@@ -3990,7 +4133,7 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
     # Показываем "загрузка"
     loading_msg = await query.message.reply_text("🔄 Подготавливаем вашу медитацию...")
     
-    # Получаем информацию о подписке для текста
+    # Получаем информацию о подписке
     subscription = db.get_user_subscription(user.id)
     has_active_subscription = False
     subscription_text = ""
@@ -4002,14 +4145,13 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
             if has_active_subscription:
                 subscription_text = f"\n💎 *Видео доступно до:* {sub_end.strftime('%d.%m.%Y')}"
             else:
-                subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+                subscription_text = "\n⏰ *Бесплатный доступ:* 24 часа с момента первого просмотра"
         else:
-            subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+            subscription_text = "\n⏰ *Бесплатный доступ:* 24 часа с момента первого просмотра"
     else:
-        subscription_text = "\n⏰ *Бесплатный доступ:* 1 час с момента первого просмотра"
+        subscription_text = "\n⏰ *Бесплатный доступ:* 24 часа с момента первого просмотра"
     
     # Генерируем отдельные ссылки для YouTube и RUTUBE
-    # Временно убираем сложную логику с base_hash для стабильности
     youtube_link = video_system.generate_secure_link(user.id, "youtube")
     rutube_link = video_system.generate_secure_link(user.id, "rutube")
     
@@ -4028,13 +4170,13 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
 {subscription_text}
 
 ✨ *Доступные платформы:*
-• YouTube - стабильное воспроизведение
-• RUTUBE - альтернативная платформа
+• YouTube 
+• RUTUBE 
 
 ⚠️ *Важно:* 
 • Ссылки персональные и защищены
 • Для пользователей без подписки отсчёт времени начинается при первом переходе по ЛЮБОЙ из ссылок
-• Для пользователей без подписки после начала отсчёта обе ссылки будут активны 1 час
+• Для пользователей без подписки после начала отсчёта обе ссылки будут активны 24 часа
 """
     
     await loading_msg.edit_text(
@@ -4377,3 +4519,166 @@ async def test_report_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
+
+async def handle_payment_method_selection(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор платежной системы"""
+    await query.answer()
+    
+    payment_method = query.data.replace("payment_", "")
+    
+    if payment_method == "yookassa":
+        # Показываем выбор подписки для ЮKassa
+        await show_subscribe_from_button(query, context)
+    elif payment_method == "paypal":
+        # Показываем выбор подписки для PayPal
+        await show_paypal_subscription_choice(query, context)
+
+async def show_paypal_subscription_choice(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает выбор подписки для PayPal"""
+    subscription_text = """
+💎 Премиум подписка (PayPal)
+
+Откройте полный доступ к возможностям бота:
+
+✨ Что входит:
+• 5 карт дня вместо 1
+• Послание дня (ежедневно)
+• Доступ к 3 техникам самопомощи «Архипелаг ресурсов»
+• Медитация «Дары моря»
+
+🎯 Тарифы (в израильских шекелях):
+• 1 месяц - 5.00₪
+• 3 месяца - 9.00₪ 
+• 6 месяцев - 17.00₪
+• 1 год - 35.00₪
+
+Выберите срок подписки:
+"""
+    
+    await query.message.reply_text(
+        subscription_text,
+        reply_markup=keyboard.get_paypal_subscription_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_paypal_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор типа подписки PayPal"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        subscription_type = query.data.replace("paypal_", "")
+        user_id = query.from_user.id
+        
+        logging.info(f"🔄 PayPal subscription selected: {subscription_type} by user {user_id}")
+        
+        if subscription_type not in PAYPAL_PRICES:
+            await query.message.reply_text(
+                "❌ Ошибка: выбран неверный тип подписки.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            return
+        
+        price = PAYPAL_PRICES[subscription_type]
+        duration = SUBSCRIPTION_NAMES[subscription_type]
+        
+        # Создаем платеж через PayPal
+        from paypal_payment import paypal_processor
+        payment_url, payment_id = paypal_processor.create_payment(
+            amount=price,
+            description=f"Подписка {duration}",
+            user_id=user_id,
+            subscription_type=subscription_type
+        )
+        
+        if not payment_url:
+            await query.message.reply_text(
+                "❌ Ошибка при создании платежа PayPal. Попробуйте позже.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            return
+        
+        # Сохраняем в контексте
+        context.user_data['paypal_payment_id'] = payment_id
+        context.user_data['subscription_type'] = subscription_type
+        
+        payment_text = f"""
+💎 Премиум подписка - {duration} (PayPal)
+
+Стоимость: {price}₪
+
+Нажмите кнопку "💳 Оплатить через PayPal" для перехода к оплате.
+
+После успешной оплаты подписка активируется автоматически в течение 1-2 минут.
+
+Если подписка не активировалась, нажмите "🔄 Проверить оплату".
+"""
+        
+        await query.message.reply_text(
+            payment_text,
+            reply_markup=keyboard.get_paypal_payment_keyboard(subscription_type, payment_url, payment_id),
+            parse_mode='Markdown'
+        )
+        
+        logging.info(f"✅ PayPal payment message sent for user {user_id}, payment_id: {payment_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in handle_paypal_subscription_selection: {e}")
+
+async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет статус оплаты PayPal"""
+    await query.answer()
+    
+    user_id = query.from_user.id
+    payment_id = context.user_data.get('paypal_payment_id')
+    subscription_type = context.user_data.get('subscription_type')
+    
+    if not payment_id:
+        await query.message.reply_text(
+            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
+            reply_markup=keyboard.get_paypal_subscription_keyboard()
+        )
+        return
+    
+    # Проверяем статус платежа через API
+    from paypal_payment import paypal_processor
+    payment_status = paypal_processor.check_payment_status(payment_id)
+    
+    if payment_status is True:
+        # Платеж подтвержден, активируем подписку
+        if paypal_processor.activate_subscription(payment_id):
+            success_text = f"""
+✅ Оплата PayPal подтверждена!
+
+Ваша премиум подписка активирована.
+
+✨ Теперь вам доступны все премиум-функции!
+"""
+            await query.message.reply_text(
+                success_text,
+                reply_markup=keyboard.get_payment_success_keyboard(),
+                parse_mode='Markdown'
+            )
+            
+            # Очищаем данные о платеже
+            if 'paypal_payment_id' in context.user_data:
+                del context.user_data['paypal_payment_id']
+        else:
+            await query.message.reply_text(
+                "❌ Ошибка при активации подписки. Свяжитесь с администратором.",
+                reply_markup=keyboard.get_main_menu_keyboard()
+            )
+            
+    elif payment_status is False:
+        await query.message.reply_text(
+            "❌ Платеж не прошел или был отменен. Попробуйте оплатить снова.",
+            reply_markup=keyboard.get_paypal_subscription_keyboard()
+        )
+    else:
+        # Платеж еще обрабатывается
+        await query.message.reply_text(
+            "⏳ Платеж еще обрабатывается...\n\n"
+            "Пожалуйста, подождите 1-2 минуты и проверьте снова.",
+            reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id)
+        )
+
