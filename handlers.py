@@ -4568,9 +4568,10 @@ async def show_yookassa_subscription_choice(query, context: ContextTypes.DEFAULT
 Выберите срок подписки:
 """
     
+    # Отправляем новое сообщение с выбором тарифов
     await query.message.reply_text(
         subscription_text,
-        reply_markup=keyboard.get_yookassa_subscription_keyboard(),  # Используем новую клавиатуру
+        reply_markup=keyboard.get_yookassa_subscription_keyboard(),
         parse_mode='Markdown'
     )
 
