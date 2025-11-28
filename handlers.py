@@ -2169,6 +2169,7 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             'price': SUBSCRIPTION_PRICES.get(subscription_type),
             'timestamp': datetime.now().isoformat()
         })
+        
         if subscription_type not in SUBSCRIPTION_PRICES:
             await query.message.reply_text(
                 "❌ Ошибка: выбран неверный тип подписки.",
@@ -2179,10 +2180,10 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
         price = SUBSCRIPTION_PRICES[subscription_type]
         duration = SUBSCRIPTION_NAMES[subscription_type]
         
-        # Получаем ссылку для оплаты
+        # Получаем ссылку для оплаты через API ЮKassa
         payment_url = PAYMENT_LINKS.get(subscription_type)
         
-        logging.info(f"🔗 Payment URL: {payment_url}")
+        logging.info(f"🔗 Static Payment URL: {payment_url}")
         
         if not payment_url:
             await query.message.reply_text(
@@ -2191,20 +2192,20 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             )
             return
         
-        # ✅ СОЗДАЕМ ПЛАТЕЖ С ПЕРЕДАЧЕЙ user_id
+        # ✅ СОЗДАЕМ ПЛАТЕЖ ЧЕРЕЗ API ЮKASSA
         payment_url, payment_id = payment_processor.create_payment(
             amount=price,
             description=f"Подписка {duration}",
-            user_id=user_id,  # ✅ ПЕРЕДАЕМ user_id
+            user_id=user_id,
             subscription_type=subscription_type
         )
         
         if not payment_url:
-            await query.message.reply_text(
-                "❌ Ошибка при создании платежа. Попробуйте позже.",
-                reply_markup=keyboard.get_main_menu_keyboard()
-            )
-            return
+            logging.error("❌ Failed to create YooKassa payment via API")
+            # Пробуем использовать статическую ссылку как fallback
+            payment_url = PAYMENT_LINKS.get(subscription_type)
+            payment_id = f"static_{subscription_type}_{user_id}"
+            logging.info(f"🔄 Using static URL as fallback: {payment_url}")
         
         # Сохраняем в контексте
         context.user_data['payment_id'] = payment_id
@@ -2232,6 +2233,10 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
         
     except Exception as e:
         logging.error(f"❌ Error in handle_subscription_selection: {e}")
+        await query.message.reply_text(
+            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
 
 def save_user_action(user_id: int, action_type: str, action_data: dict):
     """Сохраняет действие пользователя для идентификации"""

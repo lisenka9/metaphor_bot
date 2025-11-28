@@ -55,90 +55,76 @@ class PayPalPayment:
             return None
     
     def create_payment(self, amount: float, description: str, user_id: int, subscription_type: str):
-        """Создает платеж в PayPal"""
+        """Создает платеж в ЮKassa"""
         try:
-            access_token = self.get_access_token()
-            if not access_token:
+            # Проверяем наличие ключей ЮKassa
+            if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+                logging.error("❌ YooKassa keys not configured")
                 return None, None
-            
+                
             payment_id = str(uuid.uuid4())
             
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {access_token}",
-                "PayPal-Request-Id": payment_id
-            }
-            
             payload = {
-                "intent": "CAPTURE",
-                "purchase_units": [
-                    {
-                        "reference_id": subscription_type,
-                        "description": description,
-                        "amount": {
-                            "currency_code": "ILS",
-                            "value": f"{amount:.2f}"
-                        },
-                        "custom_id": str(user_id)
-                    }
-                ],
-                "payment_source": {
-                    "paypal": {
-                        "experience_context": {
-                            "payment_method_preference": "IMMEDIATE_PAYMENT_REQUIRED",
-                            "brand_name": "Metaphor Cards Sea Bot",
-                            "locale": "ru-RU",
-                            "landing_page": "LOGIN",
-                            "user_action": "PAY_NOW",
-                            "return_url": f"https://t.me/MetaphorCardsSeaBot?start=paypal_success_{payment_id}",
-                            "cancel_url": f"https://t.me/MetaphorCardsSeaBot?start=paypal_cancel"
-                        }
-                    }
+                "amount": {
+                    "value": f"{amount:.2f}",
+                    "currency": "RUB"
+                },
+                "payment_method_data": {
+                    "type": "bank_card"
+                },
+                "confirmation": {
+                    "type": "redirect",
+                    "return_url": f"https://t.me/MetaphorCardsSeaBot?start=payment_success"
+                },
+                "capture": True,
+                "description": description,
+                "metadata": {
+                    "user_id": int(user_id),  
+                    "subscription_type": subscription_type,
+                    "payment_id": payment_id
                 }
             }
             
+            headers = {
+                "Idempotence-Key": str(uuid.uuid4()),
+                "Content-Type": "application/json"
+            }
+            
+            logging.info(f"🔧 Creating YooKassa payment: amount={amount}, user_id={user_id}")
+            
             response = requests.post(
-                f"{self.base_url}/v2/checkout/orders",
+                f"{self.base_url}/payments",
                 json=payload,
                 headers=headers,
+                auth=self.auth,
                 timeout=30
             )
             
-            if response.status_code in [200, 201]:
-                order_data = response.json()
+            if response.status_code == 200:
+                payment_data = response.json()
                 
                 # Сохраняем информацию о платеже
                 self.pending_payments[payment_id] = {
                     'user_id': user_id,
                     'subscription_type': subscription_type,
-                    'paypal_order_id': order_data['id'],
-                    'status': order_data['status'],
+                    'yookassa_payment_id': payment_data['id'],
+                    'status': payment_data['status'],
                     'created_at': datetime.now(),
                     'amount': amount
                 }
                 
-                # Запускаем автоматический мониторинг
+                # Запускаем мониторинг
                 self.start_payment_monitoring(payment_id)
                 
-                # Находим ссылку для подтверждения
-                for link in order_data.get('links', []):
-                    if link.get('rel') == 'payer-action':
-                        return link['href'], payment_id
-                
-                # Если нет payer-action, используем approve
-                for link in order_data.get('links', []):
-                    if link.get('rel') == 'approve':
-                        return link['href'], payment_id
-                        
-                return None, None
+                return payment_data['confirmation']['confirmation_url'], payment_id
             else:
-                logging.error(f"❌ PayPal API error: {response.status_code} - {response.text}")
+                logging.error(f"❌ YooKassa API error: {response.status_code} - {response.text}")
                 return None, None
                 
         except Exception as e:
-            logging.error(f"❌ Error creating PayPal payment: {e}")
+            logging.error(f"❌ Error creating YooKassa payment: {e}")
             return None, None
-
+    
     def check_payment_status(self, payment_id: str):
         """Проверяет статус платежа через PayPal API"""
         try:
@@ -369,6 +355,6 @@ class PayPalPayment:
         if payment_id and payment_info:
             return self.activate_subscription(payment_id)
         return False
-        
+
 # Глобальный экземпляр
 paypal_processor = PayPalPayment()

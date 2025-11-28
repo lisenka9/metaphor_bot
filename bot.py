@@ -1315,7 +1315,13 @@ def run_bot_with_restart():
             application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
-                drop_pending_updates=True
+                drop_pending_updates=True,
+                allowed_updates=['message', 'callback_query'],
+                read_timeout=20,
+                write_timeout=20,
+                connect_timeout=20,
+                bootstrap_retries=0,  
+                close_loop=False     
             )
             
         except Exception as e:
@@ -1398,9 +1404,11 @@ def run_bot_process():
 
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
-    logger.info("🛑 Received shutdown signal...")
-    sys.exit(0)
-
+    logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
+    # Принудительно завершаем процесс
+    import os
+    os._exit(0)
+    
 def main():
     """Основная функция запуска"""
     # Регистрируем обработчики сигналов
