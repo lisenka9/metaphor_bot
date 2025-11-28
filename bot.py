@@ -1317,11 +1317,8 @@ def run_bot_with_restart():
                 timeout=20,
                 drop_pending_updates=True,
                 allowed_updates=['message', 'callback_query'],
-                read_timeout=20,
-                write_timeout=20,
-                connect_timeout=20,
-                bootstrap_retries=0,  
-                close_loop=False     
+                bootstrap_retries=0,
+                close_loop=False
             )
             
         except Exception as e:
@@ -1408,7 +1405,7 @@ def signal_handler(signum, frame):
     # Принудительно завершаем процесс
     import os
     os._exit(0)
-    
+
 def main():
     """Основная функция запуска"""
     # Регистрируем обработчики сигналов
