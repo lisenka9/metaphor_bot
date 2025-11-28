@@ -117,6 +117,9 @@ class PayPalPayment:
                     'amount': amount
                 }
                 
+                # Запускаем автоматический мониторинг
+                self.start_payment_monitoring(payment_id)
+                
                 # Находим ссылку для подтверждения
                 for link in order_data.get('links', []):
                     if link.get('rel') == 'payer-action':
@@ -135,7 +138,7 @@ class PayPalPayment:
         except Exception as e:
             logging.error(f"❌ Error creating PayPal payment: {e}")
             return None, None
-    
+
     def check_payment_status(self, payment_id: str):
         """Проверяет статус платежа через PayPal API"""
         try:
@@ -289,5 +292,83 @@ class PayPalPayment:
             if payment_id in self.pending_payments:
                 del self.pending_payments[payment_id]
 
+    def start_payment_monitoring(self, payment_id: str, max_checks: int = 60):
+        """Запускает мониторинг платежа в отдельном потоке"""
+        def monitor():
+            checks = 0
+            while checks < max_checks:
+                try:
+                    status = self.check_payment_status(payment_id)
+                    
+                    if status is True:
+                        # Платеж успешен
+                        if self.activate_subscription(payment_id):
+                            logging.info(f"✅ PayPal payment confirmed and subscription activated: {payment_id}")
+                        break
+                    elif status is False:
+                        # Платеж не прошел
+                        logging.info(f"❌ PayPal payment failed: {payment_id}")
+                        break
+                    # Если status is None - платеж еще в процессе
+                    
+                except Exception as e:
+                    logging.error(f"❌ Error in PayPal payment monitoring: {e}")
+                
+                time.sleep(30)  # Проверяем каждые 30 секунд
+                checks += 1
+            
+            # Если платеж не подтвердился, очищаем
+            if payment_id in self.pending_payments:
+                logging.warning(f"⚠️ PayPal payment monitoring timeout: {payment_id}")
+                del self.pending_payments[payment_id]
+        
+        thread = Thread(target=monitor)
+        thread.daemon = True
+        thread.start()
+
+    def check_all_pending_payments(self):
+        """Автоматически проверяет все ожидающие платежи"""
+        completed_payments = []
+        
+        for payment_id, payment_info in list(self.pending_payments.items()):
+            try:
+                # Пропускаем платежи младше 2 минут (дают время на оплату)
+                if datetime.now() - payment_info['created_at'] < timedelta(minutes=2):
+                    continue
+                    
+                status = self.check_payment_status(payment_id)
+                
+                if status is True:
+                    # Платеж успешен - активируем подписку
+                    if self.activate_subscription(payment_id):
+                        logging.info(f"✅ Auto-activated PayPal subscription for payment {payment_id}")
+                        completed_payments.append(payment_id)
+                elif status is False:
+                    # Платеж не прошел - удаляем
+                    logging.info(f"❌ PayPal payment failed: {payment_id}")
+                    completed_payments.append(payment_id)
+                    
+            except Exception as e:
+                logging.error(f"❌ Error checking PayPal payment {payment_id}: {e}")
+        
+        # Удаляем завершенные платежи
+        for payment_id in completed_payments:
+            if payment_id in self.pending_payments:
+                del self.pending_payments[payment_id]
+
+    def find_payment_by_order_id(self, order_id: str):
+        """Находит платеж по order_id PayPal"""
+        for payment_id, payment_info in self.pending_payments.items():
+            if payment_info.get('paypal_order_id') == order_id:
+                return payment_id, payment_info
+        return None, None
+
+    def activate_subscription_by_order_id(self, order_id: str):
+        """Активирует подписку по order_id PayPal"""
+        payment_id, payment_info = self.find_payment_by_order_id(order_id)
+        if payment_id and payment_info:
+            return self.activate_subscription(payment_id)
+        return False
+        
 # Глобальный экземпляр
 paypal_processor = PayPalPayment()

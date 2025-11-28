@@ -7,7 +7,7 @@ import threading
 from flask import Flask, request, jsonify, redirect, Response, stream_with_context
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, PAYPAL_WEBHOOK_ID, SUBSCRIPTION_DURATIONS
 import handlers
 from database import db
 from yookassa_payment import payment_processor  
@@ -430,6 +430,8 @@ def paypal_webhook():
         event_type = event_json.get('event_type')
         resource = event_json.get('resource', {})
         
+        logging.info(f"🔧 PayPal webhook event: {event_type}")
+        
         # Обрабатываем разные типы событий
         if event_type == 'PAYMENT.CAPTURE.COMPLETED':
             return handle_paypal_payment_completed(resource)
@@ -437,7 +439,13 @@ def paypal_webhook():
             return handle_paypal_order_completed(resource)
         elif event_type == 'PAYMENT.CAPTURE.DENIED':
             return handle_paypal_payment_denied(resource)
+        elif event_type == 'PAYMENT.CAPTURE.REFUNDED':
+            return handle_paypal_payment_refunded(resource)
+        elif event_type == 'PAYMENT.CAPTURE.REVERSED':
+            return handle_paypal_payment_reversed(resource)
         
+        # Логируем необработанные события для отладки
+        logging.info(f"🔧 Unhandled PayPal webhook event: {event_type}")
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
@@ -494,12 +502,80 @@ def verify_paypal_webhook(request):
         logging.error(f"❌ Error verifying PayPal webhook: {e}")
         return False
 
-def handle_paypal_payment_completed(resource):
-    """Обрабатывает завершенный платеж PayPal"""
+def handle_paypal_order_completed(resource):
+    """Обрабатывает завершенный заказ PayPal"""
+    try:
+        order_id = resource.get('id')
+        purchase_units = resource.get('purchase_units', [])
+        
+        if not purchase_units:
+            return jsonify({"status": "success"}), 200
+            
+        purchase_unit = purchase_units[0]
+        custom_id = purchase_unit.get('custom_id')
+        amount = purchase_unit.get('amount', {}).get('value')
+        
+        logging.info(f"🔧 PayPal order completed: order_id={order_id}, custom_id={custom_id}, amount={amount}")
+        
+        # Способ 1: Пытаемся найти в pending payments
+        from paypal_payment import paypal_processor
+        payment_id, payment_info = paypal_processor.find_payment_by_order_id(order_id)
+        
+        if payment_info:
+            # Активируем через существующий механизм
+            if paypal_processor.activate_subscription(payment_id):
+                logging.info(f"✅ PayPal subscription activated via pending payment for user {payment_info['user_id']}")
+                return jsonify({"status": "success"}), 200
+        
+        # Способ 2: Активируем по custom_id (user_id)
+        if custom_id and amount:
+            user_id = int(custom_id)
+            
+            # Определяем тип подписки по сумме
+            subscription_type = determine_subscription_type_from_paypal(amount)
+            
+            if subscription_type:
+                # Активируем подписку
+                success = db.create_subscription(
+                    user_id, 
+                    subscription_type, 
+                    SUBSCRIPTION_DURATIONS[subscription_type]
+                )
+                
+                if success:
+                    logging.info(f"✅ PayPal subscription activated via custom_id for user {user_id}")
+                    
+                    # Отправляем уведомление пользователю
+                    send_subscription_notification(user_id, subscription_type, amount)
+                    
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        logging.error(f"❌ Error handling PayPal order completed: {e}")
+        return jsonify({"status": "error"}), 500
+
+def handle_paypal_payment_denied(resource):
+    """Обрабатывает отклоненный платеж PayPal"""
     try:
         custom_id = resource.get('custom_id')
+        if custom_id:
+            user_id = int(custom_id)
+            logging.info(f"❌ PayPal payment denied for user {user_id}")
+            
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        logging.error(f"❌ Error handling PayPal payment denied: {e}")
+        return jsonify({"status": "error"}), 500
+
+def handle_paypal_payment_captured(resource):
+    """Обрабатывает подтвержденный платеж (captured)"""
+    try:
+        custom_id = resource.get('custom_id')
+        order_id = resource.get('supplementary_data', {}).get('related_ids', {}).get('order_id')
         amount = resource.get('amount', {}).get('value')
-        payment_id = resource.get('id')
+        
+        logging.info(f"🔧 PayPal payment captured: custom_id={custom_id}, order_id={order_id}, amount={amount}")
         
         if custom_id and amount:
             user_id = int(custom_id)
@@ -516,7 +592,7 @@ def handle_paypal_payment_completed(resource):
                 )
                 
                 if success:
-                    logging.info(f"✅ PayPal subscription activated via webhook for user {user_id}")
+                    logging.info(f"✅ PayPal subscription activated via payment captured for user {user_id}")
                     
                     # Отправляем уведомление пользователю
                     send_subscription_notification(user_id, subscription_type, amount)
@@ -524,7 +600,7 @@ def handle_paypal_payment_completed(resource):
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
-        logging.error(f"❌ Error handling PayPal payment completed: {e}")
+        logging.error(f"❌ Error handling PayPal payment captured: {e}")
         return jsonify({"status": "error"}), 500
 
 def determine_subscription_type_from_paypal(amount):
@@ -552,12 +628,23 @@ def send_subscription_notification(user_id, subscription_type, amount):
             "year": "1 год"
         }
         
+        # Получаем информацию о подписке для даты окончания
+        subscription = db.get_user_subscription(user_id)
+        end_date_str = ""
+        if subscription and subscription[1]:
+            end_date = subscription[1]
+            if hasattr(end_date, 'strftime'):
+                end_date_str = end_date.strftime('%d.%m.%Y')
+            else:
+                end_date_str = str(end_date)[:10]
+        
         message_text = f"""
 ✅ *Оплата PayPal подтверждена!*
 
 💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 месяц')}" активирована.
 
 💰 Сумма: {amount}₪
+📅 Действует до: {end_date_str}
 
 ✨ Теперь вам доступны:
 • 5 карт дня вместо 1
@@ -573,6 +660,7 @@ def send_subscription_notification(user_id, subscription_type, amount):
             text=message_text,
             parse_mode='Markdown'
         )
+        logging.info(f"✅ PayPal subscription notification sent to user {user_id}")
         
     except Exception as e:
         logging.error(f"❌ Error sending PayPal subscription notification: {e}")
@@ -1249,8 +1337,11 @@ def start_payment_monitoring():
             payment_processor.check_all_pending_payments()
             
             # Мониторинг PayPal платежей
-            from paypal_payment import paypal_processor
-            paypal_processor.check_all_pending_payments()
+            try:
+                from paypal_payment import paypal_processor
+                paypal_processor.check_all_pending_payments()
+            except Exception as e:
+                logging.error(f"❌ Error in PayPal payment monitoring: {e}")
             
         except Exception as e:
             logging.error(f"❌ Error in payment monitoring: {e}")

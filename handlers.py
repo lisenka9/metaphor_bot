@@ -4658,7 +4658,7 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
             reply_markup=keyboard.get_main_menu_keyboard()
         )
 
-async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты PayPal"""
     await query.answer()
     
@@ -4673,6 +4673,12 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
+    # Сначала проверяем базу данных - возможно подписка уже активирована
+    subscription = db.get_user_subscription(user_id)
+    if subscription:
+        await handle_successful_payment(query, subscription)
+        return
+    
     # Проверяем статус платежа через API
     from paypal_payment import paypal_processor
     payment_status = paypal_processor.check_payment_status(payment_id)
@@ -4680,18 +4686,8 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
     if payment_status is True:
         # Платеж подтвержден, активируем подписку
         if paypal_processor.activate_subscription(payment_id):
-            success_text = f"""
-✅ Оплата PayPal подтверждена!
-
-Ваша премиум подписка активирована.
-
-✨ Теперь вам доступны все премиум-функции!
-"""
-            await query.message.reply_text(
-                success_text,
-                reply_markup=keyboard.get_payment_success_keyboard(),
-                parse_mode='Markdown'
-            )
+            subscription = db.get_user_subscription(user_id)
+            await handle_successful_payment(query, subscription)
             
             # Очищаем данные о платеже
             if 'paypal_payment_id' in context.user_data:
@@ -4711,7 +4707,33 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
         # Платеж еще обрабатывается
         await query.message.reply_text(
             "⏳ Платеж еще обрабатывается...\n\n"
-            "Пожалуйста, подождите 1-2 минуты и проверьте снова.",
+            "✅ Автоматическая проверка активна - подписка активируется сама при успешной оплате.\n"
+            "Вы можете закрыть это окно и вернуться позже.",
             reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id)
         )
 
+async def handle_successful_payment(query, subscription):
+    """Обрабатывает успешную оплату"""
+    subscription_type, end_date = subscription
+    
+    if hasattr(end_date, 'strftime'):
+        end_date_str = end_date.strftime('%d.%m.%Y')
+    else:
+        end_date_str = str(end_date)[:10]
+    
+    success_text = f"""
+✅ Оплата подтверждена!
+
+Ваша премиум подписка активирована.
+
+💎 Тип подписки: {SUBSCRIPTION_NAMES.get(subscription_type, subscription_type)}
+📅 Действует до: {end_date_str}
+
+✨ Теперь вам доступны все премиум-функции!
+"""
+    
+    await query.message.reply_text(
+        success_text,
+        reply_markup=keyboard.get_payment_success_keyboard(),
+        parse_mode='Markdown'
+    )
