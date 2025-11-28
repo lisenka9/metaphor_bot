@@ -1951,7 +1951,6 @@ async def show_subscribe_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-
 async def message_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает статус посланий пользователя с кнопками подписки"""
     user = update.effective_user
@@ -2153,27 +2152,15 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Ошибка при сбросе лимита посланий")
 
 async def handle_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает выбор типа подписки"""
+    """Обрабатывает выбор типа подписки (оригинальный рабочий код)"""
     query = update.callback_query
-    
-    # СРАЗУ отвечаем на callback query чтобы избежать таймаута
-    try:
-        await query.answer()
-    except Exception as e:
-        logging.warning(f"⚠️ Could not answer callback query: {e}")
+    await query.answer()
     
     try:
         subscription_type = query.data.replace("subscribe_", "")
         user_id = query.from_user.id
         
         logging.info(f"🔄 Subscription selected: {subscription_type} by user {user_id}")
-        
-        # ✅ СОХРАНЯЕМ ДЕЙСТВИЕ ПОЛЬЗОВАТЕЛЯ ДЛЯ ИДЕНТИФИКАЦИИ
-        save_user_action(user_id, 'subscription_selection', {
-            'subscription_type': subscription_type,
-            'price': SUBSCRIPTION_PRICES.get(subscription_type),
-            'timestamp': datetime.now().isoformat()
-        })
         
         if subscription_type not in SUBSCRIPTION_PRICES:
             await query.message.reply_text(
@@ -2185,21 +2172,18 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
         price = SUBSCRIPTION_PRICES[subscription_type]
         duration = SUBSCRIPTION_NAMES[subscription_type]
         
-        # ПОКАЗЫВАЕМ сообщение "обработка" сразу
-        processing_msg = await query.message.reply_text("🔄 Создаем ссылку для оплаты...")
-        
-        # Используем статическую ссылку сразу (быстро)
+        # ИСПОЛЬЗУЕМ СТАТИЧЕСКИЕ ССЫЛКИ (как раньше)
         payment_url = PAYMENT_LINKS.get(subscription_type)
-        payment_id = f"static_{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
-        
-        logging.info(f"🔗 Using static Payment URL: {payment_url}")
         
         if not payment_url:
-            await processing_msg.edit_text(
+            await query.message.reply_text(
                 "❌ Ошибка: ссылка для оплаты не найдена. Свяжитесь с администратором.",
                 reply_markup=keyboard.get_main_menu_keyboard()
             )
             return
+        
+        # Генерируем простой payment_id
+        payment_id = f"{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
         
         # Сохраняем в контексте
         context.user_data['payment_id'] = payment_id
@@ -2217,17 +2201,13 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
 Если подписка не активировалась, нажмите "🔄 Проверить оплату".
 """
         
-        # Обновляем сообщение "обработка" на финальное
-        await processing_msg.edit_text(
+        await query.message.reply_text(
             payment_text,
             reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url, payment_id),
             parse_mode='Markdown'
         )
         
-        logging.info(f"✅ Payment message sent for user {user_id}, payment_id: {payment_id}")
-        
-        # ЗАПУСКАЕМ API ВЫЗОВ В ФОНОВОМ РЕЖИМЕ (если нужен)
-        # await create_api_payment_background(user_id, subscription_type, price, duration)
+        logging.info(f"✅ Payment message sent for user {user_id}")
         
     except Exception as e:
         logging.error(f"❌ Error in handle_subscription_selection: {e}")
@@ -4543,11 +4523,40 @@ async def handle_payment_method_selection(query, context: ContextTypes.DEFAULT_T
     payment_method = query.data.replace("payment_", "")
     
     if payment_method == "yookassa":
-        # Показываем выбор подписки для ЮKassa
-        await show_yookassa_subscription_choice(query, context)
+        # Показываем выбор подписки для ЮKassa (оригинальный способ)
+        await show_subscription_choice_original(query, context)
     elif payment_method == "paypal":
         # Показываем выбор подписки для PayPal
         await show_paypal_subscription_choice(query, context)
+
+async def show_subscription_choice_original(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает выбор подписки (оригинальный способ)"""
+    subscription_text = """
+💎 Премиум подписка
+
+Откройте полный доступ к возможностям бота:
+
+✨ Что входит:
+• 5 карт дня вместо 1
+• Послание дня (ежедневно)
+• Доступ к 3 техникам самопомощи «Архипелаг ресурсов»
+• Медитация «Дары моря»
+
+🎯 Тарифы:
+• 1 месяц - 99₽
+• 3 месяца - 199₽ 
+• 6 месяцев - 399₽
+• 1 год - 799₽
+
+Выберите срок подписки:
+"""
+    
+    await query.message.reply_text(
+        subscription_text,
+        reply_markup=keyboard.get_subscription_keyboard(),  # Оригинальная клавиатура
+        parse_mode='Markdown'
+    )
+
 
 async def show_yookassa_subscription_choice(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает выбор подписки для ЮKassa"""
