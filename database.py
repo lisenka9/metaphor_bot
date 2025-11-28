@@ -1609,5 +1609,104 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def create_manual_subscription(self, user_id: int, subscription_type: str, duration_days: int):
+        """Создает подписку для пользователя вручную (для администратора)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            from datetime import datetime, timedelta
+            from config import DAILY_CARD_LIMIT_PREMIUM
+            
+            # Проверяем существование пользователя
+            cursor.execute('SELECT user_id FROM users WHERE user_id = %s', (user_id,))
+            if not cursor.fetchone():
+                return False, "Пользователь не найден"
+            
+            end_date = datetime.now() + timedelta(days=duration_days)
+            
+            # Деактивируем старые подписки
+            cursor.execute('''
+                UPDATE subscriptions 
+                SET is_active = FALSE 
+                WHERE user_id = %s
+            ''', (user_id,))
+            
+            # Создаем новую подписку
+            cursor.execute('''
+                INSERT INTO subscriptions (user_id, subscription_type, end_date)
+                VALUES (%s, %s, %s)
+            ''', (user_id, subscription_type, end_date))
+            
+            # Обновляем лимит карт для премиум пользователей
+            cursor.execute('''
+                UPDATE users 
+                SET is_premium = TRUE, 
+                    premium_until = %s, 
+                    daily_cards_limit = %s
+                WHERE user_id = %s
+            ''', (end_date, DAILY_CARD_LIMIT_PREMIUM, user_id))
+            
+            # Записываем ручной платеж в историю
+            cursor.execute('''
+                INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, payment_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (
+                user_id,
+                0,  # Бесплатно
+                subscription_type,
+                'success',
+                'manual',
+                f"manual_{user_id}_{int(datetime.now().timestamp())}"
+            ))
+            
+            conn.commit()
+            
+            logging.info(f"✅ Manual subscription created for user {user_id}: {subscription_type}, duration: {duration_days} days")
+            return True, f"Подписка успешно активирована до {end_date.strftime('%d.%m.%Y')}"
+            
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"❌ Error creating manual subscription: {e}")
+            return False, f"Ошибка: {str(e)}"
+        finally:
+            conn.close()
+
+    def get_user_info(self, user_id: int):
+        """Получает информацию о пользователе"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT u.user_id, u.username, u.first_name, u.is_premium, u.premium_until,
+                    COUNT(uc.id) as total_cards,
+                    u.registered_date
+                FROM users u
+                LEFT JOIN user_cards uc ON u.user_id = uc.user_id
+                WHERE u.user_id = %s
+                GROUP BY u.user_id, u.username, u.first_name, u.is_premium, u.premium_until, u.registered_date
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            if result:
+                user_id, username, first_name, is_premium, premium_until, total_cards, registered_date = result
+                return {
+                    'user_id': user_id,
+                    'username': username,
+                    'first_name': first_name,
+                    'is_premium': is_premium,
+                    'premium_until': premium_until,
+                    'total_cards': total_cards,
+                    'registered_date': registered_date
+                }
+            return None
+            
+        except Exception as e:
+            logging.error(f"❌ Error getting user info: {e}")
+            return None
+        finally:
+            conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

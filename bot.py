@@ -1275,6 +1275,8 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
             application.add_handler(CommandHandler("debug_report", handlers.debug_report))
             application.add_handler(CommandHandler("update_payments", handlers.update_payments_table))
+            application.add_handler(CommandHandler("subscribe_user", handlers.manual_subscription))
+            application.add_handler(CommandHandler("user_info", handlers.user_info))
             
             application.add_handler(CallbackQueryHandler(
                 handlers.show_report_problem_from_button, 

@@ -4785,4 +4785,184 @@ async def update_payments_table(update: Update, context: ContextTypes.DEFAULT_TY
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def manual_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручное включение подписки для пользователя (только для администратора)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    # Проверяем аргументы команды
+    if not context.args or len(context.args) < 2:
+        help_text = """
+📋 *Использование команды:*
+`/subscribe_user <user_id> <тип_подписки> [дней]`
+
+*Типы подписок:*
+• `month` - 1 месяц (30 дней)
+• `3months` - 3 месяца (90 дней) 
+• `6months` - 6 месяцев (180 дней)
+• `year` - 1 год (365 дней)
+
+*Примеры:*
+`/subscribe_user 123456789 month` - подписка на 1 месяц
+`/subscribe_user 123456789 year 400` - подписка на 400 дней
+`/subscribe_user 123456789 custom 15` - подписка на 15 дней
+"""
+        await update.message.reply_text(help_text, parse_mode='Markdown')
+        return
+    
+    try:
+        target_user_id = int(context.args[0])
+        subscription_type = context.args[1].lower()
         
+        # Определяем длительность подписки
+        subscription_durations = {
+            'month': 30,
+            '3months': 90,
+            '6months': 180, 
+            'year': 365
+        }
+        
+        if subscription_type in subscription_durations:
+            duration_days = subscription_durations[subscription_type]
+            subscription_name = {
+                'month': '1 месяц',
+                '3months': '3 месяца',
+                '6months': '6 месяцев', 
+                'year': '1 год'
+            }.get(subscription_type, subscription_type)
+        elif subscription_type == 'custom' and len(context.args) >= 3:
+            duration_days = int(context.args[2])
+            subscription_name = f"{duration_days} дней"
+        else:
+            # Если указана кастомная длительность
+            duration_days = int(context.args[2]) if len(context.args) >= 3 else 30
+            subscription_name = f"{duration_days} дней"
+        
+        # Получаем информацию о пользователе
+        user_info = db.get_user_info(target_user_id)
+        if not user_info:
+            await update.message.reply_text(f"❌ Пользователь с ID {target_user_id} не найден")
+            return
+        
+        # Активируем подписку
+        success, message = db.create_manual_subscription(target_user_id, subscription_type, duration_days)
+        
+        if success:
+            # Формируем сообщение об успехе
+            user_display = f"@{user_info['username']}" if user_info['username'] else user_info['first_name'] or f"ID {target_user_id}"
+            
+            success_text = f"""
+✅ *Подписка успешно активирована!*
+
+👤 *Пользователь:* {user_display}
+🆔 *ID:* {target_user_id}
+💎 *Тип подписки:* {subscription_name}
+📅 *Длительность:* {duration_days} дней
+📊 *Карт в истории:* {user_info['total_cards']}
+📅 *Регистрация:* {user_info['registered_date'].strftime('%d.%m.%Y') if user_info['registered_date'] else 'Неизвестно'}
+
+{message}
+"""
+            await update.message.reply_text(success_text, parse_mode='Markdown')
+            
+            # Пытаемся отправить уведомление пользователю
+            try:
+                from telegram import Bot
+                from config import BOT_TOKEN
+                
+                bot = Bot(token=BOT_TOKEN)
+                
+                user_notification = f"""
+🎉 *Вам активирована премиум подписка!*
+
+💎 *Тип подписки:* {subscription_name}
+📅 *Действует до:* {(datetime.now() + timedelta(days=duration_days)).strftime('%d.%m.%Y')}
+
+✨ *Теперь вам доступны:*
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Архипелаг ресурсов
+• Медитация «Дары Моря»
+
+Наслаждайтесь полным доступом! 💫
+"""
+                await bot.send_message(
+                    chat_id=target_user_id,
+                    text=user_notification,
+                    parse_mode='Markdown'
+                )
+                logging.info(f"✅ Notification sent to user {target_user_id}")
+                
+            except Exception as notify_error:
+                logging.error(f"❌ Error sending notification to user {target_user_id}: {notify_error}")
+                await update.message.reply_text(f"⚠️ Подписка активирована, но не удалось отправить уведомление пользователю: {notify_error}")
+                
+        else:
+            await update.message.reply_text(f"❌ {message}")
+            
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат ID пользователя или количества дней")
+    except Exception as e:
+        logging.error(f"❌ Error in manual_subscription: {e}")
+        await update.message.reply_text(f"❌ Произошла ошибка: {str(e)}")
+
+async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о пользователе (только для администратора)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Укажите ID пользователя\nПример: `/user_info 123456789`", parse_mode='Markdown')
+        return
+    
+    try:
+        target_user_id = int(context.args[0])
+        user_info = db.get_user_info(target_user_id)
+        
+        if not user_info:
+            await update.message.reply_text(f"❌ Пользователь с ID {target_user_id} не найден")
+            return
+        
+        # Получаем информацию о подписке
+        subscription = db.get_user_subscription(target_user_id)
+        
+        # Форматируем информацию
+        user_display = f"@{user_info['username']}" if user_info['username'] else user_info['first_name'] or f"ID {target_user_id}"
+        premium_status = "✅ Активна" if user_info['is_premium'] else "❌ Неактивна"
+        
+        subscription_info = "❌ Нет активной подписки"
+        if subscription:
+            sub_type, end_date = subscription
+            if hasattr(end_date, 'strftime'):
+                end_date_str = end_date.strftime('%d.%m.%Y')
+            else:
+                end_date_str = str(end_date)[:10]
+            
+            subscription_info = f"✅ {sub_type} (до {end_date_str})"
+        
+        info_text = f"""
+👤 *Информация о пользователе*
+
+*Имя:* {user_display}
+*ID:* {target_user_id}
+*Премиум статус:* {premium_status}
+*Подписка:* {subscription_info}
+*Карт в истории:* {user_info['total_cards']}
+*Лимит карт:* {user_info.get('daily_cards_limit', 1)}/день
+*Дата регистрации:* {user_info['registered_date'].strftime('%d.%m.%Y') if user_info['registered_date'] else 'Неизвестно'}
+"""
+        await update.message.reply_text(info_text, parse_mode='Markdown')
+        
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат ID пользователя")
+    except Exception as e:
+        logging.error(f"❌ Error in user_info: {e}")
+        await update.message.reply_text(f"❌ Произошла ошибка: {str(e)}")
+
