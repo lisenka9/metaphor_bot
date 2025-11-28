@@ -67,19 +67,47 @@ class DatabaseManager:
                 )
             ''')
             
-           # Таблица платежей 
+           
+            # Таблица платежей
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS payments (
                     id SERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES users(user_id),
-                    amount INTEGER NOT NULL,
+                    amount DECIMAL NOT NULL,
                     currency TEXT DEFAULT 'RUB',
-                    subscription_type TEXT NOT NULL,
+                    subscription_type TEXT,
+                    product_type TEXT DEFAULT 'subscription',
                     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     status TEXT DEFAULT 'pending',
+                    payment_method TEXT DEFAULT 'yookassa',
                     yoomoney_payment_id TEXT,
-                    payment_id TEXT  
+                    payment_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            ''')
+            
+            # Добавляем недостающие колонки если таблица уже существует
+            cursor.execute('''
+                DO $$ 
+                BEGIN
+                    -- Добавляем payment_method если нет
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='payments' AND column_name='payment_method') THEN
+                        ALTER TABLE payments ADD COLUMN payment_method TEXT DEFAULT 'yookassa';
+                    END IF;
+                    
+                    -- Добавляем product_type если нет
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='payments' AND column_name='product_type') THEN
+                        ALTER TABLE payments ADD COLUMN product_type TEXT DEFAULT 'subscription';
+                    END IF;
+                    
+                    -- Добавляем created_at если нет
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='payments' AND column_name='created_at') THEN
+                        ALTER TABLE payments ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                    END IF;
+                END $$;
             ''')
             
             # Таблица для посланий (если ещё нет)
@@ -1558,15 +1586,16 @@ class DatabaseManager:
         
         try:
             cursor.execute('''
-                INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, payment_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, payment_id, currency)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             ''', (
                 user_id,
                 amount,
                 subscription_type,
-                'success',  # Предполагаем успешный платеж для статических ссылок
+                'success',
                 'paypal',
-                payment_id or f"paypal_{user_id}_{int(datetime.now().timestamp())}"
+                payment_id or f"paypal_{user_id}_{int(datetime.now().timestamp())}",
+                'ILS'
             ))
             
             conn.commit()

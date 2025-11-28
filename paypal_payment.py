@@ -362,6 +362,17 @@ class PayPalPayment:
             conn = db.get_connection()
             cursor = conn.cursor()
             
+            # Сначала обновляем структуру таблицы если нужно
+            cursor.execute('''
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='payments' AND column_name='payment_method') THEN
+                        ALTER TABLE payments ADD COLUMN payment_method TEXT DEFAULT 'yookassa';
+                    END IF;
+                END $$;
+            ''')
+            
             # Ищем платежи в базе данных по таблице payments
             cursor.execute('''
                 SELECT p.user_id, p.subscription_type, p.payment_date, p.status 
@@ -473,5 +484,26 @@ class PayPalPayment:
         except Exception as e:
             logging.error(f"❌ Error sending PayPal success notification: {e}")
 
+    def start_paypal_monitoring(self):
+        """Запускает автоматический мониторинг PayPal платежей"""
+        def monitor():
+            while True:
+                try:
+                    # Проверяем статические платежи каждые 30 секунд
+                    activated_count = self.check_paypal_static_payments()
+                    if activated_count > 0:
+                        logging.info(f"✅ PayPal monitor: activated {activated_count} subscriptions")
+                    
+                    # Проверяем pending платежи через API
+                    self.check_all_pending_payments()
+                    
+                except Exception as e:
+                    logging.error(f"❌ Error in PayPal monitoring: {e}")
+                
+                time.sleep(30)  # Проверяем каждые 30 секунд
+        
+        thread = Thread(target=monitor)
+        thread.daemon = True
+        thread.start()
 # Глобальный экземпляр
 paypal_processor = PayPalPayment()

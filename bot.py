@@ -1274,6 +1274,7 @@ def run_bot_with_restart():
             application.add_handler(CommandHandler("reports", handlers.admin_reports))
             application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
             application.add_handler(CommandHandler("debug_report", handlers.debug_report))
+            application.add_handler(CommandHandler("update_payments", handlers.update_payments_table))
             
             application.add_handler(CallbackQueryHandler(
                 handlers.show_report_problem_from_button, 
@@ -1339,7 +1340,7 @@ def start_payment_monitoring():
             # Мониторинг ЮKassa платежей
             payment_processor.check_all_pending_payments()
             
-            # Мониторинг PayPal статических платежей
+            # Мониторинг PayPal платежей
             try:
                 from paypal_payment import paypal_processor
                 activated_count = paypal_processor.check_paypal_static_payments()

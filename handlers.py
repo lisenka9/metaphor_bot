@@ -4743,3 +4743,46 @@ async def handle_successful_payment(query, subscription):
         reply_markup=keyboard.get_payment_success_keyboard(),
         parse_mode='Markdown'
     )
+
+async def update_payments_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновляет таблицу payments (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Добавляем недостающие колонки
+        cursor.execute('''
+            DO $$ 
+            BEGIN
+                -- Добавляем payment_method если нет
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='payment_method') THEN
+                    ALTER TABLE payments ADD COLUMN payment_method TEXT DEFAULT 'yookassa';
+                END IF;
+                
+                -- Добавляем product_type если нет
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='product_type') THEN
+                    ALTER TABLE payments ADD COLUMN product_type TEXT DEFAULT 'subscription';
+                END IF;
+                
+                -- Добавляем created_at если нет
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='created_at') THEN
+                    ALTER TABLE payments ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                END IF;
+            END $$;
+        ''')
+        
+        conn.commit()
+        await update.message.reply_text("✅ Таблица payments обновлена! Добавлены колонки payment_method, product_type, created_at")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+        
