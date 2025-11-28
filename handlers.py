@@ -2155,7 +2155,12 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор типа подписки"""
     query = update.callback_query
-    await query.answer()
+    
+    # СРАЗУ отвечаем на callback query чтобы избежать таймаута
+    try:
+        await query.answer()
+    except Exception as e:
+        logging.warning(f"⚠️ Could not answer callback query: {e}")
     
     try:
         subscription_type = query.data.replace("subscribe_", "")
@@ -2180,32 +2185,21 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
         price = SUBSCRIPTION_PRICES[subscription_type]
         duration = SUBSCRIPTION_NAMES[subscription_type]
         
-        # Получаем ссылку для оплаты через API ЮKassa
-        payment_url = PAYMENT_LINKS.get(subscription_type)
+        # ПОКАЗЫВАЕМ сообщение "обработка" сразу
+        processing_msg = await query.message.reply_text("🔄 Создаем ссылку для оплаты...")
         
-        logging.info(f"🔗 Static Payment URL: {payment_url}")
+        # Используем статическую ссылку сразу (быстро)
+        payment_url = PAYMENT_LINKS.get(subscription_type)
+        payment_id = f"static_{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
+        
+        logging.info(f"🔗 Using static Payment URL: {payment_url}")
         
         if not payment_url:
-            await query.message.reply_text(
+            await processing_msg.edit_text(
                 "❌ Ошибка: ссылка для оплаты не найдена. Свяжитесь с администратором.",
                 reply_markup=keyboard.get_main_menu_keyboard()
             )
             return
-        
-        # ✅ СОЗДАЕМ ПЛАТЕЖ ЧЕРЕЗ API ЮKASSA
-        payment_url, payment_id = payment_processor.create_payment(
-            amount=price,
-            description=f"Подписка {duration}",
-            user_id=user_id,
-            subscription_type=subscription_type
-        )
-        
-        if not payment_url:
-            logging.error("❌ Failed to create YooKassa payment via API")
-            # Пробуем использовать статическую ссылку как fallback
-            payment_url = PAYMENT_LINKS.get(subscription_type)
-            payment_id = f"static_{subscription_type}_{user_id}"
-            logging.info(f"🔄 Using static URL as fallback: {payment_url}")
         
         # Сохраняем в контексте
         context.user_data['payment_id'] = payment_id
@@ -2223,13 +2217,17 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
 Если подписка не активировалась, нажмите "🔄 Проверить оплату".
 """
         
-        await query.message.reply_text(
+        # Обновляем сообщение "обработка" на финальное
+        await processing_msg.edit_text(
             payment_text,
             reply_markup=keyboard.get_payment_keyboard(subscription_type, payment_url, payment_id),
             parse_mode='Markdown'
         )
         
         logging.info(f"✅ Payment message sent for user {user_id}, payment_id: {payment_id}")
+        
+        # ЗАПУСКАЕМ API ВЫЗОВ В ФОНОВОМ РЕЖИМЕ (если нужен)
+        # await create_api_payment_background(user_id, subscription_type, price, duration)
         
     except Exception as e:
         logging.error(f"❌ Error in handle_subscription_selection: {e}")

@@ -97,7 +97,7 @@ class PayPalPayment:
                 json=payload,
                 headers=headers,
                 auth=self.auth,
-                timeout=30
+                timeout=10
             )
             
             if response.status_code == 200:
