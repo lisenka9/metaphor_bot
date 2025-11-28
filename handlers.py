@@ -4658,7 +4658,7 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
             reply_markup=keyboard.get_main_menu_keyboard()
         )
 
-def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты PayPal"""
     await query.answer()
     
