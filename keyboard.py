@@ -438,3 +438,15 @@ def get_paypal_check_keyboard(subscription_type: str, payment_id: str):
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_yookassa_subscription_keyboard():
+    """Клавиатура для выбора подписки ЮKassa"""
+    keyboard = [
+        [InlineKeyboardButton("1 месяц - 99₽", callback_data="subscribe_month")],
+        [InlineKeyboardButton("3 месяца - 199₽", callback_data="subscribe_3months")],
+        [InlineKeyboardButton("6 месяцев - 399₽", callback_data="subscribe_6months")],
+        [InlineKeyboardButton("1 год - 799₽", callback_data="subscribe_year")],
+        [InlineKeyboardButton("🔙 Назад к выбору оплаты", callback_data="subscribe")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)

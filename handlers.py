@@ -8,7 +8,7 @@ import csv
 import io
 from datetime import datetime, date
 from yookassa_payment import payment_processor
-from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES
+from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES, PAYPAL_PRICES, PAYPAL_LINKS
 import uuid
 
 def get_video_system_safe():
@@ -303,14 +303,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "meditation":
         await meditation_button_handler(query, context)
     
-    elif query.data == "subscribe":
-        await show_subscribe_from_button(query, context)
-    
     elif query.data.startswith("subscribe_"):
         await handle_subscription_selection(update, context)
-    
-    elif query.data.startswith("check_payment_"):
-        await handle_payment_check(query, context)
+
+    elif query.data == "subscribe":
+        await show_subscribe_from_button(query, context)
 
     elif query.data.startswith("payment_"):
         await handle_payment_method_selection(query, context)
@@ -320,6 +317,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data.startswith("check_paypal_"):
         await handle_paypal_payment_check(query, context)
+    
+    elif query.data.startswith("check_payment_"):
+        await handle_payment_check(query, context)
 
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
@@ -4528,10 +4528,38 @@ async def handle_payment_method_selection(query, context: ContextTypes.DEFAULT_T
     
     if payment_method == "yookassa":
         # Показываем выбор подписки для ЮKassa
-        await show_subscribe_from_button(query, context)
+        await show_yookassa_subscription_choice(query, context)
     elif payment_method == "paypal":
         # Показываем выбор подписки для PayPal
         await show_paypal_subscription_choice(query, context)
+
+async def show_yookassa_subscription_choice(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает выбор подписки для ЮKassa"""
+    subscription_text = """
+💎 Премиум подписка (ЮKassa)
+
+Откройте полный доступ к возможностям бота:
+
+✨ Что входит:
+• 5 карт дня вместо 1
+• Послание дня (ежедневно)
+• Доступ к 3 техникам самопомощи «Архипелаг ресурсов»
+• Медитация «Дары моря»
+
+🎯 Тарифы (в рублях):
+• 1 месяц - 99₽
+• 3 месяца - 199₽ 
+• 6 месяцев - 399₽
+• 1 год - 799₽
+
+Выберите срок подписки:
+"""
+    
+    await query.message.reply_text(
+        subscription_text,
+        reply_markup=keyboard.get_yookassa_subscription_keyboard(),  # Используем новую клавиатуру
+        parse_mode='Markdown'
+    )
 
 async def show_paypal_subscription_choice(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает выбор подписки для PayPal"""
@@ -4572,6 +4600,7 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         
         logging.info(f"🔄 PayPal subscription selected: {subscription_type} by user {user_id}")
         
+        # Проверяем, что тип подписки существует в PayPal ценах
         if subscription_type not in PAYPAL_PRICES:
             await query.message.reply_text(
                 "❌ Ошибка: выбран неверный тип подписки.",
@@ -4624,6 +4653,10 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         
     except Exception as e:
         logging.error(f"❌ Error in handle_paypal_subscription_selection: {e}")
+        await query.message.reply_text(
+            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
+            reply_markup=keyboard.get_main_menu_keyboard()
+        )
 
 async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты PayPal"""

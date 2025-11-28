@@ -577,7 +577,6 @@ def send_subscription_notification(user_id, subscription_type, amount):
     except Exception as e:
         logging.error(f"❌ Error sending PayPal subscription notification: {e}")
 
-        
 def handle_payment_notification(event_data):
     """Обрабатывает уведомление о платеже"""
     try:

@@ -788,10 +788,7 @@ class DatabaseManager:
             return 0
         finally:
             conn.close()
-
-
-
-    
+ 
     def get_last_user_card_description(self, user_id: int):
         """Получает описание последней карты пользователя"""
         conn = self.get_connection()
@@ -1020,8 +1017,7 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
-
-    
+   
     def get_user_message_stats(self, user_id: int):
         """Получает статистику посланий пользователя"""
         conn = self.get_connection()
