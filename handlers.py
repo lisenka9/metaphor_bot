@@ -10,6 +10,7 @@ from datetime import datetime, date
 from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES, PAYPAL_PRICES, PAYPAL_LINKS
 import uuid
+import json
 
 def get_video_system_safe():
     """Безопасно получает video_system"""
@@ -2238,6 +2239,17 @@ def save_user_action(user_id: int, action_type: str, action_data: dict):
         conn = db.get_connection()
         cursor = conn.cursor()
         
+        # Создаем таблицу если не существует
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_actions (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT,
+                action_type TEXT,
+                action_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         cursor.execute('''
             INSERT INTO user_actions (user_id, action_type, action_data)
             VALUES (%s, %s, %s)
@@ -2245,6 +2257,7 @@ def save_user_action(user_id: int, action_type: str, action_data: dict):
         
         conn.commit()
         conn.close()
+        logging.info(f"✅ User action saved: {action_type} for user {user_id}")
         
     except Exception as e:
         logging.error(f"❌ Error saving user action: {e}")
