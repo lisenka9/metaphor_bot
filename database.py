@@ -1551,5 +1551,34 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def save_paypal_payment(self, user_id: int, subscription_type: str, amount: float, payment_id: str = None):
+        """Сохраняет информацию о PayPal платеже в базу"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, payment_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (
+                user_id,
+                amount,
+                subscription_type,
+                'success',  # Предполагаем успешный платеж для статических ссылок
+                'paypal',
+                payment_id or f"paypal_{user_id}_{int(datetime.now().timestamp())}"
+            ))
+            
+            conn.commit()
+            logging.info(f"✅ PayPal payment saved to database for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error saving PayPal payment to DB: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

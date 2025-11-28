@@ -4649,6 +4649,7 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         
         # Генерируем простой payment_id для PayPal
         payment_id = f"paypal_{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
+        db.save_paypal_payment(user_id, subscription_type, price, payment_id)
         
         # Сохраняем в контексте
         context.user_data['paypal_payment_id'] = payment_id

@@ -356,5 +356,122 @@ class PayPalPayment:
             return self.activate_subscription(payment_id)
         return False
 
+    def check_paypal_static_payments(self):
+        """Проверяет статические PayPal платежи по базе данных"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Ищем платежи в базе данных по таблице payments
+            cursor.execute('''
+                SELECT p.user_id, p.subscription_type, p.payment_date, p.status 
+                FROM payments p 
+                WHERE p.payment_method = 'paypal' 
+                AND p.status = 'success'
+                AND p.payment_date >= NOW() - INTERVAL '10 minutes'
+                AND NOT EXISTS (
+                    SELECT 1 FROM subscriptions s 
+                    WHERE s.user_id = p.user_id 
+                    AND s.is_active = true 
+                    AND s.end_date > NOW()
+                )
+            ''')
+            
+            new_payments = cursor.fetchall()
+            conn.close()
+            
+            activated_count = 0
+            for user_id, subscription_type, payment_date, status in new_payments:
+                # Активируем подписку
+                if self.activate_paypal_subscription(user_id, subscription_type):
+                    activated_count += 1
+                    logging.info(f"✅ Activated subscription from PayPal payment for user {user_id}")
+            
+            if activated_count > 0:
+                logging.info(f"✅ Activated {activated_count} PayPal subscriptions")
+                
+            return activated_count
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking PayPal static payments: {e}")
+            return 0
+
+    def activate_paypal_subscription(self, user_id: int, subscription_type: str):
+        """Активирует подписку для PayPal платежа"""
+        try:
+            if subscription_type not in SUBSCRIPTION_DURATIONS:
+                return False
+                
+            # Активируем подписку в базе данных
+            success = db.create_subscription(
+                user_id, 
+                subscription_type, 
+                SUBSCRIPTION_DURATIONS[subscription_type]
+            )
+            
+            if success:
+                logging.info(f"✅ PayPal subscription activated for user {user_id}, type: {subscription_type}")
+                
+                # Отправляем уведомление пользователю
+                self.send_paypal_success_notification(user_id, subscription_type)
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logging.error(f"❌ Error activating PayPal subscription: {e}")
+            return False
+
+    def send_paypal_success_notification(self, user_id: int, subscription_type: str):
+        """Отправляет уведомление об успешной оплате PayPal"""
+        try:
+            from telegram import Bot
+            from config import BOT_TOKEN
+            
+            bot = Bot(token=BOT_TOKEN)
+            
+            subscription_names = {
+                "month": "1 месяц",
+                "3months": "3 месяца", 
+                "6months": "6 месяцев",
+                "year": "1 год"
+            }
+            
+            # Получаем информацию о подписке для даты окончания
+            subscription = db.get_user_subscription(user_id)
+            end_date_str = ""
+            if subscription and subscription[1]:
+                end_date = subscription[1]
+                if hasattr(end_date, 'strftime'):
+                    end_date_str = end_date.strftime('%d.%m.%Y')
+                else:
+                    end_date_str = str(end_date)[:10]
+            
+            message_text = f"""
+    ✅ *Оплата PayPal подтверждена!*
+
+    💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 год')}" активирована.
+
+    📅 Действует до: {end_date_str}
+
+    ✨ Теперь вам доступны:
+    • 5 карт дня вместо 1
+    • Ежедневное послание дня  
+    • Архипелаг ресурсов
+    • Медитация «Дары Моря»
+
+    Наслаждайтесь полным доступом! 💫
+    """
+            
+            bot.send_message(
+                chat_id=user_id,
+                text=message_text,
+                parse_mode='Markdown'
+            )
+            logging.info(f"✅ PayPal success notification sent to user {user_id}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error sending PayPal success notification: {e}")
+
 # Глобальный экземпляр
 paypal_processor = PayPalPayment()

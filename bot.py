@@ -1339,10 +1339,12 @@ def start_payment_monitoring():
             # Мониторинг ЮKassa платежей
             payment_processor.check_all_pending_payments()
             
-            # Мониторинг PayPal платежей
+            # Мониторинг PayPal статических платежей
             try:
                 from paypal_payment import paypal_processor
-                paypal_processor.check_all_pending_payments()
+                activated_count = paypal_processor.check_paypal_static_payments()
+                if activated_count > 0:
+                    logging.info(f"✅ PayPal monitor: activated {activated_count} subscriptions")
             except Exception as e:
                 logging.error(f"❌ Error in PayPal payment monitoring: {e}")
             
