@@ -1191,8 +1191,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Error in error handler itself: {e}")
 
-async def run_bot_with_restart():
-    """Запускает бота с автоматическим перезапуском при ошибках"""
+def run_bot_with_restart():
+    """Запускает бота с автоматическим перезапуском при ошибках (синхронная версия)"""
     max_retries = 5
     retry_delay = 60  # секунды
     
@@ -1316,8 +1316,8 @@ async def run_bot_with_restart():
             
             logger.info("🚀 Запуск бота в режиме Polling...")
             
-            # ЗАПУСКАЕМ POLLING АСИНХРОННО
-            await application.run_polling(
+            # ЗАПУСКАЕМ POLLING СИНХРОННО
+            application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
                 drop_pending_updates=True,
@@ -1409,48 +1409,58 @@ def signal_handler(signum, frame):
     logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
 
 def main():
-    """Основная функция запуска"""
+    """Основная функция запуска для Render"""
+    logger.info("🚀 Starting bot and Flask...")
+    
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    logger.info("🚀 Starting bot and Flask in separate threads...")
-    
-    # Создаем потоки вместо процессов
-    flask_thread = threading.Thread(target=run_flask_process, name="FlaskThread")
-    bot_thread = threading.Thread(target=run_bot_process, name="BotThread")
-    
-    # Делаем потоки демонами (завершатся при завершении main)
-    flask_thread.daemon = True
-    bot_thread.daemon = True
-    
-    # Запускаем потоки
+    # Запускаем Flask в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask_process, daemon=True)
     flask_thread.start()
     logger.info("✅ Flask thread started")
     
-    time.sleep(3)  # Даем Flask время на запуск перед ботом
+    # Даем Flask время на запуск
+    time.sleep(5)
     
-    bot_thread.start()
-    logger.info("✅ Bot thread started")
-    
-    # Мониторим потоки и перезапускаем при падении
-    while True:
-        time.sleep(10)
+    # Запускаем все фоновые процессы
+    try:
+        # Мониторинг платежей
+        payment_thread = threading.Thread(target=start_payment_monitoring, daemon=True)
+        payment_thread.start()
         
-        # Проверяем статус потоков
-        if not flask_thread.is_alive():
-            logger.error("❌ Flask thread died, restarting...")
-            flask_thread = threading.Thread(target=run_flask_process, name="FlaskThread")
-            flask_thread.daemon = True
-            flask_thread.start()
-            logger.info("✅ Flask thread restarted")
-            
-        if not bot_thread.is_alive():
-            logger.error("❌ Bot thread died, restarting...")
-            bot_thread = threading.Thread(target=run_bot_process, name="BotThread")
-            bot_thread.daemon = True
-            bot_thread.start()
-            logger.info("✅ Bot thread restarted")
+        # Самопинг
+        ping_thread = threading.Thread(target=ping_self, daemon=True)
+        ping_thread.start()
+        
+        # Очистка видео ссылок
+        cleanup_thread = threading.Thread(target=cleanup_video_links_loop, daemon=True)
+        cleanup_thread.start()
+        
+        logger.info("✅ Background threads started")
+        
+    except Exception as e:
+        logger.error(f"❌ Error starting background threads: {e}")
+    
+    # Запускаем бота в основном потоке СИНХРОННО
+    try:
+        run_bot_with_restart()
+    except KeyboardInterrupt:
+        logger.info("🛑 Received interrupt signal")
+    except Exception as e:
+        logger.error(f"💥 Fatal error: {e}")
+
+def cleanup_video_links_loop():
+    """Бесконечный цикл очистки видео ссылок"""
+    while True:
+        try:
+            time.sleep(3600)  # Каждый час
+            cleaned_count = db.cleanup_expired_video_links()
+            if cleaned_count > 0:
+                logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
+        except Exception as e:
+            logger.error(f"❌ Error in periodic video links cleanup: {e}")
 
 if __name__ == '__main__':
     main()
