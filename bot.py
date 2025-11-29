@@ -1369,41 +1369,6 @@ def run_flask_process():
         logger.error(f"❌ Flask process crashed: {e}")
         sys.exit(1)
 
-def run_bot_process():
-    """Запускает бота в отдельном процессе"""
-    try:
-        # Запускаем мониторинг платежей в отдельном потоке
-        payment_thread = threading.Thread(target=start_payment_monitoring)
-        payment_thread.daemon = True
-        payment_thread.start()
-
-        # Запускаем самопинг в отдельном потоке
-        ping_thread = threading.Thread(target=ping_self)
-        ping_thread.daemon = True
-        ping_thread.start()
-        
-        # Периодическая очистка ссылок
-        def cleanup_video_links():
-            while True:
-                try:
-                    time.sleep(3600)  # Каждый час
-                    cleaned_count = db.cleanup_expired_video_links()
-                    if cleaned_count > 0:
-                        logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
-                except Exception as e:
-                    logger.error(f"❌ Error in periodic video links cleanup: {e}")
-        
-        cleanup_thread = threading.Thread(target=cleanup_video_links)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
-        
-        # Запускаем бота в asyncio event loop
-        asyncio.run(run_bot_with_restart())
-        
-    except Exception as e:
-        logger.error(f"❌ Bot process crashed: {e}")
-        sys.exit(1)
-
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
     logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
