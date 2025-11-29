@@ -1191,8 +1191,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Error in error handler itself: {e}")
 
-def run_bot_with_restart():
-    """Запускает бота с автоматическим перезапуском при ошибках (синхронная версия)"""
+async def run_bot_with_restart():
+    """Запускает бота с автоматическим перезапуском при ошибках (асинхронная версия)"""
     max_retries = 5
     retry_delay = 60  # секунды
     
@@ -1316,8 +1316,8 @@ def run_bot_with_restart():
             
             logger.info("🚀 Запуск бота в режиме Polling...")
             
-            # ЗАПУСКАЕМ POLLING СИНХРОННО
-            application.run_polling(
+            # ЗАПУСКАЕМ POLLING АСИНХРОННО
+            await application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
                 drop_pending_updates=True,
@@ -1336,6 +1336,14 @@ def run_bot_with_restart():
             else:
                 logger.error("💥 Max retries exceeded. Bot stopped.")
                 raise
+
+def start_bot_process():
+    """Запускает бота в отдельном процессе"""
+    import asyncio
+    try:
+        asyncio.run(run_bot_with_restart())
+    except Exception as e:
+        logger.error(f"❌ Bot process crashed: {e}")
 
 def start_payment_monitoring():
     """Запускает автоматический мониторинг платежей"""
