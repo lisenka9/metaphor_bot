@@ -1407,9 +1407,6 @@ def run_bot_process():
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
     logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
-    # Принудительно завершаем процесс
-    import os
-    os._exit(0)
 
 def main():
     """Основная функция запуска"""
@@ -1417,39 +1414,43 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    logger.info("🚀 Starting bot and Flask in separate processes...")
+    logger.info("🚀 Starting bot and Flask in separate threads...")
     
-    # Создаем процессы
-    flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-    bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+    # Создаем потоки вместо процессов
+    flask_thread = threading.Thread(target=run_flask_process, name="FlaskThread")
+    bot_thread = threading.Thread(target=run_bot_process, name="BotThread")
     
-    # Запускаем процессы
-    flask_process.start()
-    logger.info("✅ Flask process started")
+    # Делаем потоки демонами (завершатся при завершении main)
+    flask_thread.daemon = True
+    bot_thread.daemon = True
     
-    bot_process.start() 
-    logger.info("✅ Bot process started")
+    # Запускаем потоки
+    flask_thread.start()
+    logger.info("✅ Flask thread started")
     
-    # Мониторим процессы и перезапускаем при падении
+    time.sleep(3)  # Даем Flask время на запуск перед ботом
+    
+    bot_thread.start()
+    logger.info("✅ Bot thread started")
+    
+    # Мониторим потоки и перезапускаем при падении
     while True:
         time.sleep(10)
         
-        # Проверяем статус процессов
-        if not flask_process.is_alive():
-            logger.error("❌ Flask process died, restarting...")
-            flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-            flask_process.start()
-            logger.info("✅ Flask process restarted")
+        # Проверяем статус потоков
+        if not flask_thread.is_alive():
+            logger.error("❌ Flask thread died, restarting...")
+            flask_thread = threading.Thread(target=run_flask_process, name="FlaskThread")
+            flask_thread.daemon = True
+            flask_thread.start()
+            logger.info("✅ Flask thread restarted")
             
-        if not bot_process.is_alive():
-            logger.error("❌ Bot process died, restarting...")
-            bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
-            bot_process.start()
-            logger.info("✅ Bot process restarted")
-        
-        # Если оба процесса умерли, выходим
-        if not flask_process.is_alive() and not bot_process.is_alive():
-            logger.error("💥 Both processes died, exiting...")
-            break            
+        if not bot_thread.is_alive():
+            logger.error("❌ Bot thread died, restarting...")
+            bot_thread = threading.Thread(target=run_bot_process, name="BotThread")
+            bot_thread.daemon = True
+            bot_thread.start()
+            logger.info("✅ Bot thread restarted")
+
 if __name__ == '__main__':
     main()
