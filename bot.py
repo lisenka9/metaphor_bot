@@ -1191,8 +1191,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Error in error handler itself: {e}")
 
-async def run_bot_with_restart():
-    """Запускает бота с автоматическим перезапуском при ошибках (асинхронная версия)"""
+def run_bot_with_restart():
+    """Запускает бота с автоматическим перезапуском при ошибках"""
     max_retries = 5
     retry_delay = 60  # секунды
     
@@ -1315,9 +1315,7 @@ async def run_bot_with_restart():
             ))
             
             logger.info("🚀 Запуск бота в режиме Polling...")
-            
-            # ЗАПУСКАЕМ POLLING АСИНХРОННО
-            await application.run_polling(
+            application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
                 drop_pending_updates=True,
@@ -1336,14 +1334,6 @@ async def run_bot_with_restart():
             else:
                 logger.error("💥 Max retries exceeded. Bot stopped.")
                 raise
-
-def start_bot_process():
-    """Запускает бота в отдельном процессе"""
-    import asyncio
-    try:
-        asyncio.run(run_bot_with_restart())
-    except Exception as e:
-        logger.error(f"❌ Bot process crashed: {e}")
 
 def start_payment_monitoring():
     """Запускает автоматический мониторинг платежей"""
@@ -1377,63 +1367,86 @@ def run_flask_process():
         logger.error(f"❌ Flask process crashed: {e}")
         sys.exit(1)
 
+def run_bot_process():
+    """Запускает бота в отдельном процессе"""
+    try:
+        # Запускаем мониторинг платежей в отдельном потоке
+        payment_thread = threading.Thread(target=start_payment_monitoring)
+        payment_thread.daemon = True
+        payment_thread.start()
+
+        # Даем Flask время на запуск
+        time.sleep(5)
+        
+        # Запускаем самопинг в отдельном потоке
+        ping_thread = threading.Thread(target=ping_self)
+        ping_thread.daemon = True
+        ping_thread.start()
+        
+        # ✅ ПЕРИОДИЧЕСКАЯ ОЧИСТКА ССЫЛОК
+        def cleanup_video_links():
+            while True:
+                try:
+                    time.sleep(3600)  # Каждый час
+                    cleaned_count = db.cleanup_expired_video_links()
+                    if cleaned_count > 0:
+                        logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
+                except Exception as e:
+                    logger.error(f"❌ Error in periodic video links cleanup: {e}")
+        
+        cleanup_thread = threading.Thread(target=cleanup_video_links)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
+        
+        # Запускаем бота с автоматическим перезапуском
+        run_bot_with_restart()
+    except Exception as e:
+        logger.error(f"❌ Bot process crashed: {e}")
+        sys.exit(1)
+
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
     logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
 
 def main():
-    """Основная функция запуска для Render"""
-    logger.info("🚀 Starting bot and Flask...")
-    
+    """Основная функция запуска"""
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask_process, daemon=True)
-    flask_thread.start()
-    logger.info("✅ Flask thread started")
+    logger.info("🚀 Starting bot and Flask in separate processes...")
     
-    # Даем Flask время на запуск
-    time.sleep(5)
+    # Создаем процессы
+    flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
+    bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
     
-    # Запускаем все фоновые процессы
-    try:
-        # Мониторинг платежей
-        payment_thread = threading.Thread(target=start_payment_monitoring, daemon=True)
-        payment_thread.start()
-        
-        # Самопинг
-        ping_thread = threading.Thread(target=ping_self, daemon=True)
-        ping_thread.start()
-        
-        # Очистка видео ссылок
-        cleanup_thread = threading.Thread(target=cleanup_video_links_loop, daemon=True)
-        cleanup_thread.start()
-        
-        logger.info("✅ Background threads started")
-        
-    except Exception as e:
-        logger.error(f"❌ Error starting background threads: {e}")
+    # Запускаем процессы
+    flask_process.start()
+    logger.info("✅ Flask process started")
     
-    # Запускаем бота в основном потоке СИНХРОННО
-    try:
-        run_bot_with_restart()
-    except KeyboardInterrupt:
-        logger.info("🛑 Received interrupt signal")
-    except Exception as e:
-        logger.error(f"💥 Fatal error: {e}")
-
-def cleanup_video_links_loop():
-    """Бесконечный цикл очистки видео ссылок"""
+    bot_process.start() 
+    logger.info("✅ Bot process started")
+    
+    # Мониторим процессы и перезапускаем при падении
     while True:
-        try:
-            time.sleep(3600)  # Каждый час
-            cleaned_count = db.cleanup_expired_video_links()
-            if cleaned_count > 0:
-                logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
-        except Exception as e:
-            logger.error(f"❌ Error in periodic video links cleanup: {e}")
-
+        time.sleep(10)
+        
+        # Проверяем статус процессов
+        if not flask_process.is_alive():
+            logger.error("❌ Flask process died, restarting...")
+            flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
+            flask_process.start()
+            logger.info("✅ Flask process restarted")
+            
+        if not bot_process.is_alive():
+            logger.error("❌ Bot process died, restarting...")
+            bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+            bot_process.start()
+            logger.info("✅ Bot process restarted")
+        
+        # Если оба процесса умерли, выходим
+        if not flask_process.is_alive() and not bot_process.is_alive():
+            logger.error("💥 Both processes died, exiting...")
+            break            
 if __name__ == '__main__':
     main()
