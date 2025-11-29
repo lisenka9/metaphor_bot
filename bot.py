@@ -1191,7 +1191,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Error in error handler itself: {e}")
 
-def run_bot_with_restart():
+async def run_bot_with_restart():
     """Запускает бота с автоматическим перезапуском при ошибках"""
     max_retries = 5
     retry_delay = 60  # секунды
@@ -1315,7 +1315,9 @@ def run_bot_with_restart():
             ))
             
             logger.info("🚀 Запуск бота в режиме Polling...")
-            application.run_polling(
+            
+            # ЗАПУСКАЕМ POLLING АСИНХРОННО
+            await application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
                 drop_pending_updates=True,
@@ -1375,15 +1377,12 @@ def run_bot_process():
         payment_thread.daemon = True
         payment_thread.start()
 
-        # Даем Flask время на запуск
-        time.sleep(5)
-        
         # Запускаем самопинг в отдельном потоке
         ping_thread = threading.Thread(target=ping_self)
         ping_thread.daemon = True
         ping_thread.start()
         
-        # ✅ ПЕРИОДИЧЕСКАЯ ОЧИСТКА ССЫЛОК
+        # Периодическая очистка ссылок
         def cleanup_video_links():
             while True:
                 try:
@@ -1398,8 +1397,9 @@ def run_bot_process():
         cleanup_thread.daemon = True
         cleanup_thread.start()
         
-        # Запускаем бота с автоматическим перезапуском
-        run_bot_with_restart()
+        # Запускаем бота в asyncio event loop
+        asyncio.run(run_bot_with_restart())
+        
     except Exception as e:
         logger.error(f"❌ Bot process crashed: {e}")
         sys.exit(1)
