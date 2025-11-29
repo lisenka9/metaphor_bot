@@ -19,6 +19,37 @@ import sys
 from datetime import datetime, timedelta
 from telegram import Update
 
+
+import signal
+import sys
+import asyncio
+from threading import Event
+
+class BotManager:
+    def __init__(self):
+        self.shutdown_event = Event()
+        self.restart_count = 0
+        self.max_restarts = 10
+        self.restart_delay = 60  # секунды
+
+    def signal_handler(self, signum, frame):
+        """Обработчик сигналов для graceful shutdown"""
+        logger.info(f"🛑 Received shutdown signal {signum}. Stopping bot gracefully...")
+        self.shutdown_event.set()
+
+    async def wait_for_shutdown(self):
+        """Ожидание сигнала завершения"""
+        while not self.shutdown_event.is_set():
+            await asyncio.sleep(1)
+
+    def should_restart(self):
+        """Проверяет, можно ли перезапускать бота"""
+        self.restart_count += 1
+        if self.restart_count > self.max_restarts:
+            logger.error(f"💥 Max restarts exceeded ({self.max_restarts}). Stopping.")
+            return False
+        return True
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -451,6 +482,130 @@ def paypal_webhook():
     except Exception as e:
         logging.error(f"❌ Error in PayPal webhook: {e}")
         return jsonify({"status": "error"}), 500
+
+@app.route('/health-detailed')
+def health_detailed():
+    """Детальная проверка здоровья для Render"""
+    health_data = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0",
+        "components": {
+            "flask": "running",
+            "database": "unknown",
+            "telegram_bot": "unknown"
+        }
+    }
+    
+    try:
+        # Проверка базы данных
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        health_data["components"]["database"] = "healthy"
+        conn.close()
+    except Exception as e:
+        health_data["components"]["database"] = f"unhealthy: {str(e)}"
+        health_data["status"] = "degraded"
+    
+    # Проверка бота (косвенная)
+    try:
+        # Попытка получить информацию о боте
+        import requests
+        bot_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
+        response = requests.get(bot_url, timeout=10)
+        if response.status_code == 200:
+            health_data["components"]["telegram_bot"] = "healthy"
+        else:
+            health_data["components"]["telegram_bot"] = f"unhealthy: {response.status_code}"
+            health_data["status"] = "unhealthy"
+    except Exception as e:
+        health_data["components"]["telegram_bot"] = f"unhealthy: {str(e)}"
+        health_data["status"] = "unhealthy"
+    
+    return jsonify(health_data), 200 if health_data["status"] == "healthy" else 503
+
+@app.route('/readiness')
+def readiness_check():
+    """Проверка готовности для Load Balancer"""
+    try:
+        # Быстрая проверка базы данных
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        conn.close()
+        return "✅ Ready", 200
+    except Exception as e:
+        return f"❌ Not Ready: {str(e)}", 503
+
+async def enhanced_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Улучшенный обработчик ошибок"""
+    try:
+        error = context.error
+        
+        # Логируем ошибку
+        logger.error(f"Exception while handling an update: {error}")
+        logger.error("Full traceback:", exc_info=error)
+        
+        # Обрабатываем специфические ошибки Telegram API
+        if hasattr(error, 'message'):
+            error_message = error.message.lower()
+            
+            # Ошибки, которые требуют перезапуска
+            if any(phrase in error_message for phrase in [
+                'conflict', 'terminated', 'killed', 'restart', 
+                'webhook', 'polling', 'connection'
+            ]):
+                logger.error("🔄 Telegram API conflict detected,可能需要 перезапуск")
+                
+            # Сетевые ошибки - временные, можно игнорировать
+            elif any(phrase in error_message for phrase in [
+                'timeout', 'network', 'connection', 'gateway'
+            ]):
+                logger.warning("⚠️ Network error, will retry")
+                
+        # Уведомляем пользователя об ошибке если это возможно
+        if update and hasattr(update, 'effective_chat'):
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="❌ Произошла временная ошибка. Пожалуйста, попробуйте снова через несколько секунд."
+                )
+            except:
+                pass
+                
+    except Exception as e:
+        logger.error(f"Error in error handler itself: {e}")
+
+def start_health_monitoring():
+    """Запускает мониторинг здоровья бота"""
+    def monitor():
+        while True:
+            try:
+                # Периодическая проверка состояния
+                time.sleep(300)  # Каждые 5 минут
+                
+                # Проверка соединения с Telegram
+                import requests
+                response = requests.get(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/getMe",
+                    timeout=10
+                )
+                
+                if response.status_code != 200:
+                    logger.warning("⚠️ Telegram API connectivity issue detected")
+                
+                # Очистка устаревших данных
+                try:
+                    db.cleanup_expired_video_links()
+                except Exception as e:
+                    logger.error(f"❌ Cleanup error: {e}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Health monitor error: {e}")
+    
+    thread = threading.Thread(target=monitor, daemon=True)
+    thread.start()
 
 def verify_paypal_webhook(request):
     """Проверяет подлинность вебхука PayPal"""
@@ -1408,45 +1563,51 @@ def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
     logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
 
+bot_manager = BotManager()
 def main():
-    """Основная функция запуска"""
+    """Основная функция запуска с улучшенным управлением"""
     # Регистрируем обработчики сигналов
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, bot_manager.signal_handler)
+    signal.signal(signal.SIGTERM, bot_manager.signal_handler)
     
-    logger.info("🚀 Starting bot and Flask in separate processes...")
+    logger.info("🚀 Starting bot with enhanced restart system...")
     
-    # Создаем процессы
-    flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-    bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
-    
-    # Запускаем процессы
-    flask_process.start()
-    logger.info("✅ Flask process started")
-    
-    bot_process.start() 
-    logger.info("✅ Bot process started")
-    
-    # Мониторим процессы и перезапускаем при падении
-    while True:
-        time.sleep(10)
-        
-        # Проверяем статус процессов
-        if not flask_process.is_alive():
-            logger.error("❌ Flask process died, restarting...")
+    while not bot_manager.shutdown_event.is_set() and bot_manager.should_restart():
+        try:
+            # Запускаем бота и Flask в отдельных процессах
             flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-            flask_process.start()
-            logger.info("✅ Flask process restarted")
-            
-        if not bot_process.is_alive():
-            logger.error("❌ Bot process died, restarting...")
             bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
-            bot_process.start()
-            logger.info("✅ Bot process restarted")
-        
-        # Если оба процесса умерли, выходим
-        if not flask_process.is_alive() and not bot_process.is_alive():
-            logger.error("💥 Both processes died, exiting...")
-            break            
+            
+            flask_process.start()
+            logger.info("✅ Flask process started")
+            
+            bot_process.start() 
+            logger.info("✅ Bot process started")
+            
+            # Мониторим процессы
+            while (flask_process.is_alive() and bot_process.is_alive() 
+                   and not bot_manager.shutdown_event.is_set()):
+                time.sleep(5)
+            
+            # Если процессы умерли, логируем и перезапускаем
+            if not flask_process.is_alive():
+                logger.error("❌ Flask process died")
+                flask_process.terminate()
+                
+            if not bot_process.is_alive():
+                logger.error("❌ Bot process died")
+                bot_process.terminate()
+            
+            # Ждем перед перезапуском
+            if not bot_manager.shutdown_event.is_set():
+                logger.info(f"🔄 Restarting in {bot_manager.restart_delay} seconds... (attempt {bot_manager.restart_count})")
+                time.sleep(bot_manager.restart_delay)
+                
+        except Exception as e:
+            logger.error(f"💥 Critical error in main loop: {e}")
+            time.sleep(bot_manager.restart_delay)
+    
+    logger.info("🛑 Bot manager stopped.")
+
 if __name__ == '__main__':
     main()
