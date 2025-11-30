@@ -321,6 +321,7 @@ def get_deck_payment_keyboard(payment_url: str, payment_id: str):
     keyboard = [
         [InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)],
         [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_deck_payment_{payment_id}")],
+        [InlineKeyboardButton("🔙 Назад к выбору оплаты", callback_data="buy_deck_international")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
