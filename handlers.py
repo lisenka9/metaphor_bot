@@ -77,9 +77,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎁А еще у меня для тебя подарок: гайд по эмоциональному интеллекту, который ты можешь скачать бесплатно!
         """
         
-        await update.message.reply_text(welcome_text, parse_mode='Markdown')
         await query.message.reply_text(
-            menu_text,
+            welcome_text,
             reply_markup=keyboard.get_main_menu_keyboard(),
             parse_mode='Markdown'
         )
@@ -105,9 +104,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🎁А еще у меня для тебя подарок: гайд по эмоциональному интеллекту, который ты можешь скачать бесплатно!
         """
-        await update.message.reply_text(full_text, parse_mode='Markdown')
         await query.message.reply_text(
-            menu_text,
+            welcome_text,
             reply_markup=keyboard.get_main_menu_keyboard(),
             parse_mode='Markdown'
         )
