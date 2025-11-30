@@ -617,6 +617,110 @@ def handle_paypal_deck_payment_completed(resource):
         logger.error(f"❌ Error handling PayPal deck payment completed: {e}")
         return jsonify({"status": "error"}), 500
 
+def handle_paypal_payment_completed(resource):
+    """Обрабатывает подтвержденный платеж (captured) - ДОПОЛНЕННАЯ ВЕРСИЯ"""
+    try:
+        custom_id = resource.get('custom_id')
+        order_id = resource.get('supplementary_data', {}).get('related_ids', {}).get('order_id')
+        amount = resource.get('amount', {}).get('value')
+        
+        logging.info(f"🔧 PayPal payment captured: custom_id={custom_id}, order_id={order_id}, amount={amount}")
+        
+        if custom_id and amount:
+            user_id = int(custom_id)
+            
+            # Проверяем, это подписка или колода
+            if amount == "80.00":  # Стоимость колоды в шекелях
+                # Активируем покупку колоды
+                from paypal_payment import paypal_processor
+                if paypal_processor.activate_paypal_deck_purchase(user_id):
+                    logging.info(f"✅ PayPal deck purchase activated via payment captured for user {user_id}")
+                    # Отправляем файлы асинхронно
+                    send_deck_files_async(user_id)
+            else:
+                # Это подписка (оригинальная логика)
+                subscription_type = determine_subscription_type_from_paypal(amount)
+                
+                if subscription_type:
+                    # Активируем подписку
+                    success = db.create_subscription(
+                        user_id, 
+                        subscription_type, 
+                        SUBSCRIPTION_DURATIONS[subscription_type]
+                    )
+                    
+                    if success:
+                        logging.info(f"✅ PayPal subscription activated via payment captured for user {user_id}")
+                        
+                        # Отправляем уведомление пользователю
+                        send_subscription_notification(user_id, subscription_type, amount)
+                        
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        logging.error(f"❌ Error handling PayPal payment captured: {e}")
+        return jsonify({"status": "error"}), 500
+
+def handle_paypal_order_completed(resource):
+    """Обрабатывает завершенный заказ PayPal - ДОПОЛНЕННАЯ ВЕРСИЯ"""
+    try:
+        order_id = resource.get('id')
+        purchase_units = resource.get('purchase_units', [])
+        
+        if not purchase_units:
+            return jsonify({"status": "success"}), 200
+            
+        purchase_unit = purchase_units[0]
+        custom_id = purchase_unit.get('custom_id')
+        amount = purchase_unit.get('amount', {}).get('value')
+        
+        logging.info(f"🔧 PayPal order completed: order_id={order_id}, custom_id={custom_id}, amount={amount}")
+        
+        # Способ 1: Пытаемся найти в pending payments
+        from paypal_payment import paypal_processor
+        payment_id, payment_info = paypal_processor.find_payment_by_order_id(order_id)
+        
+        if payment_info:
+            # Активируем через существующий механизм
+            if paypal_processor.activate_subscription(payment_id):
+                logging.info(f"✅ PayPal subscription activated via pending payment for user {payment_info['user_id']}")
+                return jsonify({"status": "success"}), 200
+        
+        # Способ 2: Активируем по custom_id (user_id) и amount
+        if custom_id and amount:
+            user_id = int(custom_id)
+            
+            # Проверяем тип продукта по сумме
+            if amount == "80.00":  # Колода
+                # Активируем покупку колоды
+                if paypal_processor.activate_paypal_deck_purchase(user_id):
+                    logging.info(f"✅ PayPal deck purchase activated via order completed for user {user_id}")
+                    # Отправляем файлы асинхронно
+                    send_deck_files_async(user_id)
+            else:
+                # Это подписка
+                subscription_type = determine_subscription_type_from_paypal(amount)
+                
+                if subscription_type:
+                    # Активируем подписку
+                    success = db.create_subscription(
+                        user_id, 
+                        subscription_type, 
+                        SUBSCRIPTION_DURATIONS[subscription_type]
+                    )
+                    
+                    if success:
+                        logging.info(f"✅ PayPal subscription activated via custom_id for user {user_id}")
+                        
+                        # Отправляем уведомление пользователю
+                        send_subscription_notification(user_id, subscription_type, amount)
+                        
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        logging.error(f"❌ Error handling PayPal order completed: {e}")
+        return jsonify({"status": "error"}), 500
+
 def find_user_from_paypal_payment(resource):
     """Ищет пользователя по данным из платежа PayPal"""
     try:

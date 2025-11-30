@@ -4998,138 +4998,61 @@ async def handle_buy_deck_international(query, context: ContextTypes.DEFAULT_TYP
     await handle_deck_payment_paypal(query, context)
 
 async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
-    """Проверяет статус оплаты колоды через PayPal"""
+    """Проверяет статус оплаты колоды через PayPal (с вебхуками)"""
     user = query.from_user
     
-    # Проверяем, не покупал ли пользователь уже колоду
     if db.has_purchased_deck(user.id):
         await send_deck_files_to_query(query, context, user.id)
         return
     
-    # Пытаемся найти payment_id разными способами
     payment_id = None
-    
-    # 1. Из callback_data
     if query.data.startswith('check_paypal_deck_'):
         payment_id = query.data.replace('check_paypal_deck_', '')
-        logging.info(f"🔧 Found payment_id from callback: {payment_id}")
     
-    # 2. Из context.user_data
-    if not payment_id:
-        payment_id = context.user_data.get('paypal_deck_payment_id')
-        if payment_id:
-            logging.info(f"🔧 Found payment_id from user_data: {payment_id}")
-    
-    # 3. Из глобального хранилища по user_id
-    if not payment_id and 'paypal_deck_payments' in context.user_data:
-        payment_id = context.user_data['paypal_deck_payments'].get(user.id)
-        if payment_id:
-            logging.info(f"🔧 Found payment_id from user_data dict: {payment_id}")
-    
-    # 4. Из bot_data
-    if not payment_id and 'paypal_deck_payments' in context.bot_data:
-        payment_id = context.bot_data['paypal_deck_payments'].get(user.id)
-        if payment_id:
-            logging.info(f"🔧 Found payment_id from bot_data: {payment_id}")
-    
-    # 5. Ищем последний платеж пользователя в базе
-    if not payment_id:
-        try:
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                SELECT payment_id FROM payments 
-                WHERE user_id = %s AND product_type = 'deck'
-                ORDER BY created_at DESC 
-                LIMIT 1
-            ''', (user.id,))
-            
-            result = cursor.fetchone()
-            conn.close()
-            
-            if result:
-                payment_id = result[0]
-                logging.info(f"🔧 Found payment_id from database: {payment_id}")
-                
-        except Exception as e:
-            logging.error(f"❌ Error finding payment_id in database: {e}")
-    
-    if not payment_id:
-        await query.message.reply_text(
-            "❌ Не найден активный платеж. Возможно, сессия устарела.\n\n"
-            "Пожалуйста, начните процесс покупки заново.",
-            reply_markup=keyboard.get_buy_deck_keyboard()
-        )
-        return
-    
-    # Сохраняем найденный payment_id для будущих проверок
-    context.user_data['paypal_deck_payment_id'] = payment_id
-    
-    # Проверяем статус платежа в базе данных
+    # Проверяем статус в базе
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT status, created_at FROM payments 
-            WHERE payment_id = %s AND user_id = %s AND product_type = 'deck'
+            SELECT status FROM payments 
+            WHERE (payment_id = %s OR user_id = %s) 
+            AND product_type = 'deck'
             ORDER BY created_at DESC 
             LIMIT 1
         ''', (payment_id, user.id))
         
         result = cursor.fetchone()
+        conn.close()
         
         if result:
-            status, created_at = result
+            status = result[0]
             if status == 'success':
-                # Платеж подтвержден - отправляем файлы
                 await send_deck_files_to_query(query, context, user.id)
                 return
             elif status == 'pending':
-                # Проверяем, не прошло ли много времени
-                time_diff = datetime.now() - created_at
-                
-                if time_diff.total_seconds() > 300:  # 5 минут
-                    # Прошло много времени - предлагаем альтернативы
-                    await query.message.reply_text(
-                        "⏳ Платеж все еще обрабатывается...\n\n"
-                        f"💡 *ID платежа:* `{payment_id}`\n"
-                        "💡 *Рекомендации:*\n"
-                        "• Подождите еще несколько минут\n"
-                        "• Проверьте историю платежей в PayPal\n"
-                        "• Если оплата прошла, но файлы не пришли, свяжитесь с поддержкой\n"
-                        "• Или попробуйте оплатить снова",
-                        reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
-                        parse_mode='Markdown'
-                    )
-                else:
-                    await query.message.reply_text(
-                        "⏳ Платеж обрабатывается...\n\n"
-                        f"💡 *ID платежа:* `{payment_id}`\n"
-                        "✅ Автоматическая проверка активна - файлы будут отправлены при успешной оплате.\n"
-                        "Обычно это занимает 1-5 минут.\n\n"
-                        "Вы можете закрыть это окно и вернуться позже.",
-                        reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
-                        parse_mode='Markdown'
-                    )
+                await query.message.reply_text(
+                    "⏳ Платеж обрабатывается PayPal...\n\n"
+                    "✅ *Если вы уже оплатили:*\n"
+                    "• Файлы отправятся автоматически через вебхук\n"  
+                    "• Обычно это занимает 1-5 минут\n"
+                    "• Вы можете закрыть это окно\n\n"
+                    "🔄 *Статус проверки:* вебхуки настроены\n"
+                    "❌ *Если оплата не прошла:* попробуйте снова",
+                    reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
+                    parse_mode='Markdown'
+                )
                 return
         
-        conn.close()
-        
-        # Если платеж не найден или не подтвержден
         await query.message.reply_text(
-            f"❌ Платеж `{payment_id}` не найден или еще не подтвержден.\n\n"
-            "Если вы уже оплатили, подождите несколько минут и проверьте снова.\n"
-            "Или начните процесс заново.",
-            reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
-            parse_mode='Markdown'
+            "❌ Платеж не найден. Начните процесс заново.",
+            reply_markup=keyboard.get_buy_deck_keyboard()
         )
         
     except Exception as e:
         logging.error(f"❌ Error checking PayPal deck payment: {e}")
         await query.message.reply_text(
-            "❌ Ошибка при проверке платежа. Попробуйте позже.",
+            "❌ Ошибка при проверке платежа.",
             reply_markup=keyboard.get_buy_deck_keyboard()
         )
 
