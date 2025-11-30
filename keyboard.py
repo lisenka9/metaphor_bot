@@ -171,22 +171,13 @@ def get_payment_success_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_card_display_keyboard(card_type: str = None):
-    """Клавиатура после показа карты дня"""
-    keyboard = [
-        [InlineKeyboardButton("❓ Как исследовать карту дня", callback_data="card_questions")],
-        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-def get_card_questions_keyboard():
-    """Клавиатура после показа вопросов к карте"""
+def get_card_display_keyboard():
+    """Клавиатура после показа карты дня - только Послание дня и Вернуться в меню"""
     keyboard = [
         [InlineKeyboardButton("🦋 Послание дня", callback_data="get_daily_message")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
-
 
 def get_message_status_keyboard():
     """Клавиатура для статуса посланий (для бесплатных пользователей)"""
