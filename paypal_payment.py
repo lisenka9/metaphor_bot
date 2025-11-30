@@ -574,12 +574,12 @@ class PayPalPayment:
             bot = Bot(token=BOT_TOKEN)
             
             message_text = """
-    ✅ *Оплата подтверждена!*
+✅ *Оплата подтверждена!*
 
-    Ваша цифровая колода «Настроение как море» успешно приобретена.
+Ваша цифровая колода «Настроение как море» успешно приобретена.
 
-    📦 *Файлы отправляются...*
-    """
+📦 *Файлы отправляются...*
+"""
             
             bot.send_message(
                 chat_id=user_id,
@@ -588,8 +588,72 @@ class PayPalPayment:
             )
             logging.info(f"✅ PayPal deck success notification sent to user {user_id}")
             
+            # Отправляем файлы колоды
+            self.send_deck_files(bot, user_id)
+            
         except Exception as e:
             logging.error(f"❌ Error sending PayPal deck success notification: {e}")
 
+    def send_deck_files(self, bot, user_id: int):
+        """Отправляет файлы колоды пользователю"""
+        try:
+            # Отправляем файлы
+            file_ids = {
+                "zip": "BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
+                "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA",
+                "pdf": "BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ"
+            }
+            
+            try:
+                # ZIP файл
+                bot.send_document(
+                    chat_id=user_id,
+                    document=file_ids["zip"],
+                    filename="Ограничения.zip",
+                    caption="📦 Архив с картами (ZIP формат)"
+                )
+            except Exception as e:
+                logging.error(f"❌ Error sending ZIP: {e}")
+            
+            try:
+                # RAR файл
+                bot.send_document(
+                    chat_id=user_id,
+                    document=file_ids["rar"],
+                    filename="Возможности.rar",
+                    caption="📦 Архив с картами (RAR формат)"
+                )
+            except Exception as e:
+                logging.error(f"❌ Error sending RAR: {e}")
+            
+            try:
+                # PDF файл
+                bot.send_document(
+                    chat_id=user_id,
+                    document=file_ids["pdf"],
+                    filename="Колода_Настроение_как_море_методическое_пособие.pdf",
+                    caption="📚 Методическое пособие с посланиями"
+                )
+            except Exception as e:
+                logging.error(f"❌ Error sending PDF: {e}")
+            
+            # Финальное сообщение
+            final_text = """
+🎉 *Поздравляем с приобретением колоды!*
+
+Теперь у вас есть полный доступ ко всем картам и методическим материалам.
+
+💫 Приятного использования!
+"""
+            bot.send_message(
+                chat_id=user_id,
+                text=final_text,
+                parse_mode='Markdown'
+            )
+            
+            logging.info(f"✅ Deck files sent to user {user_id}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error sending deck files: {e}")
 # Глобальный экземпляр
 paypal_processor = PayPalPayment()
