@@ -757,8 +757,8 @@ def find_user_from_paypal_payment(resource):
         logger.error(f"❌ Error finding user from PayPal payment: {e}")
         return None
 
-def update_payment_status_for_deck(user_id: int, status: str):
-    """Обновляет статус платежа за колоду"""
+def update_payment_status(self, payment_id: str, status: str):
+    """Обновляет статус платежа в базе данных"""
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
@@ -766,17 +766,15 @@ def update_payment_status_for_deck(user_id: int, status: str):
         cursor.execute('''
             UPDATE payments 
             SET status = %s 
-            WHERE user_id = %s AND product_type = 'deck' 
-            ORDER BY created_at DESC 
-            LIMIT 1
-        ''', (status, user_id))
+            WHERE payment_id = %s
+        ''', (status, payment_id))
         
         conn.commit()
         conn.close()
-        logger.info(f"✅ Payment status updated to {status} for user {user_id}")
+        logging.info(f"✅ Payment status updated to {status} for {payment_id}")
         
     except Exception as e:
-        logger.error(f"❌ Error updating payment status: {e}")
+        logging.error(f"❌ Error updating payment status: {e}")
 
 async def enhanced_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Улучшенный обработчик ошибок с обработкой конфликтов"""

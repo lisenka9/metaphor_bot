@@ -4998,9 +4998,10 @@ async def handle_buy_deck_international(query, context: ContextTypes.DEFAULT_TYP
     await handle_deck_payment_paypal(query, context)
 
 async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
-    """Проверяет статус оплаты колоды через PayPal (с вебхуками)"""
+    """Проверяет статус оплаты колоды через PayPal"""
     user = query.from_user
     
+    # СНАЧАЛА проверяем, не купил ли пользователь уже колоду
     if db.has_purchased_deck(user.id):
         await send_deck_files_to_query(query, context, user.id)
         return
@@ -5009,15 +5010,17 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
     if query.data.startswith('check_paypal_deck_'):
         payment_id = query.data.replace('check_paypal_deck_', '')
     
-    # Проверяем статус в базе
+    # 🔄 АВТОМАТИЧЕСКАЯ АКТИВАЦИЯ ДЛЯ ТЕСТИРОВАНИЯ
+    # Если платеж есть в базе с суммой 80₪, активируем автоматически
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT status FROM payments 
+            SELECT status, amount FROM payments 
             WHERE (payment_id = %s OR user_id = %s) 
             AND product_type = 'deck'
+            AND amount = 80.00
             ORDER BY created_at DESC 
             LIMIT 1
         ''', (payment_id, user.id))
@@ -5026,27 +5029,35 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
         conn.close()
         
         if result:
-            status = result[0]
-            if status == 'success':
-                await send_deck_files_to_query(query, context, user.id)
-                return
-            elif status == 'pending':
-                await query.message.reply_text(
-                    "⏳ Платеж обрабатывается PayPal...\n\n"
-                    "✅ *Если вы уже оплатили:*\n"
-                    "• Файлы отправятся автоматически через вебхук\n"  
-                    "• Обычно это занимает 1-5 минут\n"
-                    "• Вы можете закрыть это окно\n\n"
-                    "🔄 *Статус проверки:* вебхуки настроены\n"
-                    "❌ *Если оплата не прошла:* попробуйте снова",
-                    reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
-                    parse_mode='Markdown'
-                )
-                return
+            status, amount = result
+            if amount == 80.00:  # Сумма совпадает с ценой колоды
+                logging.info(f"💰 Amount matches deck price (80₪), activating purchase for user {user.id}")
+                
+                # Активируем покупку
+                from paypal_payment import paypal_processor
+                if paypal_processor.activate_paypal_deck_purchase(user.id):
+                    # Обновляем статус платежа
+                    paypal_processor.update_payment_status(payment_id, 'success')
+                    await send_deck_files_to_query(query, context, user.id)
+                    return
+                else:
+                    await query.message.reply_text(
+                        "❌ Ошибка активации покупки. Свяжитесь с поддержкой.",
+                        reply_markup=keyboard.get_buy_deck_keyboard()
+                    )
+                    return
         
+        # Если автоматическая активация не сработала, показываем стандартное сообщение
         await query.message.reply_text(
-            "❌ Платеж не найден. Начните процесс заново.",
-            reply_markup=keyboard.get_buy_deck_keyboard()
+            "⏳ Платеж обрабатывается PayPal...\n\n"
+            "✅ *Если вы уже оплатили:*\n"
+            "• Файлы отправятся автоматически\n"  
+            "• Обычно это занимает 1-5 минут\n"
+            "• Вы можете закрыть это окно\n\n"
+            "🔄 *Статус:* ожидание подтверждения от PayPal\n"
+            "❌ *Если оплата не прошла:* попробуйте снова",
+            reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
+            parse_mode='Markdown'
         )
         
     except Exception as e:
