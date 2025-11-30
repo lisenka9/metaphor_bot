@@ -13,14 +13,14 @@ import uuid
 import json
 
 def get_video_system_safe():
-    """Безопасно получает video_system"""
+    """Безопасно создает экземпляр video_system"""
     try:
         from secure_video import SecureVideoSystem
         from config import BASE_URL
         from database import db
         
         video_system = SecureVideoSystem(BASE_URL, db)
-        logging.info(f"✅ Video system created for user")
+        logging.info("✅ Video system created successfully")
         return video_system
     except Exception as e:
         logging.error(f"❌ Error creating video system: {e}")

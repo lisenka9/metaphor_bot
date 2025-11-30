@@ -1,3 +1,5 @@
+# secure_video.py - добавим функцию get_video_system_safe
+
 import hashlib
 import secrets
 import requests
@@ -24,7 +26,6 @@ class SecureVideoSystem:
             # Определяем тип доступа
             subscription = self.db.get_user_subscription(user_id)
             has_subscription = False
-            expires_at = None
             
             if subscription and subscription[1]:
                 subscription_end = subscription[1]
@@ -35,8 +36,14 @@ class SecureVideoSystem:
                 
                 if sub_date >= datetime.now().date():
                     has_subscription = True
-                    # Для подписчиков устанавливаем дату окончания подписки
-                    expires_at = datetime.combine(sub_date, datetime.max.time())
+                    # Для подписчиков - 1 год доступа
+                    expires_at = datetime.now() + timedelta(days=365)
+                else:
+                    # Подписка истекла - 24 часа
+                    expires_at = datetime.now() + timedelta(hours=24)
+            else:
+                # Бесплатные пользователи - 24 часа
+                expires_at = datetime.now() + timedelta(hours=24)
             
             # Для бесплатных пользователей проверяем, использовали ли они уже доступ
             if not has_subscription:
@@ -44,9 +51,6 @@ class SecureVideoSystem:
                 if access_info and access_info.get('has_used_free', False):
                     # Уже использовали бесплатный доступ
                     return None
-                else:
-                    # Устанавливаем 24 часа доступа
-                    expires_at = datetime.now() + timedelta(hours=24)
             
             # Генерируем уникальный хеш
             unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
@@ -69,7 +73,7 @@ class SecureVideoSystem:
                 logging.error("❌ Failed to save video link to database")
                 return None
             
-            logging.info(f"✅ Generated secure {platform} link for user {user_id}, has_subscription: {has_subscription}, expires: {expires_at}")
+            logging.info(f"✅ Generated secure {platform} link for user {user_id}")
             
             # Возвращаем ссылку на наш защищенный плеер
             secure_url = f"{self.base_url}/secure-video/{link_hash}"
@@ -88,3 +92,16 @@ class SecureVideoSystem:
         except Exception as e:
             logging.error(f"❌ Error activating meditation access: {e}")
             return False
+
+def get_video_system_safe():
+    """Безопасно создает экземпляр video_system"""
+    try:
+        from config import BASE_URL
+        from database import db
+        
+        video_system = SecureVideoSystem(BASE_URL, db)
+        logging.info("✅ Video system created successfully")
+        return video_system
+    except Exception as e:
+        logging.error(f"❌ Error creating video system: {e}")
+        return None

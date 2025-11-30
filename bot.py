@@ -110,7 +110,7 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
-# bot.py - упрощенная версия secure_video_player
+# bot.py - упростим secure_video_player
 
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
@@ -137,10 +137,15 @@ def secure_video_player(link_hash):
         
         # Для бесплатных пользователей активируем доступ при первом открытии
         if not has_subscription:
-            from secure_video import get_video_system_safe
-            video_system = get_video_system_safe()
-            if video_system:
-                video_system.activate_meditation_access(user_id)
+            try:
+                # Создаем video_system напрямую
+                from secure_video import SecureVideoSystem
+                from config import BASE_URL
+                video_system = SecureVideoSystem(BASE_URL, db)
+                if video_system:
+                    video_system.activate_meditation_access(user_id)
+            except Exception as e:
+                logging.error(f"❌ Error activating meditation access: {e}")
         
         # Проверяем срок действия
         if link_data['expires_at'] and datetime.now() > link_data['expires_at']:
