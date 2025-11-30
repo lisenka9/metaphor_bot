@@ -1412,7 +1412,13 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
-            # Добавляем все необходимые колонки
+            # Сначала делаем колонку expires_at nullable
+            cursor.execute('''
+                ALTER TABLE video_links 
+                ALTER COLUMN expires_at DROP NOT NULL
+            ''')
+            
+            # Добавляем все необходимые колонки если их нет
             cursor.execute('''
                 ALTER TABLE video_links 
                 ADD COLUMN IF NOT EXISTS video_url TEXT,

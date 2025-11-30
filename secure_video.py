@@ -24,6 +24,7 @@ class SecureVideoSystem:
             # Определяем тип доступа
             subscription = self.db.get_user_subscription(user_id)
             has_subscription = False
+            expires_at = None
             
             if subscription and subscription[1]:
                 subscription_end = subscription[1]
@@ -34,6 +35,8 @@ class SecureVideoSystem:
                 
                 if sub_date >= datetime.now().date():
                     has_subscription = True
+                    # Для подписчиков устанавливаем дату окончания подписки
+                    expires_at = datetime.combine(sub_date, datetime.max.time())
             
             # Для бесплатных пользователей проверяем, использовали ли они уже доступ
             if not has_subscription:
@@ -41,6 +44,9 @@ class SecureVideoSystem:
                 if access_info and access_info.get('has_used_free', False):
                     # Уже использовали бесплатный доступ
                     return None
+                else:
+                    # Устанавливаем 24 часа доступа
+                    expires_at = datetime.now() + timedelta(hours=24)
             
             # Генерируем уникальный хеш
             unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
@@ -48,11 +54,6 @@ class SecureVideoSystem:
             
             # Выбираем платформу
             video_url = self.youtube_url if platform == "youtube" else self.rutube_url
-            
-            # Для бесплатных пользователей устанавливаем время доступа
-            expires_at = None
-            if not has_subscription:
-                expires_at = datetime.now() + timedelta(hours=24)
             
             # Сохраняем в базу данных
             success = self.db.save_video_link(
@@ -68,7 +69,7 @@ class SecureVideoSystem:
                 logging.error("❌ Failed to save video link to database")
                 return None
             
-            logging.info(f"✅ Generated secure {platform} link for user {user_id}, has_subscription: {has_subscription}")
+            logging.info(f"✅ Generated secure {platform} link for user {user_id}, has_subscription: {has_subscription}, expires: {expires_at}")
             
             # Возвращаем ссылку на наш защищенный плеер
             secure_url = f"{self.base_url}/secure-video/{link_hash}"

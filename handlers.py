@@ -4064,6 +4064,44 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         disable_web_page_preview=True
     )
 
+async def fix_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Исправляет таблицу video_links (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Делаем expires_at nullable
+        cursor.execute('''
+            ALTER TABLE video_links 
+            ALTER COLUMN expires_at DROP NOT NULL
+        ''')
+        
+        # Обновляем существующие записи, где expires_at NULL
+        cursor.execute('''
+            UPDATE video_links 
+            SET expires_at = NOW() + INTERVAL '1 year'
+            WHERE expires_at IS NULL AND has_subscription = TRUE
+        ''')
+        
+        cursor.execute('''
+            UPDATE video_links 
+            SET expires_at = NOW() + INTERVAL '24 hours'
+            WHERE expires_at IS NULL AND has_subscription = FALSE
+        ''')
+        
+        conn.commit()
+        await update.message.reply_text("✅ Таблица video_links исправлена! Колонка expires_at теперь nullable.")
+        
+    except Exception as e:
+        logging.error(f"❌ Error fixing video table: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
 async def update_video_table(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновляет таблицу video_links (только для админов)"""
     user = update.effective_user
@@ -4149,7 +4187,6 @@ async def recreate_video_table(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logging.error(f"❌ Error recreating video table: {e}")
         await update.message.reply_text(f"❌ Ошибка: {e}")
-
 
 async def report_problem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /report - сообщить о проблеме"""
