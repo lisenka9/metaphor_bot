@@ -514,7 +514,7 @@ class PayPalPayment:
             
             # Ищем платежи за колоду в базе данных
             cursor.execute('''
-                SELECT p.user_id, p.payment_date, p.status 
+                SELECT p.user_id, p.payment_id, p.payment_date, p.status 
                 FROM payments p 
                 WHERE p.product_type = 'deck'
                 AND p.payment_method = 'paypal'
@@ -531,7 +531,7 @@ class PayPalPayment:
             conn.close()
             
             activated_count = 0
-            for user_id, payment_date, status in new_payments:
+            for user_id, payment_id, payment_date, status in new_payments:
                 # Активируем покупку колоды
                 if self.activate_paypal_deck_purchase(user_id):
                     activated_count += 1
@@ -564,6 +564,52 @@ class PayPalPayment:
         except Exception as e:
             logging.error(f"❌ Error activating PayPal deck purchase: {e}")
             return False
+
+    def save_paypal_payment(self, user_id: int, amount: float, payment_id: str, product_type: str = "subscription", subscription_type: str = None):
+        """Сохраняет информацию о PayPal платеже в базу"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Для платежей за колоду subscription_type должен быть NULL
+            if product_type == "deck":
+                cursor.execute('''
+                    INSERT INTO payments (user_id, amount, product_type, status, payment_method, payment_id, currency)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    user_id,
+                    amount,
+                    product_type,
+                    'pending',
+                    'paypal',
+                    payment_id,
+                    'ILS'
+                ))
+            else:
+                cursor.execute('''
+                    INSERT INTO payments (user_id, amount, subscription_type, product_type, status, payment_method, payment_id, currency)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    user_id,
+                    amount,
+                    subscription_type,
+                    product_type,
+                    'pending',
+                    'paypal',
+                    payment_id,
+                    'ILS'
+                ))
+            
+            conn.commit()
+            logging.info(f"✅ PayPal payment saved to database for user {user_id}, product_type: {product_type}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Error saving PayPal payment to DB: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
 
     def send_paypal_deck_success_notification(self, user_id: int):
         """Отправляет уведомление об успешной покупке колоды через PayPal"""

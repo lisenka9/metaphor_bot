@@ -3063,7 +3063,7 @@ async def force_update_cards(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def handle_storm_calm_technique(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает технику Шторм и Штиль внутри тебя"""
     technique_text = """
-*Шторм и Штиль внутри тебя: найди свой внутренний ритм*
+*Шторм и Штиль внутри тебя*
 
 💡 *Цель Техники*
 Мягко исследовать текущее эмоциональное состояние (без оценки «хорошо/плохо»), осознать его динамику и найти внутренний ресурс, который помогает оставаться в согласии с самим собой.
@@ -5050,8 +5050,8 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
         
         cursor.execute('''
             SELECT status FROM payments 
-            WHERE payment_id = %s AND user_id = %s
-            ORDER BY payment_date DESC 
+            WHERE payment_id = %s AND user_id = %s AND product_type = 'deck'
+            ORDER BY created_at DESC 
             LIMIT 1
         ''', (payment_id, user.id))
         
@@ -5089,7 +5089,7 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
             "❌ Ошибка при проверке платежа. Попробуйте позже.",
             reply_markup=keyboard.get_buy_deck_keyboard()
         )
-
+        
 async def update_payments_structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновляет структуру таблицы payments (только для админов)"""
     user = update.effective_user
