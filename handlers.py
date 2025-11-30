@@ -270,7 +270,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "buy":
         await show_buy_from_button(query, context)
+    
+    elif query.data == "buy_deck_russia":
+        await handle_buy_deck_russia(query, context)
         
+    elif query.data == "buy_deck_international":
+        await handle_buy_deck_international(query, context)
+        
+    elif query.data == "deck_payment_yookassa":
+        await handle_buy_deck(query, context)
+        
+    elif query.data == "deck_payment_paypal":
+        await handle_deck_payment_paypal(query, context)
+        
+    elif query.data.startswith("check_paypal_deck_"):
+        await handle_paypal_deck_payment_check(query, context)
+
     elif query.data == "buy_deck":
         await handle_buy_deck(query, context)
 
@@ -626,7 +641,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📊 Всего карт получено: {total_cards}
 💎 Подписка: {subscription_text}
 🎯 Лимит карт в день: {limit}
-🗺️ Доступ к ресурсам: {'✅ Есть' if has_resources_access else '❌ Нет'}
 📅 Дата регистрации: {reg_date}
     """
     
@@ -663,7 +677,6 @@ async def show_profile_from_button(query, context: ContextTypes.DEFAULT_TYPE):
 📊 Всего карт получено: {total_cards}
 💎 Подписка: {subscription_text}
 🎯 Лимит карт в день: {limit}
-🗺️ Доступ к ресурсам: {'✅ Есть' if has_resources_access else '❌ Нет'}
 📅 Дата регистрации: {reg_date}
     """
     
@@ -2443,7 +2456,6 @@ async def check_subscription_status(update: Update, context: ContextTypes.DEFAUL
 📊 Статус вашей подписки:
 
 🎯 Лимит карт в день: {limit}
-🗺️ Доступ к ресурсам: {'✅ Есть' if has_resources_access else '❌ Нет'}
 💎 Премиум статус: {'✅ Активен' if is_premium else '❌ Неактивен'}
 📅 Подписка до: {premium_until.strftime('%d.%m.%Y') if premium_until else 'Неактивна'}
 📨 Карт получено сегодня: {today_count or 0}/{limit}
@@ -4861,4 +4873,120 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"❌ Error in user_info: {e}")
         await update.message.reply_text(f"❌ Произошла ошибка: {str(e)}")
+
+async def show_buy_from_button(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о покупке из кнопки меню"""
+    user = query.from_user
+    
+    # Проверяем, покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        # Если уже покупал - сразу отправляем файлы
+        await send_deck_files_to_query(query, context, user.id)
+        return
+
+    buy_text = """
+🛒 Купить цифровую колоду
+
+Вы можете приобрести полную цифровую версию колоды метафорических карт «Настроение как море»:
+
+✨ Что входит в комплект:
+• 88 карт без рамки (Возможности)
+• 88 карт с рамкой (Ограничения) 
+• Методическое пособие с посланиями ко всем картам
+
+💎 Формат файлов: PDF, ZIP, RAR
+📦 Мгновенная доставка: файлы придут сразу после оплаты
+
+Выберите способ оплаты:
+
+🇷🇺 Оплата из России (999₽)
+🌍 Оплата из любой точки мира (80₪)
+
+Обе системы обеспечивают безопасную оплату и мгновенную доставку.
+"""
+    
+    await query.message.reply_text(
+        buy_text,
+        reply_markup=keyboard.get_buy_deck_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def handle_buy_deck_russia(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает выбор оплаты из России"""
+    await handle_buy_deck(query, context)
+
+async def handle_buy_deck_international(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает выбор платежной системы для международной оплаты"""
+    payment_text = """
+🛒 Купить цифровую колоду 
+
+💎 Стоимость: 80₪ 
+
+✨ Что входит:
+• 88 карт без рамки (Возможности)
+• 88 карт с рамкой (Ограничения) 
+• Методическое пособие с посланиями
+
+Выберите платежную систему:
+"""
+    user = query.from_user
+    
+    # Проверяем, покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        await send_deck_files_to_query(query, context, user.id)
+        return
+    
+    from config import PAYPAL_DECK_LINK, DECK_PRICE_ILS
+    
+    # Генерируем payment_id для отслеживания
+    payment_id = f"paypal_deck_{user.id}_{int(datetime.now().timestamp())}"
+    
+    # Сохраняем в контексте
+    context.user_data['paypal_deck_payment_id'] = payment_id
+    
+    payment_text = f"""
+🛒 Цифровая колода «Настроение как море»
+
+Стоимость: {DECK_PRICE_ILS}₪
+
+Нажмите кнопку "💳 Оплатить" для перехода к оплате.
+
+После успешной оплаты файлы колоды будут отправлены автоматически в течение 1-2 минут.
+
+Если файлы не пришли, нажмите "🔄 Проверить оплату".
+"""
+    
+    await query.message.reply_text(
+        payment_text,
+        reply_markup=keyboard.get_paypal_deck_payment_keyboard(PAYPAL_DECK_LINK, payment_id),
+        parse_mode='Markdown'
+    )
+    
+
+async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
+    """Проверяет статус оплаты колоды через PayPal"""
+    user = query.from_user
+    
+    # Проверяем, не покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        await send_deck_files_to_query(query, context, user.id)
+        return
+    
+    payment_id = context.user_data.get('paypal_deck_payment_id')
+    
+    if not payment_id:
+        await query.message.reply_text(
+            "❌ Не найден активный платеж. Пожалуйста, начните процесс заново.",
+            reply_markup=keyboard.get_buy_deck_keyboard()
+        )
+        return
+    
+    # Для статических ссылок PayPal просто сообщаем, что проверка в процессе
+    await query.message.reply_text(
+        "⏳ Платеж обрабатывается...\n\n"
+        "✅ Автоматическая проверка активна - файлы будут отправлены при успешной оплате.\n"
+        "Обычно это занимает 1-5 минут.\n\n"
+        "Вы можете закрыть это окно и вернуться позже.",
+        reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id)
+    )
 

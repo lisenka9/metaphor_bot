@@ -505,5 +505,91 @@ class PayPalPayment:
         thread = Thread(target=monitor)
         thread.daemon = True
         thread.start()
+
+    def check_paypal_deck_payments(self):
+        """Проверяет PayPal платежи за колоду по базе данных"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Ищем платежи за колоду в базе данных
+            cursor.execute('''
+                SELECT p.user_id, p.payment_date, p.status 
+                FROM payments p 
+                WHERE p.product_type = 'deck'
+                AND p.payment_method = 'paypal'
+                AND p.status = 'success'
+                AND p.payment_date >= NOW() - INTERVAL '10 minutes'
+                AND NOT EXISTS (
+                    SELECT 1 FROM deck_purchases dp 
+                    WHERE dp.user_id = p.user_id 
+                    AND dp.status = 'completed'
+                )
+            ''')
+            
+            new_payments = cursor.fetchall()
+            conn.close()
+            
+            activated_count = 0
+            for user_id, payment_date, status in new_payments:
+                # Активируем покупку колоды
+                if self.activate_paypal_deck_purchase(user_id):
+                    activated_count += 1
+                    logging.info(f"✅ Activated deck purchase from PayPal payment for user {user_id}")
+            
+            if activated_count > 0:
+                logging.info(f"✅ Activated {activated_count} PayPal deck purchases")
+                
+            return activated_count
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking PayPal deck payments: {e}")
+            return 0
+
+    def activate_paypal_deck_purchase(self, user_id: int):
+        """Активирует покупку колоды для PayPal платежа"""
+        try:
+            # Записываем покупку в базу
+            success = db.record_deck_purchase(user_id, f"paypal_{user_id}")
+            
+            if success:
+                logging.info(f"✅ PayPal deck purchase activated for user {user_id}")
+                
+                # Отправляем уведомление пользователю
+                self.send_paypal_deck_success_notification(user_id)
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logging.error(f"❌ Error activating PayPal deck purchase: {e}")
+            return False
+
+    def send_paypal_deck_success_notification(self, user_id: int):
+        """Отправляет уведомление об успешной покупке колоды через PayPal"""
+        try:
+            from telegram import Bot
+            from config import BOT_TOKEN
+            
+            bot = Bot(token=BOT_TOKEN)
+            
+            message_text = """
+    ✅ *Оплата подтверждена!*
+
+    Ваша цифровая колода «Настроение как море» успешно приобретена.
+
+    📦 *Файлы отправляются...*
+    """
+            
+            bot.send_message(
+                chat_id=user_id,
+                text=message_text,
+                parse_mode='Markdown'
+            )
+            logging.info(f"✅ PayPal deck success notification sent to user {user_id}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error sending PayPal deck success notification: {e}")
+
 # Глобальный экземпляр
 paypal_processor = PayPalPayment()

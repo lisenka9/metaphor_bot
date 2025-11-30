@@ -155,7 +155,6 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("🛒 Купить цифровую колоду", callback_data="buy")],
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
-        [InlineKeyboardButton("📖 История карт", callback_data="history")],
         [InlineKeyboardButton("📆 Запись на консультацию", callback_data="consult")],
         [InlineKeyboardButton("🆘 Сообщить о проблеме", callback_data="report_problem")]
     ]
@@ -439,6 +438,45 @@ def get_yookassa_subscription_keyboard():
         [InlineKeyboardButton("6 месяцев - 399₽", callback_data="subscribe_6months")],
         [InlineKeyboardButton("1 год - 799₽", callback_data="subscribe_year")],
         [InlineKeyboardButton("🔙 Назад к выбору оплаты", callback_data="subscribe")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_buy_deck_keyboard():
+    """Клавиатура для покупки колоды с выбором способа оплаты"""
+    keyboard = [
+        [InlineKeyboardButton("🇷🇺 Оплата из России", callback_data="buy_deck_russia")],
+        [InlineKeyboardButton("🌍 Оплата из любой точки мира", callback_data="buy_deck_international")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_deck_payment_method_keyboard():
+    """Клавиатура для выбора платежной системы колоды"""
+    keyboard = [
+        [InlineKeyboardButton("🇷🇺 Оплата из России - 999₽", callback_data="deck_payment_yookassa")],
+        [InlineKeyboardButton("🌍 Оплата из любой точки мира - 80₪", callback_data="deck_payment_paypal")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="buy")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_paypal_deck_payment_keyboard(payment_url: str, payment_id: str):
+    """Клавиатура для оплаты колоды через PayPal"""
+    keyboard = [
+        [InlineKeyboardButton("💳 Оплатить", url=payment_url)],
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_paypal_deck_{payment_id}")],
+        [InlineKeyboardButton("🔙 Назад к выбору оплаты", callback_data="buy_deck_international")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_paypal_deck_check_keyboard(payment_id: str):
+    """Клавиатура для проверки оплаты колоды PayPal"""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_paypal_deck_{payment_id}")],
+        [InlineKeyboardButton("🔙 Попробовать снова", callback_data="deck_payment_paypal")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)

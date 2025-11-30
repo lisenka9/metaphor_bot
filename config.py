@@ -72,4 +72,16 @@ DECK_PRODUCT = {
     "description": "Полная цифровая версия колоды с методическим пособием"
 }
 
+PAYPAL_DECK_LINK = "https://www.paypal.com/ncp/payment/4F3G4YC6LSKZN"
+
+DECK_PRICE_RUB = 999.00
+DECK_PRICE_ILS = 80.00
+
+DECK_PRODUCT_PAYPAL = {
+    "price": DECK_PRICE_ILS,
+    "name": "Цифровая колода 'Настроение как море'",
+    "payment_link": PAYPAL_DECK_LINK,
+    "description": "Полная цифровая версия колоды с методическим пособием"
+}
+
 print(f"✅ BOT_TOKEN loaded: {BOT_TOKEN[:10]}...") 

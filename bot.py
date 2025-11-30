@@ -728,23 +728,30 @@ def handle_paypal_payment_captured(resource):
         if custom_id and amount:
             user_id = int(custom_id)
             
-            # Определяем тип подписки по сумме
-            subscription_type = determine_subscription_type_from_paypal(amount)
-            
-            if subscription_type:
-                # Активируем подписку
-                success = db.create_subscription(
-                    user_id, 
-                    subscription_type, 
-                    SUBSCRIPTION_DURATIONS[subscription_type]
-                )
+            # Проверяем, это подписка или колода
+            if amount == "80.00":  # Стоимость колоды в шекелях
+                # Активируем покупку колоды
+                from paypal_payment import paypal_processor
+                if paypal_processor.activate_paypal_deck_purchase(user_id):
+                    logging.info(f"✅ PayPal deck purchase activated via payment captured for user {user_id}")
+            else:
+                # Это подписка
+                subscription_type = determine_subscription_type_from_paypal(amount)
                 
-                if success:
-                    logging.info(f"✅ PayPal subscription activated via payment captured for user {user_id}")
+                if subscription_type:
+                    # Активируем подписку
+                    success = db.create_subscription(
+                        user_id, 
+                        subscription_type, 
+                        SUBSCRIPTION_DURATIONS[subscription_type]
+                    )
                     
-                    # Отправляем уведомление пользователю
-                    send_subscription_notification(user_id, subscription_type, amount)
-                    
+                    if success:
+                        logging.info(f"✅ PayPal subscription activated via payment captured for user {user_id}")
+                        
+                        # Отправляем уведомление пользователю
+                        send_subscription_notification(user_id, subscription_type, amount)
+                        
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
@@ -1446,9 +1453,14 @@ def start_payment_monitoring():
             # Мониторинг PayPal платежей
             try:
                 from paypal_payment import paypal_processor
-                activated_count = paypal_processor.check_paypal_static_payments()
-                if activated_count > 0:
-                    logging.info(f"✅ PayPal monitor: activated {activated_count} subscriptions")
+                # Подписки
+                activated_subs = paypal_processor.check_paypal_static_payments()
+                # Колоды
+                activated_decks = paypal_processor.check_paypal_deck_payments()
+                
+                if activated_subs > 0 or activated_decks > 0:
+                    logging.info(f"✅ PayPal monitor: activated {activated_subs} subscriptions, {activated_decks} deck purchases")
+                    
             except Exception as e:
                 logging.error(f"❌ Error in PayPal payment monitoring: {e}")
             
