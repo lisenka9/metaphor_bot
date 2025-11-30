@@ -1424,143 +1424,17 @@ def setup_handlers(application):
         handlers.handle_consult_form
     ))
 
-def run_bot_with_restart():
-    """Запускает бота с автоматическим перезапуском при ошибках"""
-    max_retries = 5
-    retry_delay = 30
-    
-    for attempt in range(max_retries):
-        # Проверяем флаг shutdown перед каждой попыткой
-        if shutdown_manager.shutdown_event.is_set():
-            logger.info("🛑 Shutdown detected, stopping bot restart loop")
-            return
-            
+def cleanup_video_links():
+    """Периодическая очистка просроченных видео ссылок"""
+    while not shutdown_manager.shutdown_event.is_set():
         try:
-            logger.info(f"🔄 Attempt {attempt + 1} to start bot...")
-            
-            if not BOT_TOKEN:
-                logger.error("BOT_TOKEN not found!")
-                time.sleep(retry_delay)
-                continue
-            
-            # Инициализация базы данных
-            db.init_database()
-            db.update_existing_users_limits()
-            
-            # Создаем приложение
-            application = Application.builder().token(BOT_TOKEN).build()
-            application.add_error_handler(error_handler)
-            
-            # Добавляем обработчики команд
-            application.add_handler(CommandHandler("start", handlers.start))
-            application.add_handler(CommandHandler("daily", handlers.daily_card))
-            application.add_handler(CommandHandler("profile", handlers.profile))
-            application.add_handler(CommandHandler("help", handlers.help_command))
-            application.add_handler(CommandHandler("resetme", handlers.reset_my_limit))
-            application.add_handler(CommandHandler("debug", handlers.debug_db))
-            application.add_handler(CommandHandler("history", handlers.history_command))
-            application.add_handler(CommandHandler("stats", handlers.admin_stats))
-            application.add_handler(CommandHandler("users", handlers.admin_users))
-            application.add_handler(CommandHandler("export", handlers.export_data))
-            application.add_handler(CommandHandler("addcards", handlers.add_cards))
-            application.add_handler(CommandHandler("consult", handlers.consult_command))
-            application.add_handler(CommandHandler("consult_requests", handlers.admin_consult_requests))
-            application.add_handler(CommandHandler("resources", handlers.resources_command))
-            application.add_handler(CommandHandler("guide", handlers.guide_command))
-            application.add_handler(CommandHandler("buy", handlers.buy_command))
-            application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
-            application.add_handler(CommandHandler("message", handlers.show_daily_message))
-            application.add_handler(CommandHandler("messages", handlers.messages_command))
-            application.add_handler(CommandHandler("message_status", handlers.message_status))
-            application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
-            application.add_handler(CommandHandler("init_messages", handlers.init_messages))
-            application.add_handler(CommandHandler("update_db", handlers.update_database))
-            application.add_handler(CommandHandler("mystatus", handlers.check_subscription_status))
-            application.add_handler(CommandHandler("fix_limit", handlers.fix_limit))
-            application.add_handler(CommandHandler("resetsimple", handlers.reset_simple))
-            application.add_handler(CommandHandler("resetmymessages", handlers.reset_my_messages))
-            application.add_handler(CommandHandler("resetusermessages", handlers.reset_user_messages_admin))
-            application.add_handler(CommandHandler("resetallmessages", handlers.reset_all_messages))
-            application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
-            application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
-            application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
-            application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
-            application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
-            application.add_handler(CommandHandler("meditation", handlers.meditation_command))
-            application.add_handler(CommandHandler("update_video_table", handlers.update_video_table))
-            application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
-            application.add_handler(CommandHandler("recreate_video_table", handlers.recreate_video_table))
-            application.add_handler(CommandHandler("report", handlers.report_problem_command))
-            application.add_handler(CommandHandler("reports", handlers.admin_reports))
-            application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
-            application.add_handler(CommandHandler("debug_report", handlers.debug_report))
-            application.add_handler(CommandHandler("update_payments", handlers.update_payments_table))
-            application.add_handler(CommandHandler("subscribe_user", handlers.manual_subscription))
-            application.add_handler(CommandHandler("user_info", handlers.user_info))
-            
-            application.add_handler(CallbackQueryHandler(
-                handlers.show_report_problem_from_button, 
-                pattern="^report_problem$"
-            ))
-
-            application.add_handler(CallbackQueryHandler(
-                handlers.start_report_form, 
-                pattern="^start_report_form$"
-            ))
-
-            application.add_handler(CallbackQueryHandler(
-                handlers.handle_subscription_selection, 
-                pattern="^subscribe_"
-            ))
-            application.add_handler(CallbackQueryHandler(
-                handlers.handle_payment_check, 
-                pattern="^check_payment_"
-            ))
-
-            
-            application.add_handler(CallbackQueryHandler(handlers.button_handler))
-
-            application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
-
-            #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
-            
-            application.add_handler(MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                handlers.handle_random_messages
-            ))
-
-            application.add_handler(MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                handlers.handle_consult_form
-            ))
-            
-            logger.info("🚀 Запуск бота в режиме Polling...")
-            
-            # Запускаем polling с обработкой прерываний
-            application.run_polling(
-                poll_interval=3.0,
-                timeout=20,
-                drop_pending_updates=True,
-                allowed_updates=['message', 'callback_query'],
-                bootstrap_retries=0,
-                close_loop=False
-            )
-            
-            # Если дошли сюда, бот завершился нормально
-            logger.info("✅ Bot stopped normally")
-            break
-            
+            time.sleep(3600)  # Каждый час
+            if not shutdown_manager.shutdown_event.is_set():
+                cleaned_count = db.cleanup_expired_video_links()
+                if cleaned_count > 0:
+                    logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
         except Exception as e:
-            logger.error(f"❌ Bot crashed on attempt {attempt + 1}: {e}")
-            
-            if attempt < max_retries - 1 and not shutdown_manager.shutdown_event.is_set():
-                logger.info(f"🔄 Restarting in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-            else:
-                logger.error("💥 Max retries exceeded or shutdown requested")
-                if not shutdown_manager.shutdown_event.is_set():
-                    raise
+            logger.error(f"❌ Error in periodic video links cleanup: {e}")
 
 def start_payment_monitoring():
     """Запускает автоматический мониторинг платежей"""
