@@ -50,6 +50,62 @@ class BotManager:
             return False
         return True
 
+import signal
+import sys
+import asyncio
+import multiprocessing
+import time
+from threading import Event
+
+class GracefulShutdown:
+    def __init__(self):
+        self.shutdown_event = Event()
+        self.processes = []
+        
+    def signal_handler(self, signum, frame):
+        """Улучшенный обработчик сигналов"""
+        logger.info(f"🛑 Received shutdown signal {signum}. Starting graceful shutdown...")
+        
+        # Уведомляем администраторов
+        self.notify_admins_about_shutdown(signum)
+        
+        # Устанавливаем флаг завершения
+        self.shutdown_event.set()
+        
+        # Пытаемся корректно завершить процессы
+        self.terminate_processes()
+        
+    def notify_admins_about_shutdown(self, signum):
+        """Уведомляет администраторов о shutdown"""
+        try:
+            from telegram import Bot
+            from config import BOT_TOKEN, ADMIN_IDS
+            
+            bot = Bot(token=BOT_TOKEN)
+            message = f"🛑 Bot received shutdown signal {signum} at {datetime.now()}"
+            
+            for admin_id in ADMIN_IDS:
+                try:
+                    bot.send_message(chat_id=admin_id, text=message)
+                except Exception as e:
+                    logger.error(f"Failed to notify admin {admin_id}: {e}")
+        except Exception as e:
+            logger.error(f"Could not send shutdown notification: {e}")
+    
+    def terminate_processes(self):
+        """Корректно завершает дочерние процессы"""
+        for process in self.processes:
+            if process.is_alive():
+                logger.info(f"Terminating process {process.name}...")
+                process.terminate()
+                process.join(timeout=10)  # Ждем 10 секунд
+                if process.is_alive():
+                    logger.warning(f"Process {process.name} didn't terminate, killing...")
+                    process.kill()
+
+# Глобальный экземпляр
+shutdown_manager = GracefulShutdown()
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -1349,41 +1405,28 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 def run_bot_with_restart():
     """Запускает бота с автоматическим перезапуском при ошибках"""
     max_retries = 5
-    retry_delay = 60  # секунды
+    retry_delay = 30
     
     for attempt in range(max_retries):
+        # Проверяем флаг shutdown перед каждой попыткой
+        if shutdown_manager.shutdown_event.is_set():
+            logger.info("🛑 Shutdown detected, stopping bot restart loop")
+            return
+            
         try:
             logger.info(f"🔄 Attempt {attempt + 1} to start bot...")
             
-            # Проверяем наличие токена
             if not BOT_TOKEN:
-                logger.error("BOT_TOKEN not found in environment variables!")
-                return
+                logger.error("BOT_TOKEN not found!")
+                time.sleep(retry_delay)
+                continue
             
-            # Проверяем наличие ключей ЮKassa
-            from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY
-            if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
-                logger.warning("⚠️ YooKassa keys not found - payments will not work!")
-            else:
-                logger.info("✅ YooKassa keys loaded")
-            
-            # Инициализируем базу данных
-            logger.info("Инициализация базы данных...")
+            # Инициализация базы данных
             db.init_database()
             db.update_existing_users_limits()
             
-            try:
-                cleaned_count = db.cleanup_expired_video_links()
-                logger.info(f"✅ Cleaned up {cleaned_count} expired video links")
-            except Exception as e:
-                logger.error(f"❌ Error cleaning video links: {e}")
-            
-            if not db.check_cards_exist():
-                logger.warning("В базе данных нет карт!")
-            
             # Создаем приложение
             application = Application.builder().token(BOT_TOKEN).build()
-            
             application.add_error_handler(error_handler)
             
             # Добавляем обработчики команд
@@ -1470,6 +1513,8 @@ def run_bot_with_restart():
             ))
             
             logger.info("🚀 Запуск бота в режиме Polling...")
+            
+            # Запускаем polling с обработкой прерываний
             application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
@@ -1479,16 +1524,21 @@ def run_bot_with_restart():
                 close_loop=False
             )
             
+            # Если дошли сюда, бот завершился нормально
+            logger.info("✅ Bot stopped normally")
+            break
+            
         except Exception as e:
             logger.error(f"❌ Bot crashed on attempt {attempt + 1}: {e}")
             
-            if attempt < max_retries - 1:
+            if attempt < max_retries - 1 and not shutdown_manager.shutdown_event.is_set():
                 logger.info(f"🔄 Restarting in {retry_delay} seconds...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  
+                retry_delay *= 2
             else:
-                logger.error("💥 Max retries exceeded. Bot stopped.")
-                raise
+                logger.error("💥 Max retries exceeded or shutdown requested")
+                if not shutdown_manager.shutdown_event.is_set():
+                    raise
 
 def start_payment_monitoring():
     """Запускает автоматический мониторинг платежей"""
@@ -1523,9 +1573,13 @@ def run_flask_process():
         sys.exit(1)
 
 def run_bot_process():
-    """Запускает бота в отдельном процессе"""
+    """Запускает бота в отдельном процессе с улучшенным управлением"""
     try:
-        # Запускаем мониторинг платежей в отдельном потоке
+        # Регистрируем обработчик сигналов для этого процесса
+        signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+        signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
+        
+        # Запускаем мониторинг платежей
         payment_thread = threading.Thread(target=start_payment_monitoring)
         payment_thread.daemon = True
         payment_thread.start()
@@ -1533,19 +1587,20 @@ def run_bot_process():
         # Даем Flask время на запуск
         time.sleep(5)
         
-        # Запускаем самопинг в отдельном потоке
+        # Запускаем самопинг
         ping_thread = threading.Thread(target=ping_self)
         ping_thread.daemon = True
         ping_thread.start()
         
-        # ✅ ПЕРИОДИЧЕСКАЯ ОЧИСТКА ССЫЛОК
+        # Периодическая очистка ссылок
         def cleanup_video_links():
-            while True:
+            while not shutdown_manager.shutdown_event.is_set():
                 try:
                     time.sleep(3600)  # Каждый час
-                    cleaned_count = db.cleanup_expired_video_links()
-                    if cleaned_count > 0:
-                        logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
+                    if not shutdown_manager.shutdown_event.is_set():
+                        cleaned_count = db.cleanup_expired_video_links()
+                        if cleaned_count > 0:
+                            logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
                 except Exception as e:
                     logger.error(f"❌ Error in periodic video links cleanup: {e}")
         
@@ -1553,61 +1608,104 @@ def run_bot_process():
         cleanup_thread.daemon = True
         cleanup_thread.start()
         
-        # Запускаем бота с автоматическим перезапуском
+        # Запускаем бота с мониторингом shutdown
         run_bot_with_restart()
+        
+    except SystemExit:
+        logger.info("✅ Bot process stopped by system signal")
     except Exception as e:
         logger.error(f"❌ Bot process crashed: {e}")
-        sys.exit(1)
+        if not shutdown_manager.shutdown_event.is_set():
+            sys.exit(1) 
 
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
     logger.info("🛑 Received shutdown signal. Stopping bot gracefully...")
 
+def monitor_resources():
+    """Мониторинг использования ресурсов"""
+    import psutil
+    import os
+    
+    process = psutil.Process(os.getpid())
+    
+    while not shutdown_manager.shutdown_event.is_set():
+        try:
+            memory_percent = process.memory_percent()
+            cpu_percent = process.cpu_percent()
+            
+            if memory_percent > 80:
+                logger.warning(f"⚠️ High memory usage: {memory_percent:.1f}%")
+            if cpu_percent > 90:
+                logger.warning(f"⚠️ High CPU usage: {cpu_percent:.1f}%")
+                
+            time.sleep(60)  # Проверяем каждую минуту
+            
+        except Exception as e:
+            logger.error(f"❌ Resource monitoring error: {e}")
+            time.sleep(300)
+
+# Запустите в run_bot_process
+resource_thread = threading.Thread(target=monitor_resources, daemon=True)
+resource_thread.start()
+
 bot_manager = BotManager()
 def main():
-    """Основная функция запуска с улучшенным управлением"""
+    """Основная функция запуска с улучшенным управлением процессами"""
     # Регистрируем обработчики сигналов
-    signal.signal(signal.SIGINT, bot_manager.signal_handler)
-    signal.signal(signal.SIGTERM, bot_manager.signal_handler)
+    signal.signal(signal.SIGINT, shutdown_manager.signal_handler)
+    signal.signal(signal.SIGTERM, shutdown_manager.signal_handler)
     
-    logger.info("🚀 Starting bot with enhanced restart system...")
+    logger.info("🚀 Starting bot and Flask in separate processes...")
     
-    while not bot_manager.shutdown_event.is_set() and bot_manager.should_restart():
-        try:
-            # Запускаем бота и Flask в отдельных процессах
-            flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-            bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+    try:
+        # Создаем процессы
+        flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
+        bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+        
+        # Сохраняем ссылки на процессы для graceful shutdown
+        shutdown_manager.processes = [flask_process, bot_process]
+        
+        # Запускаем процессы
+        flask_process.start()
+        logger.info("✅ Flask process started")
+        
+        bot_process.start() 
+        logger.info("✅ Bot process started")
+        
+        # Мониторим процессы и перезапускаем при падении
+        while not shutdown_manager.shutdown_event.is_set():
+            time.sleep(10)
             
-            flask_process.start()
-            logger.info("✅ Flask process started")
-            
-            bot_process.start() 
-            logger.info("✅ Bot process started")
-            
-            # Мониторим процессы
-            while (flask_process.is_alive() and bot_process.is_alive() 
-                   and not bot_manager.shutdown_event.is_set()):
-                time.sleep(5)
-            
-            # Если процессы умерли, логируем и перезапускаем
-            if not flask_process.is_alive():
-                logger.error("❌ Flask process died")
-                flask_process.terminate()
+            # Проверяем статус процессов
+            if not flask_process.is_alive() and not shutdown_manager.shutdown_event.is_set():
+                logger.error("❌ Flask process died, restarting...")
+                flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
+                flask_process.start()
+                shutdown_manager.processes[0] = flask_process
+                logger.info("✅ Flask process restarted")
                 
-            if not bot_process.is_alive():
-                logger.error("❌ Bot process died")
-                bot_process.terminate()
+            if not bot_process.is_alive() and not shutdown_manager.shutdown_event.is_set():
+                logger.error("❌ Bot process died, restarting...")
+                bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+                bot_process.start()
+                shutdown_manager.processes[1] = bot_process
+                logger.info("✅ Bot process restarted")
             
-            # Ждем перед перезапуском
-            if not bot_manager.shutdown_event.is_set():
-                logger.info(f"🔄 Restarting in {bot_manager.restart_delay} seconds... (attempt {bot_manager.restart_count})")
-                time.sleep(bot_manager.restart_delay)
-                
-        except Exception as e:
-            logger.error(f"💥 Critical error in main loop: {e}")
-            time.sleep(bot_manager.restart_delay)
-    
-    logger.info("🛑 Bot manager stopped.")
+            # Если оба процесса умерли, выходим
+            if not flask_process.is_alive() and not bot_process.is_alive():
+                logger.error("💥 Both processes died, exiting...")
+                break
+        
+        # Ждем завершения процессов
+        logger.info("🛑 Waiting for processes to finish...")
+        flask_process.join(timeout=30)
+        bot_process.join(timeout=30)
+        
+    except Exception as e:
+        logger.error(f"💥 Error in main: {e}")
+    finally:
+        logger.info("🛑 Application stopped")
 
 if __name__ == '__main__':
     main()
