@@ -509,6 +509,7 @@ class PayPalPayment:
     def check_paypal_deck_payments(self):
         """Проверяет PayPal платежи за колоду по базе данных"""
         try:
+            logging.info("🔍 Checking PayPal deck payments in database...")
             conn = db.get_connection()
             cursor = conn.cursor()
             
@@ -531,7 +532,9 @@ class PayPalPayment:
             conn.close()
             
             activated_count = 0
+            logging.info(f"📊 Found {len(new_payments)} new deck payments")
             for user_id, payment_id, payment_date, status in new_payments:
+                logging.info(f"🔄 Processing deck payment: user={user_id}, status={status}")
                 # Активируем покупку колоды
                 if self.activate_paypal_deck_purchase(user_id):
                     activated_count += 1
@@ -549,18 +552,21 @@ class PayPalPayment:
     def activate_paypal_deck_purchase(self, user_id: int):
         """Активирует покупку колоды для PayPal платежа"""
         try:
+            # Проверяем, не покупал ли пользователь уже колоду
+            if db.has_purchased_deck(user_id):
+                logging.info(f"ℹ️ User {user_id} already has deck, skipping")
+                return True
+                
             # Записываем покупку в базу
             success = db.record_deck_purchase(user_id, f"paypal_{user_id}")
             
             if success:
                 logging.info(f"✅ PayPal deck purchase activated for user {user_id}")
-                
-                # Отправляем уведомление пользователю
-                self.send_paypal_deck_success_notification(user_id)
                 return True
-            
-            return False
-            
+            else:
+                logging.error(f"❌ Failed to record deck purchase for user {user_id}")
+                return False
+                
         except Exception as e:
             logging.error(f"❌ Error activating PayPal deck purchase: {e}")
             return False
