@@ -63,7 +63,6 @@ class GracefulShutdown:
 
 # Глобальный экземпляр
 shutdown_manager = GracefulShutdown()
-
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -73,8 +72,6 @@ logger = logging.getLogger(__name__)
 
 # Создаем Flask приложение
 app = Flask(__name__)
-
-shutdown_event = threading.Event()
 
 @app.route('/')
 def home():
@@ -572,92 +569,6 @@ async def enhanced_error_handler(update: object, context: ContextTypes.DEFAULT_T
         
     except Exception as e:
         logger.error(f"Error in enhanced error handler: {e}")
-
-def setup_handlers(application):
-    """Настройка всех обработчиков команд"""
-    # Добавляем обработчики команд
-    application.add_handler(CommandHandler("start", handlers.start))
-    application.add_handler(CommandHandler("daily", handlers.daily_card))
-    application.add_handler(CommandHandler("profile", handlers.profile))
-    application.add_handler(CommandHandler("help", handlers.help_command))
-    application.add_handler(CommandHandler("resetme", handlers.reset_my_limit))
-    application.add_handler(CommandHandler("debug", handlers.debug_db))
-    application.add_handler(CommandHandler("history", handlers.history_command))
-    application.add_handler(CommandHandler("stats", handlers.admin_stats))
-    application.add_handler(CommandHandler("users", handlers.admin_users))
-    application.add_handler(CommandHandler("export", handlers.export_data))
-    application.add_handler(CommandHandler("addcards", handlers.add_cards))
-    application.add_handler(CommandHandler("consult", handlers.consult_command))
-    application.add_handler(CommandHandler("consult_requests", handlers.admin_consult_requests))
-    application.add_handler(CommandHandler("resources", handlers.resources_command))
-    application.add_handler(CommandHandler("guide", handlers.guide_command))
-    application.add_handler(CommandHandler("buy", handlers.buy_command))
-    application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
-    application.add_handler(CommandHandler("message", handlers.show_daily_message))
-    application.add_handler(CommandHandler("messages", handlers.messages_command))
-    application.add_handler(CommandHandler("message_status", handlers.message_status))
-    application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
-    application.add_handler(CommandHandler("init_messages", handlers.init_messages))
-    application.add_handler(CommandHandler("update_db", handlers.update_database))
-    application.add_handler(CommandHandler("mystatus", handlers.check_subscription_status))
-    application.add_handler(CommandHandler("fix_limit", handlers.fix_limit))
-    application.add_handler(CommandHandler("resetsimple", handlers.reset_simple))
-    application.add_handler(CommandHandler("resetmymessages", handlers.reset_my_messages))
-    application.add_handler(CommandHandler("resetusermessages", handlers.reset_user_messages_admin))
-    application.add_handler(CommandHandler("resetallmessages", handlers.reset_all_messages))
-    application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
-    application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
-    application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
-    application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
-    application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
-    application.add_handler(CommandHandler("meditation", handlers.meditation_command))
-    application.add_handler(CommandHandler("update_video_table", handlers.update_video_table))
-    application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
-    application.add_handler(CommandHandler("recreate_video_table", handlers.recreate_video_table))
-    application.add_handler(CommandHandler("report", handlers.report_problem_command))
-    application.add_handler(CommandHandler("reports", handlers.admin_reports))
-    application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
-    application.add_handler(CommandHandler("debug_report", handlers.debug_report))
-    application.add_handler(CommandHandler("update_payments", handlers.update_payments_table))
-    application.add_handler(CommandHandler("subscribe_user", handlers.manual_subscription))
-    application.add_handler(CommandHandler("user_info", handlers.user_info))
-    
-    application.add_handler(CallbackQueryHandler(
-        handlers.show_report_problem_from_button, 
-        pattern="^report_problem$"
-    ))
-
-    application.add_handler(CallbackQueryHandler(
-        handlers.start_report_form, 
-        pattern="^start_report_form$"
-    ))
-
-    application.add_handler(CallbackQueryHandler(
-        handlers.handle_subscription_selection, 
-        pattern="^subscribe_"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        handlers.handle_payment_check, 
-        pattern="^check_payment_"
-    ))
-
-    
-    application.add_handler(CallbackQueryHandler(handlers.button_handler))
-
-    application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
-
-    #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
-    
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        handlers.handle_random_messages
-    ))
-
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        handlers.handle_consult_form
-    ))
-
 
 def start_health_monitoring():
     """Запускает мониторинг здоровья бота"""
@@ -1428,12 +1339,102 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Error in error handler itself: {e}")
 
+def setup_handlers(application):
+    """Настройка всех обработчиков команд"""
+    # Добавляем обработчики команд
+    application.add_handler(CommandHandler("start", handlers.start))
+    application.add_handler(CommandHandler("daily", handlers.daily_card))
+    application.add_handler(CommandHandler("profile", handlers.profile))
+    application.add_handler(CommandHandler("help", handlers.help_command))
+    application.add_handler(CommandHandler("resetme", handlers.reset_my_limit))
+    application.add_handler(CommandHandler("debug", handlers.debug_db))
+    application.add_handler(CommandHandler("history", handlers.history_command))
+    application.add_handler(CommandHandler("stats", handlers.admin_stats))
+    application.add_handler(CommandHandler("users", handlers.admin_users))
+    application.add_handler(CommandHandler("export", handlers.export_data))
+    application.add_handler(CommandHandler("addcards", handlers.add_cards))
+    application.add_handler(CommandHandler("consult", handlers.consult_command))
+    application.add_handler(CommandHandler("consult_requests", handlers.admin_consult_requests))
+    application.add_handler(CommandHandler("resources", handlers.resources_command))
+    application.add_handler(CommandHandler("guide", handlers.guide_command))
+    application.add_handler(CommandHandler("buy", handlers.buy_command))
+    application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
+    application.add_handler(CommandHandler("message", handlers.show_daily_message))
+    application.add_handler(CommandHandler("messages", handlers.messages_command))
+    application.add_handler(CommandHandler("message_status", handlers.message_status))
+    application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
+    application.add_handler(CommandHandler("init_messages", handlers.init_messages))
+    application.add_handler(CommandHandler("update_db", handlers.update_database))
+    application.add_handler(CommandHandler("mystatus", handlers.check_subscription_status))
+    application.add_handler(CommandHandler("fix_limit", handlers.fix_limit))
+    application.add_handler(CommandHandler("resetsimple", handlers.reset_simple))
+    application.add_handler(CommandHandler("resetmymessages", handlers.reset_my_messages))
+    application.add_handler(CommandHandler("resetusermessages", handlers.reset_user_messages_admin))
+    application.add_handler(CommandHandler("resetallmessages", handlers.reset_all_messages))
+    application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
+    application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
+    application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
+    application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
+    application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
+    application.add_handler(CommandHandler("meditation", handlers.meditation_command))
+    application.add_handler(CommandHandler("update_video_table", handlers.update_video_table))
+    application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
+    application.add_handler(CommandHandler("recreate_video_table", handlers.recreate_video_table))
+    application.add_handler(CommandHandler("report", handlers.report_problem_command))
+    application.add_handler(CommandHandler("reports", handlers.admin_reports))
+    application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
+    application.add_handler(CommandHandler("debug_report", handlers.debug_report))
+    application.add_handler(CommandHandler("update_payments", handlers.update_payments_table))
+    application.add_handler(CommandHandler("subscribe_user", handlers.manual_subscription))
+    application.add_handler(CommandHandler("user_info", handlers.user_info))
+    
+    application.add_handler(CallbackQueryHandler(
+        handlers.show_report_problem_from_button, 
+        pattern="^report_problem$"
+    ))
+
+    application.add_handler(CallbackQueryHandler(
+        handlers.start_report_form, 
+        pattern="^start_report_form$"
+    ))
+
+    application.add_handler(CallbackQueryHandler(
+        handlers.handle_subscription_selection, 
+        pattern="^subscribe_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        handlers.handle_payment_check, 
+        pattern="^check_payment_"
+    ))
+
+    
+    application.add_handler(CallbackQueryHandler(handlers.button_handler))
+
+    application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
+
+    #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handlers.handle_random_messages
+    ))
+
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handlers.handle_consult_form
+    ))
+
 def run_bot_with_restart():
-    """Запускает бота с автоматическим перезапуском"""
+    """Запускает бота с автоматическим перезапуском при ошибках"""
     max_retries = 5
     retry_delay = 30
     
     for attempt in range(max_retries):
+        # Проверяем флаг shutdown перед каждой попыткой
+        if shutdown_manager.shutdown_event.is_set():
+            logger.info("🛑 Shutdown detected, stopping bot restart loop")
+            return
+            
         try:
             logger.info(f"🔄 Attempt {attempt + 1} to start bot...")
             
@@ -1448,7 +1449,7 @@ def run_bot_with_restart():
             
             # Создаем приложение
             application = Application.builder().token(BOT_TOKEN).build()
-            application.add_error_handler(enhanced_error_handler)
+            application.add_error_handler(error_handler)
             
             # Добавляем обработчики команд
             application.add_handler(CommandHandler("start", handlers.start))
@@ -1521,7 +1522,7 @@ def run_bot_with_restart():
 
             application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
 
-            application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
+            #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
             
             application.add_handler(MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
@@ -1533,15 +1534,15 @@ def run_bot_with_restart():
                 handlers.handle_consult_form
             ))
             
-            logger.info("🚀 Starting bot polling (single instance)...")
+            logger.info("🚀 Запуск бота в режиме Polling...")
             
-            # Запускаем polling с параметрами для избежания конфликтов
+            # Запускаем polling с обработкой прерываний
             application.run_polling(
-                poll_interval=5.0,  # Увеличили интервал
-                timeout=30,
+                poll_interval=3.0,
+                timeout=20,
                 drop_pending_updates=True,
                 allowed_updates=['message', 'callback_query'],
-                bootstrap_retries=-1,  # Бесконечные попытки при запуске
+                bootstrap_retries=0,
                 close_loop=False
             )
             
@@ -1549,21 +1550,42 @@ def run_bot_with_restart():
             logger.info("✅ Bot stopped normally")
             break
             
-        except telegram.error.Conflict as e:
-            logger.error(f"❌ Bot conflict detected: {e}")
-            logger.info("🔄 This is likely due to another instance running. Waiting...")
-            time.sleep(retry_delay * 2)  # Удвоенная задержка при конфликте
-            
         except Exception as e:
             logger.error(f"❌ Bot crashed on attempt {attempt + 1}: {e}")
             
-            if attempt < max_retries - 1:
-                current_delay = min(retry_delay * (2 ** attempt), 300)
-                logger.info(f"🔄 Restarting in {current_delay} seconds...")
-                time.sleep(current_delay)
+            if attempt < max_retries - 1 and not shutdown_manager.shutdown_event.is_set():
+                logger.info(f"🔄 Restarting in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2
             else:
-                logger.error("💥 Max retries exceeded. Bot stopped.")
-                raise
+                logger.error("💥 Max retries exceeded or shutdown requested")
+                if not shutdown_manager.shutdown_event.is_set():
+                    raise
+
+def start_payment_monitoring():
+    """Запускает автоматический мониторинг платежей"""
+    while True:
+        try:
+            # Мониторинг ЮKassa платежей
+            payment_processor.check_all_pending_payments()
+            
+            # Мониторинг PayPal платежей
+            try:
+                from paypal_payment import paypal_processor
+                activated_count = paypal_processor.check_paypal_static_payments()
+                if activated_count > 0:
+                    logging.info(f"✅ PayPal monitor: activated {activated_count} subscriptions")
+            except Exception as e:
+                logging.error(f"❌ Error in PayPal payment monitoring: {e}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error in payment monitoring: {e}")
+        
+        # Проверяем каждые 30 секунд
+        for _ in range(30):
+            if shutdown_manager.shutdown_event.is_set():
+                break
+            time.sleep(1)
 
 def run_bot():
     """Запускает бота в основном потоке"""
@@ -1640,52 +1662,6 @@ def run_flask_server():
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
         logger.error(f"❌ Flask server crashed: {e}")
-
-def run_bot_process():
-    """Запускает бота в отдельном процессе с улучшенным управлением"""
-    try:
-        # Регистрируем обработчик сигналов для этого процесса
-        signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
-        signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
-        
-        # Запускаем мониторинг платежей
-        payment_thread = threading.Thread(target=start_payment_monitoring)
-        payment_thread.daemon = True
-        payment_thread.start()
-
-        # Даем Flask время на запуск
-        time.sleep(5)
-        
-        # Запускаем самопинг
-        ping_thread = threading.Thread(target=ping_self)
-        ping_thread.daemon = True
-        ping_thread.start()
-        
-        # Периодическая очистка ссылок
-        def cleanup_video_links():
-            while not shutdown_manager.shutdown_event.is_set():
-                try:
-                    time.sleep(3600)  # Каждый час
-                    if not shutdown_manager.shutdown_event.is_set():
-                        cleaned_count = db.cleanup_expired_video_links()
-                        if cleaned_count > 0:
-                            logger.info(f"✅ Periodically cleaned {cleaned_count} expired video links")
-                except Exception as e:
-                    logger.error(f"❌ Error in periodic video links cleanup: {e}")
-        
-        cleanup_thread = threading.Thread(target=cleanup_video_links)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
-        
-        # Запускаем бота с мониторингом shutdown
-        run_bot_with_restart()
-        
-    except SystemExit:
-        logger.info("✅ Bot process stopped by system signal")
-    except Exception as e:
-        logger.error(f"❌ Bot process crashed: {e}")
-        if not shutdown_manager.shutdown_event.is_set():
-            sys.exit(1) 
 
 def signal_handler(signum, frame):
     """Обработчик сигналов для graceful shutdown"""
