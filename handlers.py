@@ -4974,6 +4974,66 @@ async def handle_buy_deck_international(query, context: ContextTypes.DEFAULT_TYP
     )
     
 
+async def handle_deck_payment_paypal(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает оплату колоды через PayPal"""
+    user = query.from_user
+    
+    # Проверяем, покупал ли пользователь уже колоду
+    if db.has_purchased_deck(user.id):
+        await send_deck_files_to_query(query, context, user.id)
+        return
+    
+    from config import PAYPAL_DECK_LINK, DECK_PRICE_ILS
+    
+    # Генерируем payment_id для отслеживания
+    payment_id = f"paypal_deck_{user.id}_{int(datetime.now().timestamp())}"
+    
+    # Сохраняем информацию о платеже в базу ДО оплаты
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO payments (user_id, amount, product_type, status, payment_method, payment_id, currency)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            user.id,
+            DECK_PRICE_ILS,
+            'deck',
+            'pending',  # Статус pending до подтверждения оплаты
+            'paypal',
+            payment_id,
+            'ILS'
+        ))
+        
+        conn.commit()
+        conn.close()
+        logging.info(f"✅ PayPal deck payment record created for user {user.id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error creating PayPal deck payment record: {e}")
+    
+    # Сохраняем в контексте
+    context.user_data['paypal_deck_payment_id'] = payment_id
+    
+    payment_text = f"""
+🛒 Цифровая колода «Настроение как море»
+
+Стоимость: {DECK_PRICE_ILS}₪
+
+Нажмите кнопку "💳 Оплатить через PayPal" для перехода к оплате.
+
+После успешной оплаты файлы колоды будут отправлены автоматически в течение 1-2 минут.
+
+Если файлы не пришли, нажмите "🔄 Проверить оплату".
+"""
+    
+    await query.message.reply_text(
+        payment_text,
+        reply_markup=keyboard.get_paypal_deck_payment_keyboard(PAYPAL_DECK_LINK, payment_id),
+        parse_mode='Markdown'
+    )
+
 async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
     """Проверяет статус оплаты колоды через PayPal"""
     user = query.from_user
@@ -4992,12 +5052,51 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
         )
         return
     
-    # Для статических ссылок PayPal просто сообщаем, что проверка в процессе
-    await query.message.reply_text(
-        "⏳ Платеж обрабатывается...\n\n"
-        "✅ Автоматическая проверка активна - файлы будут отправлены при успешной оплате.\n"
-        "Обычно это занимает 1-5 минут.\n\n"
-        "Вы можете закрыть это окно и вернуться позже.",
-        reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id)
-    )
+    # Проверяем статус платежа в базе данных
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT status FROM payments 
+            WHERE payment_id = %s AND user_id = %s
+            ORDER BY payment_date DESC 
+            LIMIT 1
+        ''', (payment_id, user.id))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            status = result[0]
+            if status == 'success':
+                # Платеж подтвержден - отправляем файлы
+                await send_deck_files_to_query(query, context, user.id)
+                return
+            elif status == 'pending':
+                # Платеж еще в обработке
+                await query.message.reply_text(
+                    "⏳ Платеж обрабатывается...\n\n"
+                    "✅ Автоматическая проверка активна - файлы будут отправлены при успешной оплате.\n"
+                    "Обычно это занимает 1-5 минут.\n\n"
+                    "Вы можете закрыть это окно и вернуться позже.",
+                    reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id)
+                )
+                return
+        
+        # Если платеж не найден или не подтвержден
+        await query.message.reply_text(
+            "❌ Платеж не найден или еще не подтвержден.\n\n"
+            "Если вы уже оплатили, подождите несколько минут и проверьте снова.\n"
+            "Или начните процесс заново.",
+            reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id)
+        )
+        
+    except Exception as e:
+        logging.error(f"❌ Error checking PayPal deck payment: {e}")
+        await query.message.reply_text(
+            "❌ Ошибка при проверке платежа. Попробуйте позже.",
+            reply_markup=keyboard.get_buy_deck_keyboard()
+        )
 
+        
