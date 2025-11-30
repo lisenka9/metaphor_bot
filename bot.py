@@ -110,8 +110,6 @@ def payment_callback():
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
 
-# bot.py - упростим secure_video_player
-
 @app.route('/secure-video/<link_hash>')
 def secure_video_player(link_hash):
     """Безопасный видео-плеер с ограниченным доступом"""
@@ -555,6 +553,126 @@ def readiness_check():
         return "✅ Ready", 200
     except Exception as e:
         return f"❌ Not Ready: {str(e)}", 503
+
+@app.route('/paypal_deck_webhook', methods=['POST'])
+def paypal_deck_webhook():
+    """Обрабатывает вебхуки от PayPal для покупки колоды"""
+    try:
+        # Получаем JSON данные
+        event_json = request.get_json()
+        logger.info(f"📨 Received PayPal deck webhook: {event_json}")
+        
+        if not event_json:
+            logger.error("❌ Empty webhook data received")
+            return jsonify({"status": "error", "message": "No data received"}), 400
+        
+        # Проверяем тип события
+        event_type = event_json.get('event_type')
+        resource = event_json.get('resource', {})
+        
+        logger.info(f"🔧 PayPal deck webhook event: {event_type}")
+        
+        # Обрабатываем события покупки колоды
+        if event_type in ['PAYMENT.CAPTURE.COMPLETED', 'CHECKOUT.ORDER.COMPLETED']:
+            return handle_paypal_deck_payment_completed(resource)
+        
+        logger.info(f"🔧 Unhandled PayPal deck webhook event: {event_type}")
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error in PayPal deck webhook: {e}")
+        return jsonify({"status": "error"}), 500
+
+def handle_paypal_deck_payment_completed(resource):
+    """Обрабатывает завершенный платеж за колоду"""
+    try:
+        purchase_units = resource.get('purchase_units', [])
+        
+        if not purchase_units:
+            return jsonify({"status": "success"}), 200
+            
+        purchase_unit = purchase_units[0]
+        custom_id = purchase_unit.get('custom_id')
+        amount = purchase_unit.get('amount', {}).get('value')
+        
+        logger.info(f"🔧 PayPal deck payment completed: custom_id={custom_id}, amount={amount}")
+        
+        # Если amount соответствует цене колоды (80₪)
+        if amount == "80.00":
+            # Ищем пользователя по custom_id или другим данным
+            user_id = find_user_from_paypal_payment(resource)
+            
+            if user_id:
+                # Активируем покупку колоды
+                from paypal_payment import paypal_processor
+                if paypal_processor.activate_paypal_deck_purchase(user_id):
+                    logger.info(f"✅ PayPal deck purchase activated via webhook for user {user_id}")
+                    
+                    # Обновляем статус платежа в базе
+                    update_payment_status_for_deck(user_id, 'success')
+        
+        return jsonify({"status": "success"}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Error handling PayPal deck payment completed: {e}")
+        return jsonify({"status": "error"}), 500
+
+def find_user_from_paypal_payment(resource):
+    """Ищет пользователя по данным из платежа PayPal"""
+    try:
+        purchase_units = resource.get('purchase_units', [])
+        if not purchase_units:
+            return None
+            
+        purchase_unit = purchase_units[0]
+        custom_id = purchase_unit.get('custom_id')
+        
+        # Если в custom_id указан user_id
+        if custom_id and custom_id.startswith('user_'):
+            user_id = int(custom_id.replace('user_', ''))
+            return user_id
+        
+        # Ищем по email плательщика
+        payer = resource.get('payer', {})
+        email = payer.get('email_address')
+        
+        if email:
+            # Ищем пользователя по email в базе
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id FROM users WHERE email = %s LIMIT 1', (email,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                return result[0]
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error finding user from PayPal payment: {e}")
+        return None
+
+def update_payment_status_for_deck(user_id: int, status: str):
+    """Обновляет статус платежа за колоду"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE payments 
+            SET status = %s 
+            WHERE user_id = %s AND product_type = 'deck' 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (status, user_id))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"✅ Payment status updated to {status} for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating payment status: {e}")
 
 async def enhanced_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Улучшенный обработчик ошибок с обработкой конфликтов"""

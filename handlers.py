@@ -5056,7 +5056,6 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
         ''', (payment_id, user.id))
         
         result = cursor.fetchone()
-        conn.close()
         
         if result:
             status = result[0]
@@ -5065,15 +5064,42 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
                 await send_deck_files_to_query(query, context, user.id)
                 return
             elif status == 'pending':
-                # Платеж еще в обработке
-                await query.message.reply_text(
-                    "⏳ Платеж обрабатывается...\n\n"
-                    "✅ Автоматическая проверка активна - файлы будут отправлены при успешной оплате.\n"
-                    "Обычно это занимает 1-5 минут.\n\n"
-                    "Вы можете закрыть это окно и вернуться позже.",
-                    reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id)
-                )
+                # Проверяем, не прошло ли много времени
+                cursor.execute('''
+                    SELECT created_at FROM payments 
+                    WHERE payment_id = %s AND user_id = %s
+                ''', (payment_id, user.id))
+                
+                time_result = cursor.fetchone()
+                conn.close()
+                
+                if time_result:
+                    created_at = time_result[0]
+                    time_diff = datetime.now() - created_at
+                    
+                    if time_diff.total_seconds() > 300:  # 5 минут
+                        # Прошло много времени - предлагаем альтернативы
+                        await query.message.reply_text(
+                            "⏳ Платеж все еще обрабатывается...\n\n"
+                            "💡 *Рекомендации:*\n"
+                            "• Подождите еще несколько минут\n"
+                            "• Проверьте историю платежей в PayPal\n"
+                            "• Если оплата прошла, используйте команду /activate_deck (для администратора)\n"
+                            "• Или попробуйте оплатить снова",
+                            reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id),
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        await query.message.reply_text(
+                            "⏳ Платеж обрабатывается...\n\n"
+                            "✅ Автоматическая проверка активна - файлы будут отправлены при успешной оплате.\n"
+                            "Обычно это занимает 1-5 минут.\n\n"
+                            "Вы можете закрыть это окно и вернуться позже.",
+                            reply_markup=keyboard.get_paypal_deck_check_keyboard(payment_id)
+                        )
                 return
+        
+        conn.close()
         
         # Если платеж не найден или не подтвержден
         await query.message.reply_text(
@@ -5089,7 +5115,7 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
             "❌ Ошибка при проверке платежа. Попробуйте позже.",
             reply_markup=keyboard.get_buy_deck_keyboard()
         )
-        
+
 async def update_payments_structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обновляет структуру таблицы payments (только для админов)"""
     user = update.effective_user
