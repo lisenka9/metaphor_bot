@@ -149,9 +149,9 @@ def get_main_menu_keyboard():
     keyboard = [
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
         [InlineKeyboardButton("🦋 Послание дня", callback_data="messages_command")],
+        [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🐚 Медитация «Дары Моря»", callback_data="meditation")],
         [InlineKeyboardButton("🗺️ Техники самопомощи", callback_data="resources")],
-        [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить цифровую колоду", callback_data="buy")],
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
         [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
