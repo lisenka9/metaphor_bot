@@ -129,8 +129,21 @@ def secure_video_player(link_hash):
             </html>
             """, 404
         
+        user_id = link_data['user_id']
+        platform = link_data['platform']
+        has_subscription = link_data['has_subscription']
+        
+        # Для бесплатных пользователей активируем доступ при первом открытии
+        if not has_subscription and not link_data['access_started_at']:
+            from secure_video import get_video_system_safe
+            video_system = get_video_system_safe()
+            if video_system:
+                video_system.activate_meditation_access(user_id)
+                # Обновляем данные ссылки
+                link_data = db.get_video_link(link_hash)
+        
         # Проверяем срок действия
-        if datetime.now() > link_data['expires_at']:
+        if link_data['expires_at'] and datetime.now() > link_data['expires_at']:
             logging.info(f"❌ Link expired: {link_hash}")
             db.cleanup_expired_video_links()
             return """
@@ -144,8 +157,23 @@ def secure_video_player(link_hash):
             """, 403
         
         video_url = link_data['video_url']
-        platform = link_data['platform']
-        expires_time = link_data['expires_at'].strftime('%d.%m.%Y %H:%M')
+        
+        # Форматируем время для отображения (местное время пользователя)
+        if link_data['expires_at']:
+            # Используем JavaScript для отображения местного времени
+            expires_timestamp = int(link_data['expires_at'].timestamp() * 1000)
+            expires_time_display = f"""
+            <span id="expires-time">{link_data['expires_at'].strftime('%d.%m.%Y %H:%M')} (UTC)</span>
+            <script>
+                const localTime = new Date({expires_timestamp});
+                document.getElementById('expires-time').textContent = 
+                    localTime.toLocaleDateString('ru-RU') + ' ' + 
+                    localTime.toLocaleTimeString('ru-RU', {{hour: '2-digit', minute:'2-digit'}}) + 
+                    ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
+            </script>
+            """
+        else:
+            expires_time_display = "Неограниченно (по подписке)"
         
         # Для YouTube используем оригинальный подход со сдвигом
         # Для RUTUBE используем обычное отображение с усиленным скрытием элементов
@@ -155,6 +183,12 @@ def secure_video_player(link_hash):
             iframe_style = "position: absolute; top: -60px; left: 0; width: 100%; height: calc(100% + 120px); border: none;"
         else:
             iframe_style = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+
+        # Текст о доступе
+        if has_subscription:
+            access_info = f"💎 <strong>Премиум доступ</strong><br>Действует до: {expires_time_display}"
+        else:
+            access_info = f"🆓 <strong>Бесплатный доступ</strong><br>Доступно до: {expires_time_display}"
 
         html_content = f"""
         <!DOCTYPE html>
@@ -188,6 +222,13 @@ def secure_video_player(link_hash):
                     color: #333;
                     margin-bottom: 20px;
                 }}
+                .access-info {{
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 15px 0;
+                    text-align: left;
+                }}
                 .video-wrapper {{
                     position: relative;
                     width: 100%;
@@ -213,13 +254,6 @@ def secure_video_player(link_hash):
                     pointer-events: none;
                     z-index: 100;
                     background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 80px, transparent calc(100% - 80px), rgba(0,0,0,0.9) 100%);
-                }}
-                .info {{
-                    background: #f8f9fa;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 20px 0;
-                    text-align: left;
                 }}
                 .btn {{
                     background: #667eea;
@@ -258,8 +292,8 @@ def secure_video_player(link_hash):
                 <h1>🐚 Медитация «Дары Моря»</h1>
                 <div class="platform-badge">{platform.upper()}</div>
                 
-                <div class="info">
-                    <p><strong>⏰ Доступно до:</strong> {expires_time}</p>
+                <div class="access-info">
+                    {access_info}
                 </div>
                 
                 <div class="video-wrapper">
@@ -804,7 +838,7 @@ def send_subscription_notification(user_id, subscription_type, amount):
 ✨ Теперь вам доступны:
 • 5 карт дня вместо 1
 • Ежедневное послание дня  
-• Архипелаг ресурсов
+• Техники самопомощи
 • Медитация «Дары Моря»
 
 Наслаждайтесь полным доступом! 💫
@@ -981,7 +1015,7 @@ def handle_payment_notification(event_data):
 ✨ Теперь вам доступны:
 • 5 карт дня вместо 1
 • Ежедневное послание дня  
-• Архипелаг ресурсов
+• Техники самопомощи
 
 Наслаждайтесь полным доступом! 💫
 """
@@ -1223,7 +1257,7 @@ async def send_payment_success_notification(user_id: int, subscription_type: str
 ✨ Теперь вам доступны:
 • 5 карт дня вместо 1
 • Ежедневное послание дня  
-• Архипелаг ресурсов
+• Техники самопомощи
 
 Наслаждайтесь полным доступом! 💫
 """

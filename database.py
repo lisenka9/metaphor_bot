@@ -1224,16 +1224,16 @@ class DatabaseManager:
                     conn.close()
                     return True, "✅ Доступ открыт по подписке"
             
-            # Для бесплатных пользователей проверяем ОБЩЕЕ количество просмотров
+            # Для бесплатных пользователей проверяем, использовали ли они уже бесплатный доступ
             cursor.execute('''
-                SELECT COUNT(*) FROM user_meditations 
+                SELECT id FROM user_meditations 
                 WHERE user_id = %s
+                LIMIT 1
             ''', (user_id,))
             
-            total_watched = cursor.fetchone()[0]
+            has_watched = cursor.fetchone() is not None
             
-            # Ограничиваем 1 бесплатным просмотром ВСЕГО
-            if total_watched >= 1:
+            if has_watched:
                 conn.close()
                 return False, "❌ Вы уже использовали бесплатный доступ к медитации. Оформите подписку для неограниченного доступа!"
             else:
@@ -1248,7 +1248,7 @@ class DatabaseManager:
             conn.close()
 
     def record_meditation_watch(self, user_id: int) -> bool:
-        """Записывает факт просмотра медитации"""
+        """Записывает факт просмотра медитации (для бесплатных пользователей)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -1262,6 +1262,11 @@ class DatabaseManager:
                 )
             ''')
             
+            # Проверяем, есть ли уже запись
+            cursor.execute('SELECT id FROM user_meditations WHERE user_id = %s', (user_id,))
+            if cursor.fetchone():
+                return True  # Уже есть запись
+                
             # Записываем просмотр
             cursor.execute('''
                 INSERT INTO user_meditations (user_id) 
@@ -1278,7 +1283,7 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
-    
+
     def cleanup_expired_video_links(self):
         """Очищает просроченные видео ссылки"""
         conn = self.get_connection()
@@ -1505,48 +1510,98 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def start_meditation_access(self, base_hash: str) -> bool:
-        """Запускает отсчет времени для общего доступа к медитации"""
+    def start_meditation_access(self, user_id: int) -> bool:
+        """Запускает отсчет времени доступа к медитации для бесплатных пользователей"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            # Устанавливаем время начала и время окончания (1 час)
+            # Устанавливаем время начала и время окончания (24 часа)
             access_started = datetime.now()
-            expires_at = access_started + timedelta(hours=1)
+            expires_at = access_started + timedelta(hours=24)
             
-            cursor.execute('''
-                UPDATE meditation_access 
-                SET access_started_at = %s, expires_at = %s
-                WHERE base_hash = %s AND access_started_at IS NULL
-            ''', (access_started, expires_at, base_hash))
-            
-            # Также обновляем все связанные видео ссылки
+            # Обновляем все активные ссылки пользователя
             cursor.execute('''
                 UPDATE video_links 
                 SET access_started_at = %s, expires_at = %s
-                WHERE link_hash IN (
-                    SELECT link_hash FROM video_links 
-                    WHERE user_id = (
-                        SELECT user_id FROM meditation_access WHERE base_hash = %s
-                    ) AND access_started_at IS NULL
-                )
-            ''', (access_started, expires_at, base_hash))
+                WHERE user_id = %s AND has_subscription = FALSE
+            ''', (access_started, expires_at, user_id))
             
             conn.commit()
-            success = cursor.rowcount > 0
+            updated_count = cursor.rowcount
             
-            if success:
-                logging.info(f"✅ Meditation access started for base_hash {base_hash}, expires at {expires_at}")
+            if updated_count > 0:
+                logging.info(f"✅ Meditation access started for user {user_id}, expires at {expires_at}")
+                return True
             else:
-                logging.warning(f"⚠️ Meditation access already started for base_hash {base_hash}")
+                logging.warning(f"⚠️ No video links found for user {user_id}")
+                return False
                 
-            return success
-            
         except Exception as e:
             logging.error(f"❌ Error starting meditation access: {e}")
             conn.rollback()
             return False
+        finally:
+            conn.close()
+
+    def get_meditation_access_info(self, user_id: int):
+        """Получает информацию о доступе к медитации"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Проверяем подписку
+            subscription = self.get_user_subscription(user_id)
+            has_active_subscription = False
+            subscription_end = None
+            
+            if subscription and subscription[1]:
+                subscription_end = subscription[1]
+                if hasattr(subscription_end, 'date'):
+                    has_active_subscription = subscription_end.date() >= date.today()
+            
+            # Для подписчиков возвращаем информацию о подписке
+            if has_active_subscription:
+                return {
+                    'has_subscription': True,
+                    'expires_at': subscription_end,
+                    'access_started_at': None
+                }
+            
+            # Для бесплатных пользователей ищем активную ссылку
+            cursor.execute('''
+                SELECT access_started_at, expires_at 
+                FROM video_links 
+                WHERE user_id = %s AND has_subscription = FALSE 
+                AND expires_at > NOW()
+                ORDER BY created_at DESC 
+                LIMIT 1
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                access_started_at, expires_at = result
+                return {
+                    'has_subscription': False,
+                    'expires_at': expires_at,
+                    'access_started_at': access_started_at
+                }
+            else:
+                # Проверяем, использовал ли пользователь бесплатный доступ
+                cursor.execute('SELECT id FROM user_meditations WHERE user_id = %s', (user_id,))
+                has_used_free = cursor.fetchone() is not None
+                
+                return {
+                    'has_subscription': False,
+                    'expires_at': None,
+                    'access_started_at': None,
+                    'has_used_free': has_used_free
+                }
+                
+        except Exception as e:
+            logging.error(f"❌ Error getting meditation access info: {e}")
+            return None
         finally:
             conn.close()
 

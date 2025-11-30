@@ -5,6 +5,8 @@ import os
 from datetime import datetime, timedelta
 import logging
 
+# secure_video.py - обновим класс SecureVideoSystem
+
 class SecureVideoSystem:
     def __init__(self, base_url, db):
         self.base_url = base_url
@@ -37,9 +39,16 @@ class SecureVideoSystem:
                     has_subscription = True
                     expires_at = datetime.combine(sub_date, datetime.max.time())
             
-            # Для бесплатных пользователей устанавливаем 24 часа доступа
+            # Для бесплатных пользователей НЕ устанавливаем время сразу
+            # Время установится только при первом открытии ссылки
             if not has_subscription:
-                expires_at = datetime.now() + timedelta(hours=24)  # Изменено с 1 часа на 24 часа
+                # Проверяем, есть ли уже активный доступ
+                access_info = self.db.get_meditation_access_info(user_id)
+                if access_info and access_info.get('expires_at'):
+                    expires_at = access_info['expires_at']
+                else:
+                    # Пока не устанавливаем время - будет установлено при первом открытии
+                    expires_at = None
             
             # Генерируем уникальный хеш
             unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
@@ -62,7 +71,7 @@ class SecureVideoSystem:
                 logging.error("❌ Failed to save video link to database")
                 return None
             
-            logging.info(f"✅ Generated secure {platform} link for user {user_id}, expires: {expires_at}")
+            logging.info(f"✅ Generated secure {platform} link for user {user_id}, has_subscription: {has_subscription}")
             
             # Возвращаем ссылку на наш защищенный плеер
             secure_url = f"{self.base_url}/secure-video/{link_hash}"
@@ -72,15 +81,15 @@ class SecureVideoSystem:
             logging.error(f"❌ Error generating secure link: {e}")
             return None
 
-    def get_video_system_safe():
-        """Безопасно получает video_system"""
+    def activate_meditation_access(self, user_id: int) -> bool:
+        """Активирует доступ к медитации для бесплатных пользователей"""
         try:
-            from config import BASE_URL
-            from database import db
+            # Записываем факт просмотра
+            self.db.record_meditation_watch(user_id)
             
-            video_system = SecureVideoSystem(BASE_URL, db)
-            logging.info("✅ Video system created successfully")
-            return video_system
+            # Запускаем отсчет времени
+            return self.db.start_meditation_access(user_id)
+            
         except Exception as e:
-            logging.error(f"❌ Error creating video system: {e}")
-            return None
+            logging.error(f"❌ Error activating meditation access: {e}")
+            return False
