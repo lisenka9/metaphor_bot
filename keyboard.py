@@ -121,7 +121,7 @@ def get_tide_final_keyboard():
 def get_tide_completion_keyboard():
     """Клавиатура после завершения практики Морской Прилив"""
     keyboard = [
-        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🗺️ Техники самопомощи", callback_data="resources")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -150,7 +150,7 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("🎴 Карта дня", callback_data="show_daily_intro")],
         [InlineKeyboardButton("🦋 Послание дня", callback_data="messages_command")],
         [InlineKeyboardButton("🐚 Медитация «Дары Моря»", callback_data="meditation")],
-        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🗺️ Техники самопомощи", callback_data="resources")],
         [InlineKeyboardButton("📚 Гайд по Эмоциональному Интеллекту", callback_data="guide")],
         [InlineKeyboardButton("🛒 Купить цифровую колоду", callback_data="buy")],
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
@@ -232,7 +232,7 @@ def get_storm_calm_step3_keyboard():
 def get_storm_calm_completion_keyboard():
     """Клавиатура после завершения практики"""
     keyboard = [
-        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🗺️ Техники самопомощи", callback_data="resources")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -296,7 +296,7 @@ def get_three_waves_completion_keyboard():
 def get_three_waves_final_keyboard():
     """Финальная клавиатура после завершения"""
     keyboard = [
-        [InlineKeyboardButton("🗺️ Архипелаг ресурсов", callback_data="resources")],
+        [InlineKeyboardButton("🗺️ Техники самопомощи", callback_data="resources")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)

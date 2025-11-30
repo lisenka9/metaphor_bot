@@ -5,8 +5,6 @@ import os
 from datetime import datetime, timedelta
 import logging
 
-# secure_video.py - обновим класс SecureVideoSystem
-
 class SecureVideoSystem:
     def __init__(self, base_url, db):
         self.base_url = base_url
@@ -26,7 +24,6 @@ class SecureVideoSystem:
             # Определяем тип доступа
             subscription = self.db.get_user_subscription(user_id)
             has_subscription = False
-            expires_at = None
             
             if subscription and subscription[1]:
                 subscription_end = subscription[1]
@@ -37,18 +34,13 @@ class SecureVideoSystem:
                 
                 if sub_date >= datetime.now().date():
                     has_subscription = True
-                    expires_at = datetime.combine(sub_date, datetime.max.time())
             
-            # Для бесплатных пользователей НЕ устанавливаем время сразу
-            # Время установится только при первом открытии ссылки
+            # Для бесплатных пользователей проверяем, использовали ли они уже доступ
             if not has_subscription:
-                # Проверяем, есть ли уже активный доступ
                 access_info = self.db.get_meditation_access_info(user_id)
-                if access_info and access_info.get('expires_at'):
-                    expires_at = access_info['expires_at']
-                else:
-                    # Пока не устанавливаем время - будет установлено при первом открытии
-                    expires_at = None
+                if access_info and access_info.get('has_used_free', False):
+                    # Уже использовали бесплатный доступ
+                    return None
             
             # Генерируем уникальный хеш
             unique_string = f"{user_id}_{platform}_{secrets.token_hex(8)}_{datetime.now().timestamp()}"
@@ -56,6 +48,11 @@ class SecureVideoSystem:
             
             # Выбираем платформу
             video_url = self.youtube_url if platform == "youtube" else self.rutube_url
+            
+            # Для бесплатных пользователей устанавливаем время доступа
+            expires_at = None
+            if not has_subscription:
+                expires_at = datetime.now() + timedelta(hours=24)
             
             # Сохраняем в базу данных
             success = self.db.save_video_link(
@@ -85,10 +82,7 @@ class SecureVideoSystem:
         """Активирует доступ к медитации для бесплатных пользователей"""
         try:
             # Записываем факт просмотра
-            self.db.record_meditation_watch(user_id)
-            
-            # Запускаем отсчет времени
-            return self.db.start_meditation_access(user_id)
+            return self.db.record_meditation_watch(user_id)
             
         except Exception as e:
             logging.error(f"❌ Error activating meditation access: {e}")

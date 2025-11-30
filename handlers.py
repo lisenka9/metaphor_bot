@@ -3955,36 +3955,14 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Получаем информацию о доступе
-    access_info = db.get_meditation_access_info(user.id)
+    # Получаем информацию о подписке
+    subscription = db.get_user_subscription(user.id)
+    has_active_subscription = False
     
-    if not access_info:
-        await update.message.reply_text(
-            "❌ Ошибка при получении информации о доступе.",
-            reply_markup=keyboard.get_main_menu_keyboard()
-        )
-        return
-    
-    has_subscription = access_info['has_subscription']
-    expires_at = access_info['expires_at']
-    access_started_at = access_info['access_started_at']
-    
-    # Формируем текст о доступе
-    if has_subscription:
-        if hasattr(expires_at, 'strftime'):
-            subscription_text = f"💎 *Ваша подписка активна до:* {expires_at.strftime('%d.%m.%Y')}"
-        else:
-            subscription_text = "💎 *Ваша подписка активна*"
-    else:
-        if expires_at:
-            # Уже активирован доступ
-            if hasattr(expires_at, 'strftime'):
-                subscription_text = f"⏰ *Бесплатный доступ до:* {expires_at.strftime('%d.%m.%Y %H:%M')} (по вашему времени)"
-            else:
-                subscription_text = "⏰ *Бесплатный доступ активен*"
-        else:
-            # Еще не активирован
-            subscription_text = "🆓 *Бесплатный доступ:* 24 часа с момента первого просмотра"
+    if subscription and subscription[1]:
+        sub_end = subscription[1]
+        if hasattr(sub_end, 'date'):
+            has_active_subscription = sub_end.date() >= datetime.now().date()
     
     # Генерируем отдельные ссылки для YouTube и RUTUBE
     youtube_link = video_system.generate_secure_link(user.id, "youtube")
@@ -3997,24 +3975,20 @@ async def meditation_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    meditation_text = f"""
+    meditation_text = """
 🐚 *Медитация «Дары Моря»*
 
 Погрузитесь в умиротворяющую атмосферу морской медитации, которая поможет вам найти внутренний покой и гармонию.
 
-{subscription_text}
-
 ✨ *Доступные платформы:*
 • YouTube 
 • RUTUBE 
-
-⚠️ *Важно для бесплатного доступа:* 
-• Первый просмотр активирует 24-часовой доступ
-• Бесплатный доступ предоставляется только 1 раз
-• Для неограниченного доступа оформите подписку
 """
     
-    logging.info(f"✅ Sending meditation links to user {user.id}, has_subscription: {has_subscription}")
+    if not has_active_subscription:
+        meditation_text += "\n⚠️ *Бесплатный доступ:* предоставляется только 1 раз на 24 часа"
+    
+    logging.info(f"✅ Sending meditation links to user {user.id}")
     await update.message.reply_text(
         meditation_text,
         parse_mode='Markdown',
@@ -4050,36 +4024,14 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
     # Показываем "загрузка"
     loading_msg = await query.message.reply_text("🔄 Подготавливаем вашу медитацию...")
     
-    # Получаем информацию о доступе
-    access_info = db.get_meditation_access_info(user.id)
+    # Получаем информацию о подписке
+    subscription = db.get_user_subscription(user.id)
+    has_active_subscription = False
     
-    if not access_info:
-        await loading_msg.edit_text(
-            "❌ Ошибка при получении информации о доступе.",
-            reply_markup=keyboard.get_main_menu_keyboard()
-        )
-        return
-    
-    has_subscription = access_info['has_subscription']
-    expires_at = access_info['expires_at']
-    access_started_at = access_info['access_started_at']
-    
-    # Формируем текст о доступе
-    if has_subscription:
-        if hasattr(expires_at, 'strftime'):
-            subscription_text = f"💎 *Видео доступно до:* {expires_at.strftime('%d.%m.%Y')}"
-        else:
-            subscription_text = "💎 *Видео доступно по подписке*"
-    else:
-        if expires_at:
-            # Уже активирован доступ
-            if hasattr(expires_at, 'strftime'):
-                subscription_text = f"⏰ *Бесплатный доступ до:* {expires_at.strftime('%d.%m.%Y %H:%M')} (по вашему времени)"
-            else:
-                subscription_text = "⏰ *Бесплатный доступ активен*"
-        else:
-            # Еще не активирован
-            subscription_text = "🆓 *Бесплатный доступ:* 24 часа с момента первого просмотра"
+    if subscription and subscription[1]:
+        sub_end = subscription[1]
+        if hasattr(sub_end, 'date'):
+            has_active_subscription = sub_end.date() >= datetime.now().date()
     
     # Генерируем отдельные ссылки для YouTube и RUTUBE
     youtube_link = video_system.generate_secure_link(user.id, "youtube")
@@ -4092,22 +4044,18 @@ async def meditation_button_handler(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    meditation_text = f"""
+    meditation_text = """
 🐚 *Медитация «Дары Моря»*
 
 Погрузитесь в умиротворяющую атмосферу морской медитации, которая поможет вам найти внутренний покой и гармонию.
 
-{subscription_text}
-
 ✨ *Доступные платформы:*
 • YouTube 
 • RUTUBE 
-
-⚠️ *Важно для бесплатного доступа:* 
-• Первый просмотр активирует 24-часовой доступ
-• Бесплатный доступ предоставляется только 1 раз
-• Для неограниченного доступа оформите подписку
 """
+    
+    if not has_active_subscription:
+        meditation_text += "\n⚠️ *Бесплатный доступ:* предоставляется только 1 раз на 24 часа"
     
     await loading_msg.edit_text(
         meditation_text,

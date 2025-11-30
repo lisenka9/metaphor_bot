@@ -1,6 +1,6 @@
 import os
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -1311,41 +1311,20 @@ class DatabaseManager:
             # Сначала обновляем структуру таблицы
             self.update_video_links_table()
             
-            # Создаем таблицу для видео ссылок с дополнительными полями (если не существует)
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS video_links (
-                    link_hash TEXT PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),
-                    yandex_link TEXT,
-                    video_url TEXT,
-                    platform TEXT,
-                    has_subscription BOOLEAN DEFAULT FALSE,
-                    access_started_at TIMESTAMP,
-                    expires_at TIMESTAMP,
-                    base_hash TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Для пользователей без подписки устанавливаем срок 24 часа
-            if not has_subscription and expires_at is None:
-                expires_at = datetime.now() + timedelta(hours=24)
-            
             # Сохраняем ссылку
             cursor.execute('''
-                INSERT INTO video_links (link_hash, user_id, yandex_link, video_url, platform, has_subscription, expires_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO video_links (link_hash, user_id, video_url, platform, has_subscription, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (link_hash) 
                 DO UPDATE SET 
-                    yandex_link = EXCLUDED.yandex_link,
                     video_url = EXCLUDED.video_url,
                     platform = EXCLUDED.platform,
                     has_subscription = EXCLUDED.has_subscription,
                     expires_at = EXCLUDED.expires_at
-            ''', (link_hash, user_id, video_url, video_url, platform, has_subscription, expires_at))
+            ''', (link_hash, user_id, video_url, platform, has_subscription, expires_at))
             
             conn.commit()
-            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}, expires: {expires_at}")
+            logging.info(f"✅ Video link saved for user {user_id}, platform: {platform}")
             return True
             
         except Exception as e:
