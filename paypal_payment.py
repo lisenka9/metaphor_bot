@@ -509,7 +509,6 @@ class PayPalPayment:
     def check_paypal_deck_payments(self):
         """Проверяет PayPal платежи за колоду по базе данных"""
         try:
-            logging.info("🔍 Checking PayPal deck payments in database...")
             conn = db.get_connection()
             cursor = conn.cursor()
             
@@ -529,8 +528,6 @@ class PayPalPayment:
             
             new_payments = cursor.fetchall()
             conn.close()
-            
-            logging.info(f"📊 Found {len(new_payments)} deck payments to process")
             
             activated_count = 0
             for user_id, payment_id, payment_date, status, amount in new_payments:
