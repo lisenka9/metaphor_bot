@@ -105,7 +105,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎁А еще у меня для тебя подарок: гайд по эмоциональному интеллекту, который ты можешь скачать бесплатно!
         """
         await query.message.reply_text(
-            welcome_text,
+            full_text,
             reply_markup=keyboard.get_main_menu_keyboard(),
             parse_mode='Markdown'
         )
@@ -787,7 +787,7 @@ async def show_daily_card(query, context: ContextTypes.DEFAULT_TYPE):
             await loading_message.delete()
             
             # ✅ Отправляем карту с текстом и кнопками в одном сообщении
-            caption = f"{card_text}\n\n🎴 **{card_type}**"
+            caption = f"{card_text}"
             
             await query.message.reply_photo(
                 photo=image_url,
@@ -1522,7 +1522,7 @@ async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYP
 async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /guide"""
     try:
-        file_id = "BQACAgIAAxkBAAIDwWj8b5ci3sQ1cngkY3N-bue4xshdAAKCfAACi0jhS_Jqr9GIbsvvNgQ"
+        file_id = "BQACAgIAAxkBAAIPyWksJ2oB7zWcPGDuD4Y10SFMGxW4AAIRiAACi_RhSZpuTPvDNakwNgQ"
         
         logging.info(f"🔄 Attempting to send guide with file_id: {file_id}")
         
