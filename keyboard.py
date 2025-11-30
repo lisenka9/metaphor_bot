@@ -47,8 +47,9 @@ def get_consult_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_profile_keyboard():
-    """Клавиатура для профиля - только кнопка 'Вернуться в меню'"""
+    """Клавиатура для профиля"""
     keyboard = [
+        [InlineKeyboardButton("🖼 Посмотреть историю карт", callback_data="show_history_pics")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -64,7 +65,7 @@ def get_resources_keyboard():
     """Клавиатура для Архипелага ресурсов"""
     keyboard = [
         [InlineKeyboardButton("🌊 Волна Новых Возможностей", callback_data="resource_tide")],
-        [InlineKeyboardButton("🌪️ Шторм и Штиль: найди свой внутренний ритм", callback_data="resource_tech2")],
+        [InlineKeyboardButton("🌪️ Шторм и Штиль внутри тебя: найди свой внутренний ритм", callback_data="resource_tech2")],
         [InlineKeyboardButton("🌀 Три Волны Осознанности", callback_data="resource_tech3")],
         [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="main_menu")]
     ]
