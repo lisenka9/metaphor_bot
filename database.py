@@ -206,8 +206,15 @@ class DatabaseManager:
                 LIMIT 1
             ''', (user_id,))
             
-            return cursor.fetchone() is not None
+            result = cursor.fetchone() is not None
             
+            if result:
+                logging.info(f"✅ User {user_id} has already purchased deck")
+            else:
+                logging.info(f"ℹ️ User {user_id} has not purchased deck yet")
+                
+            return result
+                
         except Exception as e:
             logging.error(f"❌ Error checking deck purchase: {e}")
             return False

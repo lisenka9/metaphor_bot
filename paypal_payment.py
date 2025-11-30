@@ -519,7 +519,7 @@ class PayPalPayment:
                 FROM payments p 
                 WHERE p.product_type = 'deck'
                 AND p.payment_method = 'paypal'
-                AND p.payment_date >= NOW() - INTERVAL '1 hour'  # Проверяем за последний час
+                AND p.payment_date >= NOW() - INTERVAL '1 hour' 
                 AND NOT EXISTS (
                     SELECT 1 FROM deck_purchases dp 
                     WHERE dp.user_id = p.user_id 
@@ -575,6 +575,25 @@ class PayPalPayment:
         except Exception as e:
             logging.error(f"❌ Error activating PayPal deck purchase: {e}")
             return False
+
+    def update_payment_status(self, payment_id: str, status: str):
+        """Обновляет статус платежа в базе данных"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                UPDATE payments 
+                SET status = %s 
+                WHERE payment_id = %s
+            ''', (status, payment_id))
+            
+            conn.commit()
+            conn.close()
+            logging.info(f"✅ Payment status updated to {status} for {payment_id}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error updating payment status: {e}")
 
     def save_paypal_payment(self, user_id: int, amount: float, payment_id: str, product_type: str = "subscription", subscription_type: str = None):
         """Сохраняет информацию о PayPal платеже в базу"""

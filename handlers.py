@@ -5011,7 +5011,6 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
         payment_id = query.data.replace('check_paypal_deck_', '')
     
     # 🔄 АВТОМАТИЧЕСКАЯ АКТИВАЦИЯ ДЛЯ ТЕСТИРОВАНИЯ
-    # Если платеж есть в базе с суммой 80₪, активируем автоматически
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
@@ -5036,8 +5035,13 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
                 # Активируем покупку
                 from paypal_payment import paypal_processor
                 if paypal_processor.activate_paypal_deck_purchase(user.id):
-                    # Обновляем статус платежа
-                    paypal_processor.update_payment_status(payment_id, 'success')
+                    # Обновляем статус платежа (с обработкой ошибки)
+                    try:
+                        paypal_processor.update_payment_status(payment_id, 'success')
+                    except Exception as e:
+                        logging.error(f"❌ Error updating payment status: {e}")
+                        # Продолжаем, даже если не удалось обновить статус
+                    
                     await send_deck_files_to_query(query, context, user.id)
                     return
                 else:
