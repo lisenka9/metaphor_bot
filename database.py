@@ -1619,27 +1619,31 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def save_paypal_payment(self, user_id: int, subscription_type: str, amount: float, payment_id: str = None):
+    def save_paypal_payment(self, user_id: int, subscription_type: str, amount: float, payment_id: str = None, product_type: str = "subscription"):
         """Сохраняет информацию о PayPal платеже в базу"""
-        conn = self.get_connection()
+        conn = db.get_connection()
         cursor = conn.cursor()
         
         try:
+            # Для платежей за колоду subscription_type должен быть NULL
+            sub_type = subscription_type if product_type == "subscription" else None
+            
             cursor.execute('''
-                INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, payment_id, currency)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO payments (user_id, amount, subscription_type, product_type, status, payment_method, payment_id, currency)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 user_id,
                 amount,
-                subscription_type,
-                'success',
+                sub_type,  # Будет NULL для колоды
+                product_type,
+                'pending',
                 'paypal',
                 payment_id or f"paypal_{user_id}_{int(datetime.now().timestamp())}",
                 'ILS'
             ))
             
             conn.commit()
-            logging.info(f"✅ PayPal payment saved to database for user {user_id}")
+            logging.info(f"✅ PayPal payment saved to database for user {user_id}, product_type: {product_type}")
             return True
             
         except Exception as e:
@@ -1748,5 +1752,31 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def update_payments_table_structure(self):
+        """Обновляет структуру таблицы payments для поддержки NULL в subscription_type"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Делаем subscription_type nullable
+            cursor.execute('''
+                ALTER TABLE payments 
+                ALTER COLUMN subscription_type DROP NOT NULL
+            ''')
+            
+            # Добавляем product_type если нет
+            cursor.execute('''
+                ALTER TABLE payments 
+                ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT 'subscription'
+            ''')
+            
+            conn.commit()
+            logging.info("✅ Payments table structure updated: subscription_type now nullable")
+            
+        except Exception as e:
+            logging.error(f"❌ Error updating payments table structure: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

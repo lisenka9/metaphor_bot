@@ -4988,26 +4988,17 @@ async def handle_deck_payment_paypal(query, context: ContextTypes.DEFAULT_TYPE):
     # Генерируем payment_id для отслеживания
     payment_id = f"paypal_deck_{user.id}_{int(datetime.now().timestamp())}"
     
-    # Сохраняем информацию о платеже в базу ДО оплаты
+    # Сохраняем информацию о платеже в базу ДО оплаты с product_type='deck'
     try:
-        conn = db.get_connection()
-        cursor = conn.cursor()
+        from paypal_payment import paypal_processor
+        paypal_processor.save_paypal_payment(
+            user_id=user.id,
+            subscription_type=None,  # Для колоды нет типа подписки
+            amount=DECK_PRICE_ILS,
+            payment_id=payment_id,
+            product_type='deck'  # Важно указать тип продукта
+        )
         
-        cursor.execute('''
-            INSERT INTO payments (user_id, amount, product_type, status, payment_method, payment_id, currency)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ''', (
-            user.id,
-            DECK_PRICE_ILS,
-            'deck',
-            'pending',  # Статус pending до подтверждения оплаты
-            'paypal',
-            payment_id,
-            'ILS'
-        ))
-        
-        conn.commit()
-        conn.close()
         logging.info(f"✅ PayPal deck payment record created for user {user.id}")
         
     except Exception as e:
@@ -5099,4 +5090,17 @@ async def handle_paypal_deck_payment_check(query, context: ContextTypes.DEFAULT_
             reply_markup=keyboard.get_buy_deck_keyboard()
         )
 
+async def update_payments_structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновляет структуру таблицы payments (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        db.update_payments_table_structure()
+        await update.message.reply_text("✅ Структура таблицы payments обновлена! subscription_type теперь nullable.")
         
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
