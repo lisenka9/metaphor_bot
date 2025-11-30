@@ -25,31 +25,6 @@ import sys
 import asyncio
 from threading import Event
 
-class BotManager:
-    def __init__(self):
-        self.shutdown_event = Event()
-        self.restart_count = 0
-        self.max_restarts = 10
-        self.restart_delay = 60  # секунды
-
-    def signal_handler(self, signum, frame):
-        """Обработчик сигналов для graceful shutdown"""
-        logger.info(f"🛑 Received shutdown signal {signum}. Stopping bot gracefully...")
-        self.shutdown_event.set()
-
-    async def wait_for_shutdown(self):
-        """Ожидание сигнала завершения"""
-        while not self.shutdown_event.is_set():
-            await asyncio.sleep(1)
-
-    def should_restart(self):
-        """Проверяет, можно ли перезапускать бота"""
-        self.restart_count += 1
-        if self.restart_count > self.max_restarts:
-            logger.error(f"💥 Max restarts exceeded ({self.max_restarts}). Stopping.")
-            return False
-        return True
-
 import signal
 import sys
 import asyncio
@@ -59,22 +34,16 @@ from threading import Event
 
 class GracefulShutdown:
     def __init__(self):
-        self.shutdown_event = Event()
-        self.processes = []
+        self.shutdown_event = threading.Event()
         
     def signal_handler(self, signum, frame):
-        """Улучшенный обработчик сигналов"""
+        """Обработчик сигналов для graceful shutdown"""
         logger.info(f"🛑 Received shutdown signal {signum}. Starting graceful shutdown...")
+        self.shutdown_event.set()
         
         # Уведомляем администраторов
         self.notify_admins_about_shutdown(signum)
-        
-        # Устанавливаем флаг завершения
-        self.shutdown_event.set()
-        
-        # Пытаемся корректно завершить процессы
-        self.terminate_processes()
-        
+    
     def notify_admins_about_shutdown(self, signum):
         """Уведомляет администраторов о shutdown"""
         try:
@@ -91,17 +60,6 @@ class GracefulShutdown:
                     logger.error(f"Failed to notify admin {admin_id}: {e}")
         except Exception as e:
             logger.error(f"Could not send shutdown notification: {e}")
-    
-    def terminate_processes(self):
-        """Корректно завершает дочерние процессы"""
-        for process in self.processes:
-            if process.is_alive():
-                logger.info(f"Terminating process {process.name}...")
-                process.terminate()
-                process.join(timeout=10)  # Ждем 10 секунд
-                if process.is_alive():
-                    logger.warning(f"Process {process.name} didn't terminate, killing...")
-                    process.kill()
 
 # Глобальный экземпляр
 shutdown_manager = GracefulShutdown()
@@ -115,6 +73,8 @@ logger = logging.getLogger(__name__)
 
 # Создаем Flask приложение
 app = Flask(__name__)
+
+shutdown_event = threading.Event()
 
 @app.route('/')
 def home():
@@ -595,43 +555,109 @@ def readiness_check():
         return f"❌ Not Ready: {str(e)}", 503
 
 async def enhanced_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Улучшенный обработчик ошибок"""
+    """Улучшенный обработчик ошибок с обработкой конфликтов"""
     try:
         error = context.error
         
-        # Логируем ошибку
+        # Обрабатываем конфликты отдельно
+        if isinstance(error, Exception) and "Conflict" in str(error):
+            logger.error("💥 CONFLICT: Multiple bot instances detected!")
+            logger.info("🔄 Waiting before restart...")
+            # Не логируем полный traceback для конфликтов
+            return
+        
+        # Логируем другие ошибки
         logger.error(f"Exception while handling an update: {error}")
         logger.error("Full traceback:", exc_info=error)
         
-        # Обрабатываем специфические ошибки Telegram API
-        if hasattr(error, 'message'):
-            error_message = error.message.lower()
-            
-            # Ошибки, которые требуют перезапуска
-            if any(phrase in error_message for phrase in [
-                'conflict', 'terminated', 'killed', 'restart', 
-                'webhook', 'polling', 'connection'
-            ]):
-                logger.error("🔄 Telegram API conflict detected,可能需要 перезапуск")
-                
-            # Сетевые ошибки - временные, можно игнорировать
-            elif any(phrase in error_message for phrase in [
-                'timeout', 'network', 'connection', 'gateway'
-            ]):
-                logger.warning("⚠️ Network error, will retry")
-                
-        # Уведомляем пользователя об ошибке если это возможно
-        if update and hasattr(update, 'effective_chat'):
-            try:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text="❌ Произошла временная ошибка. Пожалуйста, попробуйте снова через несколько секунд."
-                )
-            except:
-                pass
-                
     except Exception as e:
-        logger.error(f"Error in error handler itself: {e}")
+        logger.error(f"Error in enhanced error handler: {e}")
+
+def setup_handlers(application):
+    """Настройка всех обработчиков команд"""
+    # Добавляем обработчики команд
+    application.add_handler(CommandHandler("start", handlers.start))
+    application.add_handler(CommandHandler("daily", handlers.daily_card))
+    application.add_handler(CommandHandler("profile", handlers.profile))
+    application.add_handler(CommandHandler("help", handlers.help_command))
+    application.add_handler(CommandHandler("resetme", handlers.reset_my_limit))
+    application.add_handler(CommandHandler("debug", handlers.debug_db))
+    application.add_handler(CommandHandler("history", handlers.history_command))
+    application.add_handler(CommandHandler("stats", handlers.admin_stats))
+    application.add_handler(CommandHandler("users", handlers.admin_users))
+    application.add_handler(CommandHandler("export", handlers.export_data))
+    application.add_handler(CommandHandler("addcards", handlers.add_cards))
+    application.add_handler(CommandHandler("consult", handlers.consult_command))
+    application.add_handler(CommandHandler("consult_requests", handlers.admin_consult_requests))
+    application.add_handler(CommandHandler("resources", handlers.resources_command))
+    application.add_handler(CommandHandler("guide", handlers.guide_command))
+    application.add_handler(CommandHandler("buy", handlers.buy_command))
+    application.add_handler(CommandHandler("subscribe", handlers.subscribe_command))
+    application.add_handler(CommandHandler("message", handlers.show_daily_message))
+    application.add_handler(CommandHandler("messages", handlers.messages_command))
+    application.add_handler(CommandHandler("message_status", handlers.message_status))
+    application.add_handler(CommandHandler("debug_messages", handlers.debug_messages))
+    application.add_handler(CommandHandler("init_messages", handlers.init_messages))
+    application.add_handler(CommandHandler("update_db", handlers.update_database))
+    application.add_handler(CommandHandler("mystatus", handlers.check_subscription_status))
+    application.add_handler(CommandHandler("fix_limit", handlers.fix_limit))
+    application.add_handler(CommandHandler("resetsimple", handlers.reset_simple))
+    application.add_handler(CommandHandler("resetmymessages", handlers.reset_my_messages))
+    application.add_handler(CommandHandler("resetusermessages", handlers.reset_user_messages_admin))
+    application.add_handler(CommandHandler("resetallmessages", handlers.reset_all_messages))
+    application.add_handler(CommandHandler("todaymessages", handlers.view_today_messages))
+    application.add_handler(CommandHandler("updatecards", handlers.update_cards_descriptions))
+    application.add_handler(CommandHandler("force_update_cards", handlers.force_update_cards))
+    application.add_handler(CommandHandler("getfileid", handlers.get_file_id))
+    application.add_handler(CommandHandler("getallfiles", handlers.get_all_file_ids))
+    application.add_handler(CommandHandler("meditation", handlers.meditation_command))
+    application.add_handler(CommandHandler("update_video_table", handlers.update_video_table))
+    application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
+    application.add_handler(CommandHandler("recreate_video_table", handlers.recreate_video_table))
+    application.add_handler(CommandHandler("report", handlers.report_problem_command))
+    application.add_handler(CommandHandler("reports", handlers.admin_reports))
+    application.add_handler(CommandHandler("debug_buttons", handlers.debug_buttons))
+    application.add_handler(CommandHandler("debug_report", handlers.debug_report))
+    application.add_handler(CommandHandler("update_payments", handlers.update_payments_table))
+    application.add_handler(CommandHandler("subscribe_user", handlers.manual_subscription))
+    application.add_handler(CommandHandler("user_info", handlers.user_info))
+    
+    application.add_handler(CallbackQueryHandler(
+        handlers.show_report_problem_from_button, 
+        pattern="^report_problem$"
+    ))
+
+    application.add_handler(CallbackQueryHandler(
+        handlers.start_report_form, 
+        pattern="^start_report_form$"
+    ))
+
+    application.add_handler(CallbackQueryHandler(
+        handlers.handle_subscription_selection, 
+        pattern="^subscribe_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        handlers.handle_payment_check, 
+        pattern="^check_payment_"
+    ))
+
+    
+    application.add_handler(CallbackQueryHandler(handlers.button_handler))
+
+    application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
+
+    #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handlers.handle_random_messages
+    ))
+
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handlers.handle_consult_form
+    ))
+
 
 def start_health_monitoring():
     """Запускает мониторинг здоровья бота"""
@@ -1403,16 +1429,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"Error in error handler itself: {e}")
 
 def run_bot_with_restart():
-    """Запускает бота с автоматическим перезапуском при ошибках"""
+    """Запускает бота с автоматическим перезапуском"""
     max_retries = 5
     retry_delay = 30
     
     for attempt in range(max_retries):
-        # Проверяем флаг shutdown перед каждой попыткой
-        if shutdown_manager.shutdown_event.is_set():
-            logger.info("🛑 Shutdown detected, stopping bot restart loop")
-            return
-            
         try:
             logger.info(f"🔄 Attempt {attempt + 1} to start bot...")
             
@@ -1427,7 +1448,7 @@ def run_bot_with_restart():
             
             # Создаем приложение
             application = Application.builder().token(BOT_TOKEN).build()
-            application.add_error_handler(error_handler)
+            application.add_error_handler(enhanced_error_handler)
             
             # Добавляем обработчики команд
             application.add_handler(CommandHandler("start", handlers.start))
@@ -1512,9 +1533,72 @@ def run_bot_with_restart():
                 handlers.handle_consult_form
             ))
             
-            logger.info("🚀 Запуск бота в режиме Polling...")
+            logger.info("🚀 Starting bot polling (single instance)...")
             
-            # Запускаем polling с обработкой прерываний
+            # Запускаем polling с параметрами для избежания конфликтов
+            application.run_polling(
+                poll_interval=5.0,  # Увеличили интервал
+                timeout=30,
+                drop_pending_updates=True,
+                allowed_updates=['message', 'callback_query'],
+                bootstrap_retries=-1,  # Бесконечные попытки при запуске
+                close_loop=False
+            )
+            
+            # Если дошли сюда, бот завершился нормально
+            logger.info("✅ Bot stopped normally")
+            break
+            
+        except telegram.error.Conflict as e:
+            logger.error(f"❌ Bot conflict detected: {e}")
+            logger.info("🔄 This is likely due to another instance running. Waiting...")
+            time.sleep(retry_delay * 2)  # Удвоенная задержка при конфликте
+            
+        except Exception as e:
+            logger.error(f"❌ Bot crashed on attempt {attempt + 1}: {e}")
+            
+            if attempt < max_retries - 1:
+                current_delay = min(retry_delay * (2 ** attempt), 300)
+                logger.info(f"🔄 Restarting in {current_delay} seconds...")
+                time.sleep(current_delay)
+            else:
+                logger.error("💥 Max retries exceeded. Bot stopped.")
+                raise
+
+def run_bot():
+    """Запускает бота в основном потоке"""
+    max_retries = 3
+    retry_delay = 30
+    
+    for attempt in range(max_retries):
+        # Проверяем флаг shutdown перед каждой попыткой
+        if shutdown_manager.shutdown_event.is_set():
+            logger.info("🛑 Shutdown detected, stopping bot")
+            return
+            
+        try:
+            logger.info(f"🔄 Attempt {attempt + 1} to start bot...")
+            
+            if not BOT_TOKEN:
+                logger.error("❌ BOT_TOKEN not found in environment variables!")
+                time.sleep(retry_delay)
+                continue
+            
+            # Инициализация базы данных
+            logger.info("🔄 Initializing database...")
+            db.init_database()
+            db.update_existing_users_limits()
+            
+            # Создаем приложение
+            application = Application.builder().token(BOT_TOKEN).build()
+            application.add_error_handler(enhanced_error_handler)
+            
+            # Добавляем обработчики
+            setup_handlers(application)
+            
+            logger.info("🚀 Starting bot polling (SINGLE INSTANCE)...")
+            
+            # Запускаем polling
             application.run_polling(
                 poll_interval=3.0,
                 timeout=20,
@@ -1529,48 +1613,33 @@ def run_bot_with_restart():
             break
             
         except Exception as e:
-            logger.error(f"❌ Bot crashed on attempt {attempt + 1}: {e}")
+            error_str = str(e)
+            if "Conflict" in error_str:
+                logger.error(f"💥 CONFLICT DETECTED on attempt {attempt + 1}: {e}")
+                logger.info("🔄 This usually means another instance is running. Waiting...")
+            else:
+                logger.error(f"❌ Bot crashed on attempt {attempt + 1}: {e}")
             
             if attempt < max_retries - 1 and not shutdown_manager.shutdown_event.is_set():
-                logger.info(f"🔄 Restarting in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
+                current_delay = min(retry_delay * (2 ** attempt), 300)
+                logger.info(f"🔄 Restarting in {current_delay} seconds...")
+                for _ in range(current_delay):
+                    if shutdown_manager.shutdown_event.is_set():
+                        return
+                    time.sleep(1)
             else:
                 logger.error("💥 Max retries exceeded or shutdown requested")
                 if not shutdown_manager.shutdown_event.is_set():
                     raise
 
-def start_payment_monitoring():
-    """Запускает автоматический мониторинг платежей"""
-    while True:
-        try:
-            # Мониторинг ЮKassa платежей
-            payment_processor.check_all_pending_payments()
-            
-            # Мониторинг PayPal платежей
-            try:
-                from paypal_payment import paypal_processor
-                activated_count = paypal_processor.check_paypal_static_payments()
-                if activated_count > 0:
-                    logging.info(f"✅ PayPal monitor: activated {activated_count} subscriptions")
-            except Exception as e:
-                logging.error(f"❌ Error in PayPal payment monitoring: {e}")
-            
-        except Exception as e:
-            logging.error(f"❌ Error in payment monitoring: {e}")
-        
-        # Проверяем каждые 30 секунд
-        time.sleep(30)
-
-def run_flask_process():
-    """Запускает Flask в отдельном процессе"""
+def run_flask_server():
+    """Запускает Flask сервер"""
     try:
         port = int(os.environ.get("PORT", 10000))
         logger.info(f"🚀 Starting Flask server on port {port}")
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
-        logger.error(f"❌ Flask process crashed: {e}")
-        sys.exit(1)
+        logger.error(f"❌ Flask server crashed: {e}")
 
 def run_bot_process():
     """Запускает бота в отдельном процессе с улучшенным управлением"""
@@ -1645,67 +1714,46 @@ def monitor_resources():
             logger.error(f"❌ Resource monitoring error: {e}")
             time.sleep(300)
 
-# Запустите в run_bot_process
-resource_thread = threading.Thread(target=monitor_resources, daemon=True)
-resource_thread.start()
-
-bot_manager = BotManager()
 def main():
-    """Основная функция запуска с улучшенным управлением процессами"""
+    """Основная функция запуска - ТОЛЬКО ОДИН ПРОЦЕСС"""
     # Регистрируем обработчики сигналов
     signal.signal(signal.SIGINT, shutdown_manager.signal_handler)
     signal.signal(signal.SIGTERM, shutdown_manager.signal_handler)
     
-    logger.info("🚀 Starting bot and Flask in separate processes...")
+    logger.info("🚀 Starting Metaphor Bot (SINGLE INSTANCE)...")
     
     try:
-        # Создаем процессы
-        flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-        bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
+        # Запускаем Flask в отдельном потоке
+        flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+        flask_thread.start()
+        logger.info("✅ Flask server started in thread")
         
-        # Сохраняем ссылки на процессы для graceful shutdown
-        shutdown_manager.processes = [flask_process, bot_process]
+        # Даем Flask время на запуск
+        time.sleep(3)
         
-        # Запускаем процессы
-        flask_process.start()
-        logger.info("✅ Flask process started")
+        # Запускаем мониторинг платежей в отдельном потоке
+        payment_thread = threading.Thread(target=start_payment_monitoring, daemon=True)
+        payment_thread.start()
+        logger.info("✅ Payment monitoring started")
         
-        bot_process.start() 
-        logger.info("✅ Bot process started")
+        # Запускаем самопинг в отдельном потоке
+        ping_thread = threading.Thread(target=ping_self, daemon=True)
+        ping_thread.start()
+        logger.info("✅ Self-ping started")
         
-        # Мониторим процессы и перезапускаем при падении
-        while not shutdown_manager.shutdown_event.is_set():
-            time.sleep(10)
-            
-            # Проверяем статус процессов
-            if not flask_process.is_alive() and not shutdown_manager.shutdown_event.is_set():
-                logger.error("❌ Flask process died, restarting...")
-                flask_process = multiprocessing.Process(target=run_flask_process, name="FlaskProcess")
-                flask_process.start()
-                shutdown_manager.processes[0] = flask_process
-                logger.info("✅ Flask process restarted")
-                
-            if not bot_process.is_alive() and not shutdown_manager.shutdown_event.is_set():
-                logger.error("❌ Bot process died, restarting...")
-                bot_process = multiprocessing.Process(target=run_bot_process, name="BotProcess")
-                bot_process.start()
-                shutdown_manager.processes[1] = bot_process
-                logger.info("✅ Bot process restarted")
-            
-            # Если оба процесса умерли, выходим
-            if not flask_process.is_alive() and not bot_process.is_alive():
-                logger.error("💥 Both processes died, exiting...")
-                break
+        # Запускаем очистку видео ссылок в отдельном потоке
+        cleanup_thread = threading.Thread(target=cleanup_video_links, daemon=True)
+        cleanup_thread.start()
+        logger.info("✅ Video links cleanup started")
         
-        # Ждем завершения процессов
-        logger.info("🛑 Waiting for processes to finish...")
-        flask_process.join(timeout=30)
-        bot_process.join(timeout=30)
+        # Запускаем бота в ОСНОВНОМ потоке
+        logger.info("✅ Starting bot in main thread...")
+        run_bot()
         
     except Exception as e:
         logger.error(f"💥 Error in main: {e}")
     finally:
-        logger.info("🛑 Application stopped")
+        logger.info("🛑 Bot application stopped")
 
 if __name__ == '__main__':
     main()
