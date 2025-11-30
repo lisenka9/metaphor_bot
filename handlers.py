@@ -5129,3 +5129,43 @@ async def view_my_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"❌ Error viewing payments: {e}")
         await update.message.reply_text("❌ Ошибка при получении информации о платежах.")
 
+async def update_database_structure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обновляет структуру базы данных (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Добавляем колонку email если её нет
+        cursor.execute('''
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='users' AND column_name='email') THEN
+                    ALTER TABLE users ADD COLUMN email TEXT;
+                END IF;
+            END $$;
+        ''')
+        
+        # Добавляем колонку customer_email в payments если её нет
+        cursor.execute('''
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='customer_email') THEN
+                    ALTER TABLE payments ADD COLUMN customer_email TEXT;
+                END IF;
+            END $$;
+        ''')
+        
+        conn.commit()
+        await update.message.reply_text("✅ Структура базы данных обновлена! Добавлены колонки email и customer_email")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+        

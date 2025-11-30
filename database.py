@@ -27,6 +27,7 @@ class DatabaseManager:
                     username TEXT,
                     first_name TEXT,
                     last_name TEXT,
+                    email TEXT,
                     registered_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     daily_cards_limit INTEGER DEFAULT {DAILY_CARD_LIMIT_FREE},
                     last_daily_card_date DATE,

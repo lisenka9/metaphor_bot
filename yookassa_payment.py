@@ -35,7 +35,8 @@ class YooKassaPayment:
                 "metadata": {
                     "user_id": int(user_id),  
                     "subscription_type": subscription_type,
-                    "payment_id": payment_id
+                    "payment_id": payment_id,
+                    "custEmail": user_email
                 }
             }
             

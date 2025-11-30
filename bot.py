@@ -1279,19 +1279,31 @@ def find_user_by_email(email: str):
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Ищем в таблице users
-        cursor.execute('SELECT user_id FROM users WHERE email = %s LIMIT 1', (email,))
-        result = cursor.fetchone()
+        # Сначала проверяем, есть ли колонка email
+        cursor.execute('''
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'email'
+        ''')
+        has_email_column = cursor.fetchone() is not None
         
-        if not result:
-            # Ищем в таблице платежей по историческим данным
-            cursor.execute('''
-                SELECT user_id FROM payments 
-                WHERE customer_email = %s 
-                ORDER BY payment_date DESC 
-                LIMIT 1
-            ''', (email,))
+        if has_email_column:
+            # Ищем в таблице users по email
+            cursor.execute('SELECT user_id FROM users WHERE email = %s LIMIT 1', (email,))
             result = cursor.fetchone()
+            
+            if result:
+                conn.close()
+                return result[0]
+        
+        # Если не нашли по email, ищем в таблице платежей по историческим данным
+        cursor.execute('''
+            SELECT user_id FROM payments 
+            WHERE customer_email = %s 
+            ORDER BY payment_date DESC 
+            LIMIT 1
+        ''', (email,))
+        result = cursor.fetchone()
         
         conn.close()
         
@@ -1300,7 +1312,7 @@ def find_user_by_email(email: str):
         return None
         
     except Exception as e:
-        logger.error(f"❌ Error finding user by email: {e}")
+        logging.error(f"❌ Error finding user by email: {e}")
         return None
 
 def find_user_by_phone(phone: str):
