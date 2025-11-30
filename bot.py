@@ -1519,6 +1519,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("user_info", handlers.user_info))
     application.add_handler(CommandHandler("fix_video_table", handlers.fix_video_table))
     application.add_handler(CommandHandler("update_payments_structure", handlers.update_payments_structure))
+    application.add_handler(CommandHandler("my_payments", handlers.view_my_payments))
     
     application.add_handler(CallbackQueryHandler(
         handlers.show_report_problem_from_button, 
