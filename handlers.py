@@ -5169,3 +5169,35 @@ async def update_database_structure(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
         
+async def add_phone_column(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавляет колонку phone в таблицу users (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='users' AND column_name='phone') THEN
+                    ALTER TABLE users ADD COLUMN phone TEXT;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='customer_phone') THEN
+                    ALTER TABLE payments ADD COLUMN customer_phone TEXT;
+                END IF;
+            END $$;
+        ''')
+        
+        conn.commit()
+        await update.message.reply_text("✅ Добавлены колонки phone и customer_phone")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")

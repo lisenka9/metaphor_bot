@@ -18,6 +18,10 @@ class YooKassaPayment:
         try:
             payment_id = str(uuid.uuid4())
             
+            user_info = db.get_user_info(user_id)
+            user_email = user_info.get('email') if user_info else None
+            user_phone = user_info.get('phone') if user_info else None
+
             payload = {
                 "amount": {
                     "value": f"{amount:.2f}",
@@ -36,7 +40,8 @@ class YooKassaPayment:
                     "user_id": int(user_id),  
                     "subscription_type": subscription_type,
                     "payment_id": payment_id,
-                    "custEmail": user_email
+                    "custEmail": user_email,
+                    "custPhone": user_phone
                 }
             }
             

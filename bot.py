@@ -1055,6 +1055,7 @@ def handle_payment_notification(event_data):
         amount_value = payment_object.get('amount', {}).get('value')
         
         logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
+        logger.info(f"📋 Metadata: {metadata}")
         
         user_id = metadata.get('user_id')
         product_type = metadata.get('product_type', 'subscription')  # По умолчанию подписка
@@ -1244,7 +1245,13 @@ def find_user_by_payment_data(payment_object):
         metadata = payment_object.get('metadata', {})
         amount_value = payment_object.get('amount', {}).get('value')
         
-        # ✅ СПОСОБ 1: По email
+        # ✅ СПОСОБ 1: По user_id в metadata
+        user_id = metadata.get('user_id')
+        if user_id:
+            logger.info(f"✅ Found user {user_id} by metadata.user_id")
+            return int(user_id)
+        
+        # ✅ СПОСОБ 2: По email
         customer_email = metadata.get('custEmail')
         if customer_email:
             user_id = find_user_by_email(customer_email)
@@ -1252,16 +1259,25 @@ def find_user_by_payment_data(payment_object):
                 logger.info(f"✅ Found user {user_id} by email: {customer_email}")
                 return user_id
         
-        # ✅ СПОСОБ 2: По номеру телефона (если есть в metadata)
-        customer_phone = metadata.get('phone') or metadata.get('custPhone')
+        # ✅ СПОСОБ 3: По номеру телефона
+        customer_phone = metadata.get('custPhone') or metadata.get('customerNumber')
         if customer_phone:
             user_id = find_user_by_phone(customer_phone)
             if user_id:
                 logger.info(f"✅ Found user {user_id} by phone: {customer_phone}")
                 return user_id
         
-        # ✅ СПОСОБ 3: По последним активным пользователям (если сумма совпадает)
-        # Ищем пользователей, которые недавно нажимали на кнопки подписки
+        # ✅ СПОСОБ 4: По pending payments (если платеж создавался через бота)
+        payment_id = payment_object.get('id')
+        if payment_id:
+            from yookassa_payment import payment_processor
+            for pending_id, pending_info in payment_processor.pending_payments.items():
+                if pending_info.get('yookassa_payment_id') == payment_id:
+                    user_id = pending_info.get('user_id')
+                    logger.info(f"✅ Found user {user_id} in pending payments")
+                    return user_id
+        
+        # ✅ СПОСОБ 5: По последним действиям пользователя
         user_id = find_recent_subscription_user(amount_value)
         if user_id:
             logger.info(f"✅ Found recent subscription user {user_id} by amount: {amount_value}")
@@ -1324,14 +1340,40 @@ def find_user_by_phone(phone: str):
         # Очищаем номер от лишних символов
         clean_phone = ''.join(filter(str.isdigit, phone))
         
-        # Ищем в пользователях (если есть поле phone)
+        # Проверяем, есть ли колонка phone в таблице users
         cursor.execute('''
-            SELECT user_id FROM users 
-            WHERE phone = %s OR phone LIKE %s 
-            LIMIT 1
-        ''', (phone, f'%{clean_phone}%'))
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'phone'
+        ''')
+        has_phone_column = cursor.fetchone() is not None
         
+        if has_phone_column:
+            # Ищем по полному номеру
+            cursor.execute('SELECT user_id FROM users WHERE phone = %s LIMIT 1', (phone,))
+            result = cursor.fetchone()
+            
+            if result:
+                conn.close()
+                return result[0]
+            
+            # Ищем по чистому номеру (без +)
+            cursor.execute('SELECT user_id FROM users WHERE phone = %s LIMIT 1', (clean_phone,))
+            result = cursor.fetchone()
+            
+            if result:
+                conn.close()
+                return result[0]
+        
+        # Ищем в таблице payments по историческим данным
+        cursor.execute('''
+            SELECT user_id FROM payments 
+            WHERE customer_phone = %s 
+            ORDER BY payment_date DESC 
+            LIMIT 1
+        ''', (phone,))
         result = cursor.fetchone()
+        
         conn.close()
         
         if result:
@@ -1339,7 +1381,7 @@ def find_user_by_phone(phone: str):
         return None
         
     except Exception as e:
-        logger.error(f"❌ Error finding user by phone: {e}")
+        logging.error(f"❌ Error finding user by phone: {e}")
         return None
 
 def find_recent_subscription_user(amount: str):
@@ -1635,6 +1677,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("update_payments_structure", handlers.update_payments_structure))
     application.add_handler(CommandHandler("my_payments", handlers.view_my_payments))
     application.add_handler(CommandHandler("update_database_structure", handlers.update_database_structure))
+    application.add_handler(CommandHandler("add_phone_column", handlers.add_phone_column))
     
     application.add_handler(CallbackQueryHandler(
         handlers.show_report_problem_from_button, 
