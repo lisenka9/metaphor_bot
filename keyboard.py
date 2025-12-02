@@ -154,9 +154,9 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("🗺️ Техники самопомощи", callback_data="resources")],
         [InlineKeyboardButton("🛒 Купить цифровую колоду", callback_data="buy")],
         [InlineKeyboardButton("💎 Приобрести подписку", callback_data="subscribe")],
-        [InlineKeyboardButton("📊 Профиль", callback_data="profile")],
         [InlineKeyboardButton("📆 Запись на консультацию", callback_data="consult")],
-        [InlineKeyboardButton("🆘 Сообщить о проблеме", callback_data="report_problem")]
+        [InlineKeyboardButton("🆘 Сообщить о проблеме", callback_data="report_problem")],
+        [InlineKeyboardButton("📊 Профиль", callback_data="profile")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
