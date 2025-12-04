@@ -598,24 +598,27 @@ class PayPalPayment:
         cursor = conn.cursor()
         
         try:
-            # Для платежей за колоду subscription_type должен быть NULL
+            # Для вебхуков важно сохранять user_id в формате для идентификации
+            custom_id = f"user_{user_id}"
+            
             if product_type == "deck":
                 cursor.execute('''
-                    INSERT INTO payments (user_id, amount, product_type, status, payment_method, payment_id, currency)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO payments (user_id, amount, product_type, status, payment_method, payment_id, currency, custom_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     user_id,
                     amount,
                     product_type,
-                    'pending',  # Начинаем с pending
+                    'pending',
                     'paypal',
                     payment_id,
-                    'ILS'
+                    'ILS',
+                    custom_id  # ✅ ДОБАВЛЯЕМ CUSTOM_ID
                 ))
             else:
                 cursor.execute('''
-                    INSERT INTO payments (user_id, amount, subscription_type, product_type, status, payment_method, payment_id, currency)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO payments (user_id, amount, subscription_type, product_type, status, payment_method, payment_id, currency, custom_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     user_id,
                     amount,
@@ -624,11 +627,12 @@ class PayPalPayment:
                     'pending',
                     'paypal',
                     payment_id,
-                    'ILS'
+                    'ILS',
+                    custom_id  # ✅ ДОБАВЛЯЕМ CUSTOM_ID
                 ))
             
             conn.commit()
-            logging.info(f"✅ PayPal payment saved to database for user {user_id}, product_type: {product_type}")
+            logging.info(f"✅ PayPal payment saved to database for user {user_id}, custom_id: {custom_id}")
             return True
             
         except Exception as e:

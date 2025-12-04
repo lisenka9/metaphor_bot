@@ -5201,3 +5201,77 @@ async def add_phone_column(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def fix_expired_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручное обновление истекших подписок"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        expired_count = db.check_and_update_expired_subscriptions()
+        
+        if expired_count > 0:
+            await update.message.reply_text(f"✅ Обновлено {expired_count} истекших подписок")
+        else:
+            await update.message.reply_text("✅ Нет истекших подписок для обновления")
+            
+    except Exception as e:
+        logging.error(f"❌ Error fixing expired subscriptions: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def fix_user_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принудительное обновление подписки пользователя"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    if not context.args:
+        target_user_id = user.id
+    else:
+        try:
+            target_user_id = int(context.args[0])
+        except ValueError:
+            await update.message.reply_text("❌ Неверный формат user_id")
+            return
+    
+    try:
+        # Проверяем и обновляем подписку
+        updated = db.check_user_subscription_expiry(target_user_id)
+        
+        if updated:
+            await update.message.reply_text(f"✅ Подписка пользователя {target_user_id} обновлена (истекшая)")
+        else:
+            # Показываем текущий статус
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT is_premium, premium_until, daily_cards_limit 
+                FROM users 
+                WHERE user_id = %s
+            ''', (target_user_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                is_premium, premium_until, limit = result
+                await update.message.reply_text(
+                    f"📊 Статус пользователя {target_user_id}:\n"
+                    f"💎 Premium: {is_premium}\n"
+                    f"📅 Until: {premium_until}\n"
+                    f"🎯 Limit: {limit}\n\n"
+                    f"ℹ️ Подписка еще активна или не найдена"
+                )
+            else:
+                await update.message.reply_text(f"❌ Пользователь {target_user_id} не найден")
+            
+    except Exception as e:
+        logging.error(f"❌ Error fixing user subscription: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+

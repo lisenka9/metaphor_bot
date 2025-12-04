@@ -463,36 +463,41 @@ def secure_video_player(link_hash):
 
 @app.route('/paypal_webhook', methods=['POST'])
 def paypal_webhook():
-    """Обрабатывает вебхуки от PayPal"""
+    """Обрабатывает вебхуки от PayPal с ВЕРИФИКАЦИЕЙ"""
     try:
+        # Логируем ВСЕ входящие данные
+        logging.info("=" * 50)
+        logging.info("📨 PAYPAL WEBHOOK RECEIVED")
+        logging.info(f"📋 Headers: {dict(request.headers)}")
+        logging.info(f"📦 Raw data: {request.get_data(as_text=True)}")
+        
+        # Пробуем парсить JSON
+        event_json = request.get_json()
+        if event_json:
+            logging.info(f"🔍 Parsed JSON: {event_json}")
+        else:
+            logging.error("❌ Cannot parse JSON from webhook")
         # Получаем данные вебхука
         event_json = request.get_json()
-        logging.info(f"📨 Received PayPal webhook: {event_json}")
         
-        # Проверяем подлинность вебхука
+        # ✅ ВКЛЮЧАЕМ ПРОВЕРКУ ПОДПИСИ (важно для безопасности!)
         if not verify_paypal_webhook(request):
-            logging.error("❌ Invalid PayPal webhook signature")
-            return jsonify({"status": "error"}), 400
+            logging.error("❌ Invalid PayPal webhook signature - possible fraud!")
+            return jsonify({"status": "error", "message": "Invalid signature"}), 400
+        
+        logging.info(f"📨 Verified PayPal webhook: {event_json.get('event_type')}")
         
         event_type = event_json.get('event_type')
         resource = event_json.get('resource', {})
         
-        logging.info(f"🔧 PayPal webhook event: {event_type}")
-        
-        # Обрабатываем разные типы событий
+        # Обрабатываем ТОЛЬКО подтвержденные платежи
         if event_type == 'PAYMENT.CAPTURE.COMPLETED':
             return handle_paypal_payment_completed(resource)
         elif event_type == 'CHECKOUT.ORDER.COMPLETED':
             return handle_paypal_order_completed(resource)
-        elif event_type == 'PAYMENT.CAPTURE.DENIED':
-            return handle_paypal_payment_denied(resource)
-        elif event_type == 'PAYMENT.CAPTURE.REFUNDED':
-            return handle_paypal_payment_refunded(resource)
-        elif event_type == 'PAYMENT.CAPTURE.REVERSED':
-            return handle_paypal_payment_reversed(resource)
         
-        # Логируем необработанные события для отладки
-        logging.info(f"🔧 Unhandled PayPal webhook event: {event_type}")
+        # Для других событий просто подтверждаем получение
+        logging.info(f"🔧 Unhandled but verified PayPal event: {event_type}")
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
@@ -583,6 +588,23 @@ def paypal_deck_webhook():
         logger.error(f"❌ Error in PayPal deck webhook: {e}")
         return jsonify({"status": "error"}), 500
 
+@app.route('/paypal_webhook_test', methods=['GET', 'POST'])
+def paypal_webhook_test():
+    """Тестовый endpoint для проверки доступности"""
+    if request.method == 'GET':
+        return "✅ PayPal webhook endpoint is accessible", 200
+    else:
+        # Симулируем вебхук для тестирования
+        test_data = {
+            "event_type": "PAYMENT.CAPTURE.COMPLETED",
+            "resource": {
+                "custom_id": "user_123456",
+                "amount": {"value": "35.00"},
+                "status": "COMPLETED"
+            }
+        }
+        return jsonify(test_data), 200
+
 def handle_paypal_deck_payment_completed(resource):
     """Обрабатывает завершенный платеж за колоду"""
     try:
@@ -618,31 +640,43 @@ def handle_paypal_deck_payment_completed(resource):
         return jsonify({"status": "error"}), 500
 
 def handle_paypal_payment_completed(resource):
-    """Обрабатывает подтвержденный платеж (captured) - ДОПОЛНЕННАЯ ВЕРСИЯ"""
+    """Обрабатывает подтвержденный платеж PayPal (captured)"""
     try:
         custom_id = resource.get('custom_id')
-        order_id = resource.get('supplementary_data', {}).get('related_ids', {}).get('order_id')
         amount = resource.get('amount', {}).get('value')
         
-        logging.info(f"🔧 PayPal payment captured: custom_id={custom_id}, order_id={order_id}, amount={amount}")
+        logging.info(f"🔧 PayPal payment captured: custom_id={custom_id}, amount={amount}")
         
-        if custom_id and amount:
-            user_id = int(custom_id)
-            
-            # Проверяем, это подписка или колода
-            if amount == "80.00":  # Стоимость колоды в шекелях
-                # Активируем покупку колоды
+        # Проверяем, что платеж действительно подтвержден
+        status = resource.get('status')
+        if status != 'COMPLETED':
+            logging.warning(f"⚠️ PayPal payment not completed: status={status}")
+            return jsonify({"status": "success"}), 200
+        
+        # Ищем пользователя
+        user_id = None
+        if custom_id and custom_id.startswith('user_'):
+            user_id = int(custom_id.replace('user_', ''))
+        
+        if not user_id:
+            # Пробуем найти по другим данным
+            payer = resource.get('payer', {})
+            email = payer.get('email_address')
+            if email:
+                user_id = find_user_by_email(email)
+        
+        if user_id and amount:
+            # Определяем тип продукта по сумме
+            if amount == "80.00":  # Колода
                 from paypal_payment import paypal_processor
                 if paypal_processor.activate_paypal_deck_purchase(user_id):
-                    logging.info(f"✅ PayPal deck purchase activated via payment captured for user {user_id}")
-                    # Отправляем файлы асинхронно
-                    send_deck_files_async(user_id)
+                    logging.info(f"✅ PayPal deck purchase activated via webhook for user {user_id}")
             else:
-                # Это подписка (оригинальная логика)
+                # Это подписка
                 subscription_type = determine_subscription_type_from_paypal(amount)
                 
                 if subscription_type:
-                    # Активируем подписку
+                    # ✅ Активируем подписку ТОЛЬКО при подтвержденном платеже
                     success = db.create_subscription(
                         user_id, 
                         subscription_type, 
@@ -650,11 +684,14 @@ def handle_paypal_payment_completed(resource):
                     )
                     
                     if success:
-                        logging.info(f"✅ PayPal subscription activated via payment captured for user {user_id}")
+                        logging.info(f"✅ PayPal subscription activated via webhook for user {user_id}")
                         
-                        # Отправляем уведомление пользователю
-                        send_subscription_notification(user_id, subscription_type, amount)
+                        # Обновляем статус платежа в базе
+                        update_paypal_payment_status_in_db(user_id, amount, 'success')
                         
+                        # Отправляем уведомление
+                        send_paypal_success_notification(user_id, subscription_type, amount)
+        
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
@@ -721,6 +758,36 @@ def handle_paypal_order_completed(resource):
         logging.error(f"❌ Error handling PayPal order completed: {e}")
         return jsonify({"status": "error"}), 500
 
+def update_paypal_payment_status_in_db(user_id: int, amount: str, status: str):
+    """Обновляет статус PayPal платежа в базе данных"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Ищем самый свежий pending платеж с соответствующей суммой
+        cursor.execute('''
+            UPDATE payments 
+            SET status = %s 
+            WHERE user_id = %s 
+            AND payment_method = 'paypal'
+            AND status = 'pending'
+            AND amount = %s
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (status, user_id, float(amount)))
+        
+        updated = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if updated > 0:
+            logging.info(f"✅ PayPal payment status updated to {status} for user {user_id}, amount {amount}")
+        else:
+            logging.warning(f"⚠️ No pending PayPal payment found for user {user_id}, amount {amount}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating PayPal payment status in DB: {e}")
+
 def find_user_from_paypal_payment(resource):
     """Ищет пользователя по данным из платежа PayPal"""
     try:
@@ -756,6 +823,104 @@ def find_user_from_paypal_payment(resource):
     except Exception as e:
         logger.error(f"❌ Error finding user from PayPal payment: {e}")
         return None
+
+def determine_subscription_type_from_paypal(amount: str):
+    """Определяет тип подписки по сумме PayPal"""
+    paypal_prices = {
+        "5.00": "month",
+        "9.00": "3months", 
+        "17.00": "6months",
+        "35.00": "year"
+    }
+    return paypal_prices.get(str(amount))
+
+def update_paypal_payment_status(user_id: int, status: str):
+    """Обновляет статус PayPal платежа в базе"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE payments 
+            SET status = %s 
+            WHERE user_id = %s 
+            AND payment_method = 'paypal'
+            AND status = 'pending'
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (status, user_id))
+        
+        conn.commit()
+        conn.close()
+        logging.info(f"✅ PayPal payment status updated to {status} for user {user_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating PayPal payment status: {e}")
+
+def verify_paypal_webhook(request):
+    """Проверяет подлинность вебхука PayPal"""
+    try:
+        from paypal_payment import paypal_processor
+        
+        # Получаем заголовки верификации
+        auth_algo = request.headers.get('PAYPAL-AUTH-ALGO')
+        cert_url = request.headers.get('PAYPAL-CERT-URL')
+        transmission_id = request.headers.get('PAYPAL-TRANSMISSION-ID')
+        transmission_sig = request.headers.get('PAYPAL-TRANSMISSION-SIG')
+        transmission_time = request.headers.get('PAYPAL-TRANSMISSION-TIME')
+        webhook_id = PAYPAL_WEBHOOK_ID  # из config.py
+        
+        # Проверяем наличие всех необходимых заголовков
+        if not all([auth_algo, cert_url, transmission_id, transmission_sig, transmission_time, webhook_id]):
+            logging.error("❌ Missing PayPal webhook verification headers")
+            return False
+        
+        # Получаем access token для PayPal API
+        access_token = paypal_processor.get_access_token()
+        if not access_token:
+            logging.error("❌ Could not get PayPal access token")
+            return False
+        
+        # Тело вебхука как строка
+        webhook_event = request.get_data(as_text=True)
+        
+        # URL для верификации
+        verification_url = f"{paypal_processor.base_url}/v1/notifications/verify-webhook-signature"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        payload = {
+            "auth_algo": auth_algo,
+            "cert_url": cert_url,
+            "transmission_id": transmission_id,
+            "transmission_sig": transmission_sig,
+            "transmission_time": transmission_time,
+            "webhook_id": webhook_id,
+            "webhook_event": json.loads(webhook_event)  # Преобразуем обратно в JSON
+        }
+        
+        response = requests.post(verification_url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            verification_status = result.get('verification_status')
+            
+            if verification_status == 'SUCCESS':
+                logging.info("✅ PayPal webhook signature verified successfully")
+                return True
+            else:
+                logging.error(f"❌ PayPal webhook verification failed: {verification_status}")
+                return False
+        
+        logging.error(f"❌ PayPal verification API error: {response.status_code}")
+        return False
+        
+    except Exception as e:
+        logging.error(f"❌ Error verifying PayPal webhook: {e}")
+        return False
 
 def update_payment_status(self, payment_id: str, status: str):
     """Обновляет статус платежа в базе данных"""
@@ -825,108 +990,6 @@ def start_health_monitoring():
     thread = threading.Thread(target=monitor, daemon=True)
     thread.start()
 
-def verify_paypal_webhook(request):
-    """Проверяет подлинность вебхука PayPal"""
-    try:
-        from paypal_payment import paypal_processor
-        
-        # Получаем заголовки верификации
-        auth_algo = request.headers.get('PAYPAL-AUTH-ALGO')
-        cert_url = request.headers.get('PAYPAL-CERT-URL')
-        transmission_id = request.headers.get('PAYPAL-TRANSMISSION-ID')
-        transmission_sig = request.headers.get('PAYPAL-TRANSMISSION-SIG')
-        transmission_time = request.headers.get('PAYPAL-TRANSMISSION-TIME')
-        webhook_id = PAYPAL_WEBHOOK_ID
-        
-        # Получаем access token
-        access_token = paypal_processor.get_access_token()
-        if not access_token:
-            return False
-        
-        # Проверяем вебхук через PayPal API
-        webhook_event = request.get_data(as_text=True)
-        
-        verification_url = f"{paypal_processor.base_url}/v1/notifications/verify-webhook-signature"
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {access_token}"
-        }
-        
-        payload = {
-            "auth_algo": auth_algo,
-            "cert_url": cert_url,
-            "transmission_id": transmission_id,
-            "transmission_sig": transmission_sig,
-            "transmission_time": transmission_time,
-            "webhook_id": webhook_id,
-            "webhook_event": webhook_event
-        }
-        
-        response = requests.post(verification_url, json=payload, headers=headers)
-        
-        if response.status_code == 200:
-            result = response.json()
-            return result.get('verification_status') == 'SUCCESS'
-        
-        return False
-        
-    except Exception as e:
-        logging.error(f"❌ Error verifying PayPal webhook: {e}")
-        return False
-
-def handle_paypal_order_completed(resource):
-    """Обрабатывает завершенный заказ PayPal"""
-    try:
-        order_id = resource.get('id')
-        purchase_units = resource.get('purchase_units', [])
-        
-        if not purchase_units:
-            return jsonify({"status": "success"}), 200
-            
-        purchase_unit = purchase_units[0]
-        custom_id = purchase_unit.get('custom_id')
-        amount = purchase_unit.get('amount', {}).get('value')
-        
-        logging.info(f"🔧 PayPal order completed: order_id={order_id}, custom_id={custom_id}, amount={amount}")
-        
-        # Способ 1: Пытаемся найти в pending payments
-        from paypal_payment import paypal_processor
-        payment_id, payment_info = paypal_processor.find_payment_by_order_id(order_id)
-        
-        if payment_info:
-            # Активируем через существующий механизм
-            if paypal_processor.activate_subscription(payment_id):
-                logging.info(f"✅ PayPal subscription activated via pending payment for user {payment_info['user_id']}")
-                return jsonify({"status": "success"}), 200
-        
-        # Способ 2: Активируем по custom_id (user_id)
-        if custom_id and amount:
-            user_id = int(custom_id)
-            
-            # Определяем тип подписки по сумме
-            subscription_type = determine_subscription_type_from_paypal(amount)
-            
-            if subscription_type:
-                # Активируем подписку
-                success = db.create_subscription(
-                    user_id, 
-                    subscription_type, 
-                    SUBSCRIPTION_DURATIONS[subscription_type]
-                )
-                
-                if success:
-                    logging.info(f"✅ PayPal subscription activated via custom_id for user {user_id}")
-                    
-                    # Отправляем уведомление пользователю
-                    send_subscription_notification(user_id, subscription_type, amount)
-                    
-        return jsonify({"status": "success"}), 200
-        
-    except Exception as e:
-        logging.error(f"❌ Error handling PayPal order completed: {e}")
-        return jsonify({"status": "error"}), 500
-
 def handle_paypal_payment_denied(resource):
     """Обрабатывает отклоненный платеж PayPal"""
     try:
@@ -983,18 +1046,8 @@ def handle_paypal_payment_captured(resource):
         logging.error(f"❌ Error handling PayPal payment captured: {e}")
         return jsonify({"status": "error"}), 500
 
-def determine_subscription_type_from_paypal(amount):
-    """Определяет тип подписки по сумме PayPal"""
-    paypal_prices = {
-        "5.00": "month",
-        "9.00": "3months", 
-        "17.00": "6months",
-        "35.00": "year"
-    }
-    return paypal_prices.get(str(amount))
-
-def send_subscription_notification(user_id, subscription_type, amount):
-    """Отправляет уведомление пользователю об активации подписки"""
+def send_paypal_subscription_notification(user_id: int, subscription_type: str, amount: str):
+    """Отправляет уведомление об успешной оплате PayPal"""
     try:
         from telegram import Bot
         from config import BOT_TOKEN
@@ -1021,7 +1074,7 @@ def send_subscription_notification(user_id, subscription_type, amount):
         message_text = f"""
 ✅ *Оплата подтверждена!*
 
-💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 месяц')}" активирована.
+💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 год')}" активирована.
 
 💰 Сумма: {amount}₪
 📅 Действует до: {end_date_str}
@@ -1678,6 +1731,8 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("my_payments", handlers.view_my_payments))
     application.add_handler(CommandHandler("update_database_structure", handlers.update_database_structure))
     application.add_handler(CommandHandler("add_phone_column", handlers.add_phone_column))
+    application.add_handler(CommandHandler("fix_user_subscription", handlers.fix_user_subscription))
+    application.add_handler(CommandHandler("fix_expired_subscriptions", handlers.fix_expired_subscriptions))
     
     application.add_handler(CallbackQueryHandler(
         handlers.show_report_problem_from_button, 
@@ -1860,6 +1915,21 @@ def monitor_resources():
             logger.error(f"❌ Resource monitoring error: {e}")
             time.sleep(300)
 
+def check_expired_subscriptions_periodically():
+    """Периодически проверяет и обновляет истекшие подписки"""
+    while not shutdown_manager.shutdown_event.is_set():
+        try:
+            # Проверяем каждые 5 минут
+            time.sleep(300)
+            
+            if not shutdown_manager.shutdown_event.is_set():
+                expired_count = db.check_and_update_expired_subscriptions()
+                if expired_count > 0:
+                    logger.info(f"✅ Periodically updated {expired_count} expired subscriptions")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error in expired subscriptions check: {e}")
+
 def main():
     """Основная функция запуска - ТОЛЬКО ОДИН ПРОЦЕСС"""
     # Регистрируем обработчики сигналов
@@ -1892,6 +1962,11 @@ def main():
         cleanup_thread.start()
         logger.info("✅ Video links cleanup started")
         
+        # Запускаем проверку истекших подписок
+        expired_check_thread = threading.Thread(target=check_expired_subscriptions_periodically, daemon=True)
+        expired_check_thread.start()
+        logger.info("✅ Expired subscriptions checker started")
+
         # Запускаем бота в ОСНОВНОМ потоке
         logger.info("✅ Starting bot in main thread...")
         run_bot()

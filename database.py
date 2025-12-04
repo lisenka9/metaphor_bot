@@ -307,6 +307,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         try:
+            self.check_user_subscription_expiry(user_id)
             # ✅ ПОЛУЧАЕМ ВСЮ НЕОБХОДИМУЮ ИНФОРМАЦИЮ О ПОЛЬЗОВАТЕЛЕ
             cursor.execute('''
                 SELECT last_daily_card_date, daily_cards_limit, is_premium, premium_until 
@@ -417,14 +418,16 @@ class DatabaseManager:
             conn.close()
 
     def get_user_stats(self, user_id: int):
-        """Получает статистику пользователя включая подписку"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
+        """Получает статистику пользователя с проверкой истекшей подписки"""
         try:
             logging.info(f"🔄 Getting stats for user {user_id}")
             
-            # Получаем основные данные пользователя
+            # СНАЧАЛА проверяем и обновляем истекшую подписку
+            self.check_user_subscription_expiry(user_id)
+            
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
             cursor.execute('''
                 SELECT 
                     u.daily_cards_limit, 
@@ -439,12 +442,10 @@ class DatabaseManager:
             ''', (user_id,))
             
             result = cursor.fetchone()
+            conn.close()
             
             if result:
                 limit, is_premium, total_cards, reg_date, premium_until = result
-                
-                # Получаем информацию о подписке
-                subscription_info = self.get_user_subscription(user_id)
                 
                 # Форматируем даты
                 if reg_date:
@@ -457,30 +458,21 @@ class DatabaseManager:
                 
                 # Форматируем дату окончания подписки
                 subscription_end = None
-                if subscription_info:
-                    subscription_type, end_date = subscription_info
-                    if end_date:
-                        if isinstance(end_date, str):
-                            subscription_end = end_date[:10]
-                        else:
-                            subscription_end = end_date.strftime("%d.%m.%Y")
-                elif premium_until:
+                if premium_until:
                     if isinstance(premium_until, str):
                         subscription_end = premium_until[:10]
                     else:
                         subscription_end = premium_until.strftime("%d.%m.%Y")
                 
-                logging.info(f"📊 User stats - limit: {limit}, cards: {total_cards}, premium: {is_premium}")
+                logging.info(f"📊 User stats - limit: {limit}, premium: {is_premium}, until: {premium_until}")
                 return (limit, is_premium, total_cards, reg_date_formatted, subscription_end)
             else:
                 logging.warning(f"User data not found for {user_id}")
                 return None
-                
+                    
         except Exception as e:
             logging.error(f"❌ Error getting user stats: {e}")
             return None
-        finally:
-            conn.close()
 
     def check_cards_exist(self) -> bool:
         """Проверяет, есть ли карты в базе данных"""
@@ -895,9 +887,12 @@ class DatabaseManager:
         
         try:
             from datetime import datetime, timedelta
-            from config import DAILY_CARD_LIMIT_PREMIUM
+            from config import DAILY_CARD_LIMIT_PREMIUM, DAILY_CARD_LIMIT_FREE
             
+            # Устанавливаем время окончания подписки на КОНЕЦ дня
             end_date = datetime.now() + timedelta(days=duration_days)
+            # Устанавливаем на 23:59:59 последнего дня
+            end_date = end_date.replace(hour=23, minute=59, second=59)
             
             # Деактивируем старые подписки
             cursor.execute('''
@@ -912,18 +907,18 @@ class DatabaseManager:
                 VALUES (%s, %s, %s)
             ''', (user_id, subscription_type, end_date))
             
-            # ✅ ОБНОВЛЯЕМ ЛИМИТ КАРТ ДЛЯ ПРЕМИУМ ПОЛЬЗОВАТЕЛЕЙ
+            # ✅ ОБНОВЛЯЕМ ПОЛЬЗОВАТЕЛЯ КОРРЕКТНО
             cursor.execute('''
                 UPDATE users 
                 SET is_premium = TRUE, 
                     premium_until = %s, 
-                    daily_cards_limit = %s  -- ✅ УСТАНАВЛИВАЕМ ПРЕМИУМ ЛИМИТ
+                    daily_cards_limit = %s
                 WHERE user_id = %s
             ''', (end_date, DAILY_CARD_LIMIT_PREMIUM, user_id))
             
             conn.commit()
             
-            logging.info(f"✅ Subscription created for user {user_id}: {subscription_type}, limit: {DAILY_CARD_LIMIT_PREMIUM}")
+            logging.info(f"✅ Subscription created for user {user_id}: {subscription_type}, until {end_date}")
             return True
             
         except Exception as e:
@@ -1786,5 +1781,114 @@ class DatabaseManager:
             conn.rollback()
         finally:
             conn.close()
+
+    def check_and_update_expired_subscriptions(self):
+        """Проверяет и обновляет истекшие подписки"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            from config import DAILY_CARD_LIMIT_FREE
+            
+            # Находим пользователей с истекшей подпиской
+            cursor.execute('''
+                UPDATE users 
+                SET is_premium = FALSE, 
+                    daily_cards_limit = %s,
+                    premium_until = NULL
+                WHERE is_premium = TRUE 
+                AND premium_until < CURRENT_TIMESTAMP
+            ''', (DAILY_CARD_LIMIT_FREE,))
+            
+            updated_count = cursor.rowcount
+            
+            # Также деактивируем подписки в таблице subscriptions
+            cursor.execute('''
+                UPDATE subscriptions 
+                SET is_active = FALSE 
+                WHERE is_active = TRUE 
+                AND end_date < CURRENT_TIMESTAMP
+            ''')
+            
+            deactivated_count = cursor.rowcount
+            
+            conn.commit()
+            
+            if updated_count > 0:
+                logging.info(f"✅ Updated {updated_count} expired subscriptions in users table")
+                logging.info(f"✅ Deactivated {deactivated_count} expired subscriptions")
+            
+            return updated_count
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking expired subscriptions: {e}")
+            conn.rollback()
+            return 0
+        finally:
+            conn.close()
+
+    def check_user_subscription_expiry(self, user_id: int):
+        """Проверяет и обновляет истекшую подписку для конкретного пользователя"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            from config import DAILY_CARD_LIMIT_FREE
+            
+            cursor.execute('''
+                SELECT is_premium, premium_until 
+                FROM users 
+                WHERE user_id = %s
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            
+            if result:
+                is_premium, premium_until = result
+                
+                if is_premium and premium_until:
+                    from datetime import datetime
+                    
+                    # Проверяем, истекла ли подписка
+                    if isinstance(premium_until, str):
+                        try:
+                            expiry_date = datetime.strptime(premium_until[:19], '%Y-%m-%d %H:%M:%S')
+                        except:
+                            expiry_date = datetime.strptime(premium_until[:10], '%Y-%m-%d')
+                    else:
+                        expiry_date = premium_until
+                    
+                    if expiry_date < datetime.now():
+                        # Подписка истекла - обновляем
+                        cursor.execute('''
+                            UPDATE users 
+                            SET is_premium = FALSE, 
+                                daily_cards_limit = %s,
+                                premium_until = NULL
+                            WHERE user_id = %s
+                        ''', (DAILY_CARD_LIMIT_FREE, user_id))
+                        
+                        # Деактивируем подписку в таблице subscriptions
+                        cursor.execute('''
+                            UPDATE subscriptions 
+                            SET is_active = FALSE 
+                            WHERE user_id = %s 
+                            AND is_active = TRUE
+                        ''', (user_id,))
+                        
+                        conn.commit()
+                        logging.info(f"✅ Subscription expired for user {user_id}, updated to free")
+                        return True
+            
+            conn.close()
+            return False
+            
+        except Exception as e:
+            logging.error(f"❌ Error checking user subscription expiry: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()
