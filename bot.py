@@ -1110,18 +1110,40 @@ def handle_payment_notification(event_data):
         logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
         logger.info(f"📋 Metadata: {metadata}")
         
-        user_id = metadata.get('user_id')
-        product_type = metadata.get('product_type', 'subscription')  # По умолчанию подписка
+        # ✅ ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
+        user_id = None
         
-        # ✅ ЕСЛИ user_id НЕТ, ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
+        # Способ 1: По user_id в metadata (если есть)
+        if 'user_id' in metadata:
+            user_id = int(metadata['user_id'])
+            logger.info(f"✅ Found user {user_id} by metadata.user_id")
+        
+        # Способ 2: По email из metadata
+        elif 'custEmail' in metadata:
+            email = metadata['custEmail']
+            user_id = find_user_by_email(email)
+            if user_id:
+                logger.info(f"✅ Found user {user_id} by email: {email}")
+        
+        # Способ 3: По customerNumber (тоже может быть email)
+        elif 'customerNumber' in metadata:
+            customer_number = metadata['customerNumber']
+            if '@' in customer_number:  # Проверяем, если это email
+                user_id = find_user_by_email(customer_number)
+                if user_id:
+                    logger.info(f"✅ Found user {user_id} by customerNumber: {customer_number}")
+        
         if not user_id:
-            user_id = find_user_by_payment_data(payment_object)
+            logger.error(f"❌ Could not identify user for payment {payment_id}")
+            # Сохраняем платеж для ручной обработки
+            save_unknown_payment_for_review(payment_object)
+            return jsonify({"status": "success"}), 200
         
-        if user_id and payment_status == 'succeeded':
-            user_id = int(user_id)
-            
-            if product_type == 'deck':
-                # ✅ ОБРАБОТКА ПОКУПКИ КОЛОДЫ
+        user_id = int(user_id)
+        
+        if payment_status == 'succeeded':
+            # ✅ ОПРЕДЕЛЯЕМ ТИП ПРОДУКТА ПО СУММЕ
+            if amount_value == "999.00":  # Колода
                 logger.info(f"✅ Deck purchase succeeded for user {user_id}")
                 
                 # Записываем покупку в базу
@@ -1130,167 +1152,116 @@ def handle_payment_notification(event_data):
                 if success:
                     logger.info(f"🎉 Deck purchase recorded for user {user_id}")
                     
-                    # Запускаем отправку файлов в отдельном потоке
-                    import threading
+                    # Отправляем уведомление пользователю
+                    send_deck_purchase_notification(user_id)
                     
-                    def send_deck_files_async():
-                        """Отправляет файлы колоды асинхронно"""
-                        try:
-                            # Импортируем здесь чтобы избежать циклических импортов
-                            from telegram import Bot
-                            from config import BOT_TOKEN
-                            
-                            # Используем синхронный Bot (без Application)
-                            bot = Bot(token=BOT_TOKEN)
-                            
-                            # Отправляем сообщение об успехе
-                            success_text = """
-                    ✅ *Оплата прошла успешно!*
-
-                    Ваша цифровая колода «Настроение как море» готова к скачиванию.
-
-                    📦 *Файлы отправляются...*
-                    """
-                            bot.send_message(
-                                chat_id=user_id,
-                                text=success_text,
-                                parse_mode='Markdown'
-                            )
-                            
-                            # Отправляем файлы
-                            file_ids = {
-                                "zip": "BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
-                                "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA", 
-                                "pdf": "BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ"
-                            }
-                            
-                            try:
-                                # ZIP файл
-                                bot.send_document(
-                                    chat_id=user_id,
-                                    document=file_ids["zip"],
-                                    filename="Ограничения.zip",
-                                    caption="📦 Архив с картами (ZIP формат)"
-                                )
-                            except Exception as e:
-                                logger.error(f"❌ Error sending ZIP: {e}")
-                            
-                            try:
-                                # RAR файл
-                                bot.send_document(
-                                    chat_id=user_id,
-                                    document=file_ids["rar"],
-                                    filename="Возможности.rar", 
-                                    caption="📦 Архив с картами (RAR формат)"
-                                )
-                            except Exception as e:
-                                logger.error(f"❌ Error sending RAR: {e}")
-                            
-                            try:
-                                # PDF файл
-                                bot.send_document(
-                                    chat_id=user_id,
-                                    document=file_ids["pdf"],
-                                    filename="Колода_Настроение_как_море_методическое_пособие.pdf",
-                                    caption="📚 Методическое пособие с посланиями"
-                                )
-                            except Exception as e:
-                                logger.error(f"❌ Error sending PDF: {e}")
-                            
-                            # Финальное сообщение
-                            final_text = """
-                    🎉 *Поздравляем с приобретением колоды!*
-
-                    Теперь у вас есть полный доступ ко всем картам и методическим материалам.
-
-                    💫 Приятного использования!
-                    """
-                            bot.send_message(
-                                chat_id=user_id,
-                                text=final_text,
-                                parse_mode='Markdown'
-                            )
-                            
-                            logger.info(f"✅ Deck files sent to user {user_id}")
-                            
-                        except Exception as e:
-                            logger.error(f"❌ Error in send_deck_files_async: {e}")
-                    
-                    # Запускаем в отдельном потоке
-                    thread = threading.Thread(target=send_deck_files_async)
-                    thread.daemon = True
-                    thread.start()
-                    
-                return jsonify({"status": "success"}), 200
-                
-            else:
-                # ✅ ОБРАБОТКА ПОДПИСКИ (старый код)
+            else:  # Подписка
+                # ✅ ОПРЕДЕЛЯЕМ ТИП ПОДПИСКИ ПО СУММЕ
                 subscription_type = determine_subscription_type(amount_value)
+                if not subscription_type:
+                    logger.error(f"❌ Unknown subscription amount: {amount_value}")
+                    return jsonify({"status": "error"}), 400
+                
                 logger.info(f"✅ Payment succeeded for user {user_id}, type: {subscription_type}")
                 
-                success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
+                # ✅ АКТИВИРУЕМ ПОДПИСКУ
+                success = db.create_subscription(
+                    user_id, 
+                    subscription_type, 
+                    SUBSCRIPTION_DURATIONS[subscription_type]
+                )
                 
                 if success:
                     logger.info(f"🎉 Subscription activated for user {user_id}")
                     
-                    import threading
+                    # ✅ СОХРАНЯЕМ ПЛАТЕЖ В БАЗУ
+                    save_payment_to_db(user_id, subscription_type, payment_id, amount_value)
                     
-                    def send_subscription_notification_async():
-                        """Отправляет уведомление о подписке асинхронно"""
-                        try:
-                            from telegram import Bot
-                            from config import BOT_TOKEN
-                            
-                            bot = Bot(token=BOT_TOKEN)
-                            
-                            subscription_names = {
-                                "month": "1 месяц",
-                                "3months": "3 месяца", 
-                                "6months": "6 месяцев",
-                                "year": "1 год"
-                            }
-                            
-                            message_text = f"""
-✅ *Оплата прошла успешно!*
+                    # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ
+                    send_subscription_notification(user_id, subscription_type, amount_value)
+                    
+        elif payment_status in ['canceled', 'failed']:
+            logger.info(f"❌ Payment failed for user {user_id}")
+        else:
+            logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
+            
+        return jsonify({"status": "success"}), 200
+            
+    except Exception as e:
+        logger.error(f"❌ Error handling payment notification: {e}")
+        return jsonify({"status": "error"}), 500
 
-💎 Ваша премиум подписка "{subscription_names.get(subscription_type, '1 месяц')}" активирована.
+def send_subscription_notification(user_id: int, subscription_type: str, amount: str):
+    """Отправляет уведомление об успешной активации подписки"""
+    try:
+        from telegram import Bot
+        from config import BOT_TOKEN, SUBSCRIPTION_NAMES
+        
+        bot = Bot(token=BOT_TOKEN)
+        
+        # Получаем информацию о подписке
+        subscription = db.get_user_subscription(user_id)
+        end_date_str = ""
+        if subscription and subscription[1]:
+            end_date = subscription[1]
+            if hasattr(end_date, 'strftime'):
+                end_date_str = end_date.strftime('%d.%m.%Y')
+            else:
+                end_date_str = str(end_date)[:10]
+        
+        message_text = f"""
+✅ *Оплата подтверждена!*
 
-💰 Сумма: {amount_value}₽
+💎 Ваша премиум подписка "{SUBSCRIPTION_NAMES.get(subscription_type, '1 месяц')}" активирована.
+
+💰 Сумма: {amount}₽
+📅 Действует до: {end_date_str}
 
 ✨ Теперь вам доступны:
 • 5 карт дня вместо 1
 • Ежедневное послание дня  
 • Техники самопомощи
+• Медитация «Дары Моря»
 
 Наслаждайтесь полным доступом! 💫
 """
-                            
-                            bot.send_message(
-                                chat_id=user_id,
-                                text=message_text,
-                                parse_mode='Markdown'
-                            )
-                            logger.info(f"✅ Success notification sent to user {user_id}")
-                            
-                        except Exception as e:
-                            logger.error(f"❌ Error sending subscription notification: {e}")
-                    
-                    thread = threading.Thread(target=send_subscription_notification_async)
-                    thread.daemon = True
-                    thread.start()
-                    
-                return jsonify({"status": "success"}), 200
-                
-        elif payment_status in ['canceled', 'failed']:
-            logger.info(f"❌ Payment failed for user {user_id}")
-            return jsonify({"status": "success"}), 200
-        else:
-            logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
-            return jsonify({"status": "success"}), 200
-            
+        
+        bot.send_message(
+            chat_id=user_id,
+            text=message_text,
+            parse_mode='Markdown'
+        )
+        logger.info(f"✅ Subscription notification sent to user {user_id}")
+        
     except Exception as e:
-        logger.error(f"❌ Error handling payment notification: {e}")
-        return jsonify({"status": "error"}), 500
+        logger.error(f"❌ Error sending subscription notification: {e}")
+
+def save_payment_to_db(user_id: int, subscription_type: str, yookassa_id: str, amount: str):
+    """Сохраняет информацию о платеже в базу данных"""
+    try:
+        from config import SUBSCRIPTION_PRICES
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, yoomoney_payment_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (
+            user_id,
+            float(amount),
+            subscription_type,
+            'success',
+            'yookassa',
+            yookassa_id
+        ))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"✅ Payment saved to database for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving payment to DB: {e}")
 
 def find_user_by_payment_id(yookassa_payment_id: str):
     """Ищет пользователя по payment_id в базе"""
