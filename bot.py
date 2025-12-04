@@ -1292,6 +1292,56 @@ def handle_payment_notification(event_data):
         logger.error(f"❌ Error handling payment notification: {e}")
         return jsonify({"status": "error"}), 500
 
+def find_user_by_payment_id(yookassa_payment_id: str):
+    """Ищет пользователя по payment_id в базе"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT user_id FROM payments 
+            WHERE yoomoney_payment_id = %s 
+            OR payment_id = %s
+            LIMIT 1
+        ''', (yookassa_payment_id, yookassa_payment_id))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+        return None
+        
+    except Exception as e:
+        logging.error(f"❌ Error finding user by payment_id: {e}")
+        return None
+
+def update_payment_status_in_db(user_id: int, yookassa_id: str, status: str):
+    """Обновляет статус платежа в базе"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE payments 
+            SET status = %s 
+            WHERE user_id = %s 
+            AND (yoomoney_payment_id = %s OR payment_id LIKE %s)
+            AND status = 'pending'
+        ''', (status, user_id, yookassa_id, f"%{yookassa_id}%"))
+        
+        updated = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if updated > 0:
+            logger.info(f"✅ Payment status updated to {status} for user {user_id}")
+        else:
+            logger.warning(f"⚠️ No pending payment found to update for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating payment status in DB: {e}")
+
 def find_user_by_payment_data(payment_object):
     """Ищет пользователя по различным данным из платежа"""
     try:
@@ -1348,24 +1398,17 @@ def find_user_by_email(email: str):
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Сначала проверяем, есть ли колонка email
-        cursor.execute('''
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'users' AND column_name = 'email'
-        ''')
-        has_email_column = cursor.fetchone() is not None
-        
-        if has_email_column:
-            # Ищем в таблице users по email
+        # ✅ СПОСОБ 1: Пытаемся найти по email в таблице users
+        try:
             cursor.execute('SELECT user_id FROM users WHERE email = %s LIMIT 1', (email,))
             result = cursor.fetchone()
-            
             if result:
                 conn.close()
                 return result[0]
+        except Exception as e:
+            logging.warning(f"⚠️ Column 'email' might not exist: {e}")
         
-        # Если не нашли по email, ищем в таблице платежей по историческим данным
+        # ✅ СПОСОБ 2: Ищем в таблице payments
         cursor.execute('''
             SELECT user_id FROM payments 
             WHERE customer_email = %s 
@@ -1373,6 +1416,12 @@ def find_user_by_email(email: str):
             LIMIT 1
         ''', (email,))
         result = cursor.fetchone()
+        
+        # ✅ СПОСОБ 3: Ищем по username (если email похож на username)
+        if not result and '@' in email:
+            username = email.split('@')[0]
+            cursor.execute('SELECT user_id FROM users WHERE username = %s LIMIT 1', (username,))
+            result = cursor.fetchone()
         
         conn.close()
         
@@ -1733,6 +1782,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("add_phone_column", handlers.add_phone_column))
     application.add_handler(CommandHandler("fix_user_subscription", handlers.fix_user_subscription))
     application.add_handler(CommandHandler("fix_expired_subscriptions", handlers.fix_expired_subscriptions))
+    application.add_handler(CommandHandler("add_missing_columns", handlers.add_missing_columns))
     
     application.add_handler(CallbackQueryHandler(
         handlers.show_report_problem_from_button, 

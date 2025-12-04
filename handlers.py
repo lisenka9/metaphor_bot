@@ -5275,3 +5275,54 @@ async def fix_user_subscription(update: Update, context: ContextTypes.DEFAULT_TY
         logging.error(f"❌ Error fixing user subscription: {e}")
         await update.message.reply_text(f"❌ Ошибка: {e}")
 
+async def add_missing_columns(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавляет недостающие колонки в таблицы (только для админов)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Добавляем ВСЕ недостающие колонки
+        cursor.execute('''
+            DO $$ 
+            BEGIN
+                -- В таблице users
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='users' AND column_name='email') THEN
+                    ALTER TABLE users ADD COLUMN email TEXT;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='users' AND column_name='phone') THEN
+                    ALTER TABLE users ADD COLUMN phone TEXT;
+                END IF;
+                
+                -- В таблице payments
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='customer_email') THEN
+                    ALTER TABLE payments ADD COLUMN customer_email TEXT;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='customer_phone') THEN
+                    ALTER TABLE payments ADD COLUMN customer_phone TEXT;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                              WHERE table_name='payments' AND column_name='custom_id') THEN
+                    ALTER TABLE payments ADD COLUMN custom_id TEXT;
+                END IF;
+            END $$;
+        ''')
+        
+        conn.commit()
+        await update.message.reply_text("✅ Добавлены все недостающие колонки в базу!")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+

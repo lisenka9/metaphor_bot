@@ -37,11 +37,12 @@ class YooKassaPayment:
                 "capture": True,
                 "description": description,
                 "metadata": {
-                    "user_id": int(user_id),  
+                    "user_id": str(user_id),  
                     "subscription_type": subscription_type,
                     "payment_id": payment_id,
                     "custEmail": user_email,
-                    "custPhone": user_phone
+                    "custPhone": user_phone,
+                    "source": "telegram_bot"
                 }
             }
             
@@ -304,6 +305,31 @@ class YooKassaPayment:
         thread.daemon = True
         thread.start()
 
+    def save_payment_to_db_before_webhook(self, user_id: int, amount: float, subscription_type: str, yookassa_id: str, payment_id: str):
+        """Сохраняет платеж в базу ДО получения вебхука"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, yoomoney_payment_id, payment_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                user_id,
+                amount,
+                subscription_type,
+                'pending',  # Начинаем как pending
+                'yookassa',
+                yookassa_id,
+                payment_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            logging.info(f"✅ Payment saved to database BEFORE webhook for user {user_id}")
+            
+        except Exception as e:
+            logging.error(f"❌ Error saving payment before webhook: {e}")
 
     def create_deck_payment(self, user_id: int):
         """Создает платеж за колоду"""
