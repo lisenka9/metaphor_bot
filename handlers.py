@@ -11,7 +11,8 @@ from yookassa_payment import payment_processor
 from config import PAYMENT_LINKS, SUBSCRIPTION_PRICES, SUBSCRIPTION_NAMES, PAYPAL_PRICES, PAYPAL_LINKS
 import uuid
 import json
-from bot import send_admin_notification_successful
+from bot import send_admin_notification_successful, send_admin_notification_failed
+
 
 def get_video_system_safe():
     """Безопасно создает экземпляр video_system"""
@@ -5975,6 +5976,6 @@ async def test_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("✅ Все тестовые уведомления отправлены!")
         
     except Exception as e:
-        logger.error(f"❌ Error testing notifications: {e}")
+        logging.error(f"❌ Error testing notifications: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
