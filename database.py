@@ -1941,5 +1941,28 @@ class DatabaseManager:
         
         raise Exception("Database operation failed after retries")
 
+    def update_user_email(user_id: int, email: str):
+        """Обновляет email пользователя в базе данных"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                UPDATE users 
+                SET email = %s 
+                WHERE user_id = %s
+            ''', (email, user_id))
+            
+            conn.commit()
+            logger.info(f"✅ Email updated for user {user_id}: {email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating user email: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()

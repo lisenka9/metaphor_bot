@@ -1124,6 +1124,8 @@ def handle_payment_notification(event_data):
             user_id = find_user_by_email(email)
             if user_id:
                 logger.info(f"✅ Found user {user_id} by email: {email}")
+                # ✅ ОБНОВЛЯЕМ EMAIL ПОЛЬЗОВАТЕЛЯ В БАЗЕ
+                db.update_user_email(user_id, email)
         
         # Способ 3: По customerNumber (тоже может быть email)
         elif 'customerNumber' in metadata:
@@ -1132,6 +1134,8 @@ def handle_payment_notification(event_data):
                 user_id = find_user_by_email(customer_number)
                 if user_id:
                     logger.info(f"✅ Found user {user_id} by customerNumber: {customer_number}")
+                    # ✅ ОБНОВЛЯЕМ EMAIL ПОЛЬЗОВАТЕЛЯ В БАЗЕ
+                    db.update_user_email(user_id, customer_number)
         
         if not user_id:
             logger.error(f"❌ Could not identify user for payment {payment_id}")
@@ -1152,8 +1156,8 @@ def handle_payment_notification(event_data):
                 if success:
                     logger.info(f"🎉 Deck purchase recorded for user {user_id}")
                     
-                    # Отправляем уведомление пользователю
-                    send_deck_purchase_notification(user_id)
+                    # ✅ Используем СИНХРОННУЮ функцию для отправки уведомления
+                    send_deck_purchase_notification_sync(user_id)
                     
             else:  # Подписка
                 # ✅ ОПРЕДЕЛЯЕМ ТИП ПОДПИСКИ ПО СУММЕ
@@ -1175,10 +1179,10 @@ def handle_payment_notification(event_data):
                     logger.info(f"🎉 Subscription activated for user {user_id}")
                     
                     # ✅ СОХРАНЯЕМ ПЛАТЕЖ В БАЗУ
-                    save_payment_to_db(user_id, subscription_type, payment_id, amount_value)
+                    save_payment_to_db_sync(user_id, subscription_type, payment_id, amount_value)
                     
-                    # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ
-                    send_subscription_notification(user_id, subscription_type, amount_value)
+                    # ✅ Используем СИНХРОННУЮ функцию для отправки уведомления
+                    send_subscription_notification_sync(user_id, subscription_type, amount_value)
                     
         elif payment_status in ['canceled', 'failed']:
             logger.info(f"❌ Payment failed for user {user_id}")
@@ -1190,6 +1194,79 @@ def handle_payment_notification(event_data):
     except Exception as e:
         logger.error(f"❌ Error handling payment notification: {e}")
         return jsonify({"status": "error"}), 500
+
+def save_successful_payment_to_db(user_id: int, subscription_type: str, yookassa_id: str, amount: str, email: str):
+    """Сохраняет информацию об успешном платеже в базу данных"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, 
+                                 yoomoney_payment_id, customer_email, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+        ''', (
+            user_id,
+            float(amount),
+            subscription_type,
+            'success',
+            'yookassa',
+            yookassa_id,
+            email
+        ))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"✅ Payment saved to database for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving payment to DB: {e}")
+
+def send_subscription_notification_sync(user_id: int, subscription_type: str, amount: str):
+    """Отправляет уведомление об успешной активации подписки (синхронно)"""
+    try:
+        from telegram import Bot
+        from config import BOT_TOKEN, SUBSCRIPTION_NAMES
+        
+        bot = Bot(token=BOT_TOKEN)
+        
+        # Получаем информацию о подписке
+        subscription = db.get_user_subscription(user_id)
+        end_date_str = ""
+        if subscription and subscription[1]:
+            end_date = subscription[1]
+            if hasattr(end_date, 'strftime'):
+                end_date_str = end_date.strftime('%d.%m.%Y')
+            else:
+                end_date_str = str(end_date)[:10]
+        
+        message_text = f"""
+✅ *Оплата подтверждена!*
+
+💎 Ваша премиум подписка "{SUBSCRIPTION_NAMES.get(subscription_type, '1 месяц')}" активирована.
+
+💰 Сумма: {amount}₽
+📅 Действует до: {end_date_str}
+
+✨ Теперь вам доступны:
+• 5 карт дня вместо 1
+• Ежедневное послание дня  
+• Техники самопомощи
+• Медитация «Дары Моря»
+
+Наслаждайтесь полным доступом! 💫
+"""
+        
+        # Синхронный вызов
+        bot.send_message(
+            chat_id=user_id,
+            text=message_text,
+            parse_mode='Markdown'
+        )
+        logger.info(f"✅ Subscription notification sent to user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending subscription notification: {e}")
 
 def send_subscription_notification(user_id: int, subscription_type: str, amount: str):
     """Отправляет уведомление об успешной активации подписки"""
@@ -1591,7 +1668,7 @@ async def send_payment_success_notification(user_id: int, subscription_type: str
         logger.error(f"❌ Error sending success notification: {e}")
 
 def notify_admin_about_unknown_payment(payment_id: str, amount: str, email: str, phone: str):
-    """Уведомляет администратора о неидентифицированном платеже"""
+    """Уведомляет администратора о неидентифицированном платеже - СИНХРОННАЯ версия"""
     try:
         from telegram import Bot
         from config import BOT_TOKEN, ADMIN_IDS
@@ -1599,6 +1676,7 @@ def notify_admin_about_unknown_payment(payment_id: str, amount: str, email: str,
         if not ADMIN_IDS:
             return
             
+        # Используем синхронный подход
         bot = Bot(token=BOT_TOKEN)
         
         message_text = f"""
@@ -1614,6 +1692,7 @@ def notify_admin_about_unknown_payment(payment_id: str, amount: str, email: str,
         
         for admin_id in ADMIN_IDS:
             try:
+                # Синхронный вызов
                 bot.send_message(
                     chat_id=admin_id,
                     text=message_text,
