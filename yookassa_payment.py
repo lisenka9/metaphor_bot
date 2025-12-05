@@ -22,6 +22,30 @@ class YooKassaPayment:
             user_email = user_info.get('email') if user_info else None
             user_phone = user_info.get('phone') if user_info else None
 
+            # ✅ СОХРАНЯЕМ ПЛАТЕЖ В БАЗУ ПЕРЕД ОТПРАВКОЙ С ССЫЛКОЙ НА ЮKASSA_ID
+            yookassa_payment_id = f"yk_{user_id}_{int(datetime.now().timestamp())}"
+            
+            # Сохраняем в базу с пометкой о ожидании
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO payments (user_id, amount, subscription_type, status, 
+                                    payment_method, yoomoney_payment_id, payment_id, 
+                                    customer_email, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ''', (
+                user_id,
+                amount,
+                subscription_type,
+                'pending',
+                'yookassa',
+                yookassa_payment_id,
+                payment_id,
+                user_email
+            ))
+            conn.commit()
+            conn.close()
+            
             payload = {
                 "amount": {
                     "value": f"{amount:.2f}",
@@ -37,12 +61,14 @@ class YooKassaPayment:
                 "capture": True,
                 "description": description,
                 "metadata": {
-                    "user_id": str(user_id),  
+                    "user_id": str(user_id),  # ✅ Явно добавляем как строку
                     "subscription_type": subscription_type,
                     "payment_id": payment_id,
+                    "yookassa_internal_id": yookassa_payment_id,  # ✅ Добавляем внутренний ID
                     "custEmail": user_email,
                     "custPhone": user_phone,
-                    "source": "telegram_bot"
+                    "source": "telegram_bot",
+                    "timestamp": str(int(datetime.now().timestamp()))
                 }
             }
             
@@ -61,16 +87,20 @@ class YooKassaPayment:
             
             if response.status_code == 200:
                 payment_data = response.json()
+                actual_yookassa_id = payment_data['id']
                 
-                # Сохраняем информацию о платеже
-                self.pending_payments[payment_id] = {
-                    'user_id': user_id,
-                    'subscription_type': subscription_type,
-                    'yookassa_payment_id': payment_data['id'],
-                    'status': payment_data['status'],
-                    'created_at': datetime.now(),
-                    'amount': amount
-                }
+                # Обновляем с реальным ID ЮKassa
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE payments 
+                    SET yoomoney_payment_id = %s 
+                    WHERE payment_id = %s AND user_id = %s
+                ''', (actual_yookassa_id, payment_id, user_id))
+                conn.commit()
+                conn.close()
+                
+                logging.info(f"✅ Payment created for user {user_id}, YooKassa ID: {actual_yookassa_id}")
                 
                 return payment_data['confirmation']['confirmation_url'], payment_id
             else:
@@ -80,7 +110,7 @@ class YooKassaPayment:
         except Exception as e:
             logging.error(f"❌ Error creating YooKassa payment: {e}")
             return None, None
-    
+
     def check_payment_status(self, payment_id: str):
         """Проверяет статус платежа через API ЮKassa"""
         try:

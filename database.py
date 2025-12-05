@@ -117,6 +117,17 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # Таблица для логов действий пользователей
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_action_logs (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    action TEXT NOT NULL,
+                    action_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             
             # Добавляем недостающие колонки если таблица уже существует
             cursor.execute('''

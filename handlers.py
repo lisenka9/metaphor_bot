@@ -313,6 +313,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("check_payment_"):
         await handle_payment_check(query, context)
 
+    elif query.data.startswith("find_by_email_"):
+        await handle_find_by_email(query, context)
+
+    elif query.data.startswith("find_by_phone_"):
+        await handle_find_by_phone(query, context)
+
+    elif query.data.startswith("process_manually_"):
+        await handle_process_manually(query, context)
+
+    elif query.data.startswith("ignore_payment_"):
+        await handle_ignore_payment(query, context)
+
+    elif query.data.startswith("activate_for_"):
+        await handle_activate_for_user(query, context)
+
+    elif query.data.startswith("cancel_process_"):
+        await handle_cancel_process(query, context)
+        
+    elif query.data == "show_unknown_payments":
+        await show_unknown_payments(query, context)
+
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
     # Убираем кнопку из предыдущего сообщения
@@ -2528,7 +2549,12 @@ async def handle_random_messages(update: Update, context: ContextTypes.DEFAULT_T
         if 'report_form' in context.user_data:
             await handle_report_form(update, context)
             return
-        
+
+         # ✅ Проверяем, не находится ли администратор в процессе ручной обработки платежа
+        if 'manual_payment_processing' in context.user_data:
+            await handle_manual_user_id_input(update, context)
+            return
+
         logging.info(f"🔄 Random message from user {update.effective_user.id}: '{user_message}'")
         
         help_text = """
@@ -5325,4 +5351,566 @@ async def add_missing_columns(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def process_unknown_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка неидентифицированных платежей (только для админа)"""
+    user = update.effective_user
+    
+    if user.id != 891422895:  # Только вы
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем необработанные платежи
+        cursor.execute('''
+            SELECT id, payment_id, amount, customer_email, customer_phone, payment_data, payment_date
+            FROM unknown_payments 
+            WHERE processed = FALSE
+            ORDER BY payment_date DESC
+            LIMIT 10
+        ''')
+        
+        payments = cursor.fetchall()
+        
+        if not payments:
+            await update.message.reply_text("✅ Нет необработанных платежей")
+            return
+        
+        message = "🔄 *Необработанные платежи:*\n\n"
+        
+        for i, (record_id, payment_id, amount, email, phone, payment_data_json, payment_date) in enumerate(payments, 1):
+            message += f"{i}. *ID:* {payment_id}\n"
+            message += f"   💰 {amount}₽ | 📧 {email or 'нет'} | 📞 {phone or 'нет'}\n"
+            message += f"   📅 {payment_date.strftime('%d.%m.%Y %H:%M')}\n"
+            
+            # Кнопки для быстрой обработки
+            keyboard = []
+            
+            if email:
+                keyboard.append([
+                    InlineKeyboardButton(f"🔍 Найти по email", 
+                                        callback_data=f"find_by_email_{record_id}")
+                ])
+            
+            if phone:
+                keyboard.append([
+                    InlineKeyboardButton(f"📞 Найти по телефону", 
+                                        callback_data=f"find_by_phone_{record_id}")
+                ])
+            
+            keyboard.append([
+                InlineKeyboardButton("✅ Обработать вручную", 
+                                    callback_data=f"process_manually_{record_id}"),
+                InlineKeyboardButton("❌ Игнорировать", 
+                                    callback_data=f"ignore_payment_{record_id}")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+            message = ""  # Сбрасываем для следующего платежа
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Error processing unknown payments: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_find_by_email(query, context: ContextTypes.DEFAULT_TYPE):
+    """Ищет пользователя по email для обработки платежа"""
+    await query.answer()
+    record_id = query.data.replace("find_by_email_", "")
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию о платеже
+        cursor.execute('''
+            SELECT customer_email FROM unknown_payments WHERE id = %s
+        ''', (record_id,))
+        
+        result = cursor.fetchone()
+        if not result or not result[0]:
+            await query.message.reply_text("❌ Email не найден в записи")
+            return
+        
+        email = result[0]
+        
+        # Ищем пользователя по email
+        cursor.execute('''
+            SELECT user_id, username, first_name, last_name 
+            FROM users 
+            WHERE email = %s OR username LIKE %s
+            LIMIT 5
+        ''', (email, f"%{email}%"))
+        
+        users = cursor.fetchall()
+        
+        if users:
+            message = f"🔍 *Найдены пользователи по email {email}:*\n\n"
+            for i, (user_id, username, first_name, last_name) in enumerate(users, 1):
+                username_display = f"@{username}" if username else f"{first_name} {last_name}".strip()
+                message += f"{i}. {username_display} (ID: {user_id})\n"
+            
+            keyboard = [
+                [InlineKeyboardButton(f"✅ Активировать подписку для {users[0][0]}", 
+                                     callback_data=f"activate_for_{users[0][0]}_{record_id}")]
+            ]
+            
+            if len(users) > 1:
+                for i, (user_id, _, _, _) in enumerate(users[1:], 2):
+                    keyboard.append([
+                        InlineKeyboardButton(f"Выбрать {i}: ID {user_id}", 
+                                           callback_data=f"select_user_{user_id}_{record_id}")
+                    ])
+            
+            keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_process_{record_id}")])
+            
+            await query.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await query.message.reply_text(
+                f"❌ Пользователи с email {email} не найдены",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔍 Поиск вручную", callback_data=f"manual_search_{record_id}")]
+                ])
+            )
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Error finding by email: {e}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_find_by_phone(query, context: ContextTypes.DEFAULT_TYPE):
+    """Ищет пользователя по телефону для обработки платежа"""
+    await query.answer()
+    record_id = query.data.replace("find_by_phone_", "")
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию о платеже
+        cursor.execute('''
+            SELECT customer_phone FROM unknown_payments WHERE id = %s
+        ''', (record_id,))
+        
+        result = cursor.fetchone()
+        if not result or not result[0]:
+            await query.message.reply_text("❌ Телефон не найден в записи")
+            return
+        
+        phone = result[0]
+        
+        # Очищаем номер от лишних символов
+        clean_phone = ''.join(filter(str.isdigit, phone))
+        
+        # Ищем пользователя по телефону
+        cursor.execute('''
+            SELECT user_id, username, first_name, last_name, phone
+            FROM users 
+            WHERE phone LIKE %s OR phone LIKE %s
+            LIMIT 5
+        ''', (f"%{clean_phone}%", f"%{phone}%"))
+        
+        users = cursor.fetchall()
+        
+        if users:
+            message = f"🔍 *Найдены пользователи по телефону {phone}:*\n\n"
+            for i, (user_id, username, first_name, last_name, user_phone) in enumerate(users, 1):
+                username_display = f"@{username}" if username else f"{first_name} {last_name}".strip()
+                message += f"{i}. {username_display} (ID: {user_id}, тел: {user_phone})\n"
+            
+            keyboard = [
+                [InlineKeyboardButton(f"✅ Активировать подписку для {users[0][0]}", 
+                                     callback_data=f"activate_for_{users[0][0]}_{record_id}")]
+            ]
+            
+            if len(users) > 1:
+                for i, (user_id, _, _, _, _) in enumerate(users[1:], 2):
+                    keyboard.append([
+                        InlineKeyboardButton(f"Выбрать {i}: ID {user_id}", 
+                                           callback_data=f"select_user_{user_id}_{record_id}")
+                    ])
+            
+            keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_process_{record_id}")])
+            
+            await query.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await query.message.reply_text(
+                f"❌ Пользователи с телефоном {phone} не найдены",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔍 Поиск вручную", callback_data=f"manual_search_{record_id}")]
+                ])
+            )
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Error finding by phone: {e}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_process_manually(query, context: ContextTypes.DEFAULT_TYPE):
+    """Начинает ручную обработку платежа"""
+    await query.answer()
+    record_id = query.data.replace("process_manually_", "")
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию о платеже
+        cursor.execute('''
+            SELECT payment_id, amount, customer_email, customer_phone, payment_date
+            FROM unknown_payments WHERE id = %s
+        ''', (record_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            await query.message.reply_text("❌ Запись не найдена")
+            return
+        
+        payment_id, amount, email, phone, payment_date = result
+        
+        message = f"""
+📋 *Ручная обработка платежа*
+
+🆔 ID платежа: `{payment_id}`
+💰 Сумма: {amount}₽
+📧 Email: {email or 'не указан'}
+📞 Телефон: {phone or 'не указан'}
+📅 Дата: {payment_date.strftime('%d.%m.%Y %H:%M')}
+
+Введите ID пользователя для активации подписки:
+(или нажмите кнопки для поиска)
+"""
+        
+        keyboard = []
+        if email:
+            keyboard.append([InlineKeyboardButton(f"🔍 Поиск по email", callback_data=f"find_by_email_{record_id}")])
+        if phone:
+            keyboard.append([InlineKeyboardButton(f"📞 Поиск по телефону", callback_data=f"find_by_phone_{record_id}")])
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_process_{record_id}")])
+        
+        # Сохраняем состояние ручной обработки
+        context.user_data['manual_payment_processing'] = {
+            'record_id': record_id,
+            'payment_id': payment_id,
+            'amount': amount
+        }
+        
+        await query.message.reply_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Error starting manual processing: {e}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_ignore_payment(query, context: ContextTypes.DEFAULT_TYPE):
+    """Помечает платеж как игнорируемый"""
+    await query.answer()
+    record_id = query.data.replace("ignore_payment_", "")
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE unknown_payments 
+            SET processed = TRUE, status = 'ignored'
+            WHERE id = %s
+        ''', (record_id,))
+        
+        conn.commit()
+        
+        await query.message.reply_text(
+            f"✅ Платеж {record_id} помечен как игнорируемый",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Показать другие платежи", callback_data="show_unknown_payments")]
+            ])
+        )
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Error ignoring payment: {e}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_manual_user_id_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает ручной ввод ID пользователя"""
+    if 'manual_payment_processing' not in context.user_data:
+        return
+    
+    try:
+        user_input = update.message.text.strip()
+        
+        if not user_input.isdigit():
+            await update.message.reply_text("❌ Введите числовой ID пользователя")
+            return
+        
+        user_id = int(user_input)
+        processing_data = context.user_data['manual_payment_processing']
+        record_id = processing_data['record_id']
+        amount = float(processing_data['amount'])
+        
+        # Проверяем существование пользователя
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT user_id FROM users WHERE user_id = %s', (user_id,))
+        
+        if not cursor.fetchone():
+            await update.message.reply_text(f"❌ Пользователь с ID {user_id} не найден")
+            return
+        
+        # Определяем тип подписки по сумме
+        subscription_type = determine_subscription_type_from_amount(amount)
+        
+        if not subscription_type:
+            await update.message.reply_text(
+                f"❌ Не могу определить тип подписки для суммы {amount}₽\n"
+                f"Используйте: /subscribe_user {user_id} month"
+            )
+            return
+        
+        # Активируем подписку
+        success, message = db.create_manual_subscription(user_id, subscription_type, 30)
+        
+        if success:
+            # Помечаем платеж как обработанный
+            cursor.execute('''
+                UPDATE unknown_payments 
+                SET processed = TRUE, status = 'manual_processed', processed_by = %s
+                WHERE id = %s
+            ''', (update.effective_user.id, record_id))
+            
+            conn.commit()
+            conn.close()
+            
+            # Очищаем состояние
+            del context.user_data['manual_payment_processing']
+            
+            await update.message.reply_text(
+                f"✅ Подписка успешно активирована для пользователя {user_id}\n\n"
+                f"💎 Тип: {subscription_type}\n"
+                f"💰 Сумма: {amount}₽\n"
+                f"🆔 Запись: {record_id}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📋 Другие платежи", callback_data="show_unknown_payments")]
+                ])
+            )
+        else:
+            await update.message.reply_text(f"❌ Ошибка: {message}")
+            
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат ID")
+    except Exception as e:
+        logger.error(f"❌ Error processing manual input: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_activate_for_user(query, context: ContextTypes.DEFAULT_TYPE):
+    """Активирует подписку для выбранного пользователя"""
+    await query.answer()
+    data_parts = query.data.replace("activate_for_", "").split("_")
+    
+    if len(data_parts) < 2:
+        await query.message.reply_text("❌ Неверный формат данных")
+        return
+    
+    user_id = int(data_parts[0])
+    record_id = data_parts[1]
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию о платеже
+        cursor.execute('''
+            SELECT amount FROM unknown_payments WHERE id = %s
+        ''', (record_id,))
+        
+        result = cursor.fetchone()
+        if not result:
+            await query.message.reply_text("❌ Запись о платеже не найдена")
+            return
+        
+        amount = float(result[0])
+        
+        # Определяем тип подписки
+        subscription_type = determine_subscription_type_from_amount(amount)
+        
+        if not subscription_type:
+            await query.message.reply_text(
+                f"❌ Не могу определить тип подписки для суммы {amount}₽\n"
+                f"Используйте: /subscribe_user {user_id} month"
+            )
+            return
+        
+        # Активируем подписку
+        success, message = db.create_manual_subscription(user_id, subscription_type, 30)
+        
+        if success:
+            # Помечаем платеж как обработанный
+            cursor.execute('''
+                UPDATE unknown_payments 
+                SET processed = TRUE, status = 'auto_processed', processed_by = %s
+                WHERE id = %s
+            ''', (query.from_user.id, record_id))
+            
+            conn.commit()
+            
+            await query.message.reply_text(
+                f"✅ Подписка успешно активирована!\n\n"
+                f"👤 Пользователь: {user_id}\n"
+                f"💎 Тип: {subscription_type}\n"
+                f"💰 Сумма: {amount}₽\n\n"
+                f"Подписка действует 30 дней с момента активации.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📋 Другие платежи", callback_data="show_unknown_payments")]
+                ])
+            )
+        else:
+            await query.message.reply_text(f"❌ Ошибка: {message}")
+            
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Error activating subscription: {e}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_cancel_process(query, context: ContextTypes.DEFAULT_TYPE):
+    """Отменяет текущий процесс обработки"""
+    await query.answer()
+    record_id = query.data.replace("cancel_process_", "")
+    
+    if 'manual_payment_processing' in context.user_data:
+        del context.user_data['manual_payment_processing']
+    
+    await query.message.reply_text(
+        "❌ Обработка отменена",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Вернуться к списку", callback_data="show_unknown_payments")]
+        ])
+    )
+
+async def show_unknown_payments(query, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает необработанные платежи (через callback)"""
+    await query.answer()
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Создаем таблицу если её нет
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS unknown_payments (
+                id SERIAL PRIMARY KEY,
+                payment_id TEXT NOT NULL,
+                amount DECIMAL,
+                customer_email TEXT,
+                customer_phone TEXT,
+                payment_data JSONB,
+                payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'pending',
+                processed BOOLEAN DEFAULT FALSE,
+                processed_by BIGINT,
+                processed_at TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            SELECT id, payment_id, amount, customer_email, customer_phone, payment_date
+            FROM unknown_payments 
+            WHERE processed = FALSE
+            ORDER BY payment_date DESC
+            LIMIT 10
+        ''')
+        
+        payments = cursor.fetchall()
+        conn.close()
+        
+        if not payments:
+            await query.message.reply_text("✅ Нет необработанных платежей")
+            return
+        
+        message = "🔄 *Необработанные платежи:*\n\n"
+        
+        for i, (record_id, payment_id, amount, email, phone, payment_date) in enumerate(payments, 1):
+            message += f"{i}. *ID:* `{payment_id}`\n"
+            message += f"   💰 {amount}₽ | 📧 {email or 'нет'} | 📞 {phone or 'нет'}\n"
+            message += f"   📅 {payment_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            
+            # Кнопки для каждой записи
+            keyboard = []
+            
+            if email:
+                keyboard.append([
+                    InlineKeyboardButton(f"🔍 Поиск по email", 
+                                        callback_data=f"find_by_email_{record_id}")
+                ])
+            
+            if phone:
+                keyboard.append([
+                    InlineKeyboardButton(f"📞 Поиск по телефону", 
+                                        callback_data=f"find_by_phone_{record_id}")
+                ])
+            
+            keyboard.append([
+                InlineKeyboardButton("✅ Обработать вручную", 
+                                    callback_data=f"process_manually_{record_id}"),
+                InlineKeyboardButton("❌ Игнорировать", 
+                                    callback_data=f"ignore_payment_{record_id}")
+            ])
+            
+            await query.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            message = ""  # Сбрасываем для следующего платежа
+        
+    except Exception as e:
+        logger.error(f"❌ Error showing unknown payments: {e}")
+        await query.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+def determine_subscription_type_from_amount(amount: float):
+    """Определяет тип подписки по сумме платежа"""
+    subscription_types = {
+        99.00: "month",
+        199.00: "3months", 
+        399.00: "6months",
+        799.00: "year"
+    }
+    
+    # Проверяем точное совпадение и округленные значения
+    if amount in subscription_types:
+        return subscription_types[amount]
+    
+    # Проверяем округление (иногда могут быть копейки)
+    for price, sub_type in subscription_types.items():
+        if abs(amount - price) < 0.1:  # Разница менее 10 копеек
+            return sub_type
+    
+    return None
 
