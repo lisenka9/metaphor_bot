@@ -1099,21 +1099,24 @@ def send_paypal_subscription_notification(user_id: int, subscription_type: str, 
         logging.error(f"❌ Error sending PayPal subscription notification: {e}")
 
 def find_recent_subscription_user_by_time(payment_time):
-    """Ищет пользователя по времени платежа (ищет тех, кто нажимал на подписку в последние 10 минут)"""
+    """Ищет пользователя по времени платежа"""
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
         
         # Создаем таблицу для логов действий если её нет
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_action_logs (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT,
-                action TEXT,
-                action_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+        try:
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_action_logs (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    action TEXT,
+                    action_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        except:
+            pass  # Таблица уже существует
         
         # Ищем действия за последние 10 минут до платежа
         time_before_payment = payment_time - timedelta(minutes=10)
@@ -1121,7 +1124,7 @@ def find_recent_subscription_user_by_time(payment_time):
         cursor.execute('''
             SELECT DISTINCT user_id 
             FROM user_action_logs 
-            WHERE action LIKE '%subscribe%' 
+            WHERE action LIKE '%%subscribe%%' 
             AND created_at BETWEEN %s AND %s
             ORDER BY created_at DESC 
             LIMIT 3
@@ -1152,29 +1155,68 @@ def handle_payment_notification(event_data):
         logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
         logger.info(f"🔍 Metadata: {metadata}")
 
-        # ✅ СПОСОБ 1: Поиск по user_id в metadata
-        user_id = metadata.get('user_id')
+        # ✅ СПОСОБ 1: Поиск по user_id в metadata (прямой доступ)
+        user_id = None
         
-        # Если user_id строка, преобразуем в int
+        # Проверяем разные варианты ключей
+        for key in ['user_id', 'userId', 'user', 'userID']:
+            if key in metadata:
+                user_id = metadata[key]
+                logger.info(f"✅ Found user_id in metadata[{key}]: {user_id}")
+                break
+        
+        # Если user_id строка, пытаемся преобразовать
         if user_id and isinstance(user_id, str):
             try:
                 user_id = int(user_id)
-                logger.info(f"✅ Found user_id in metadata: {user_id}")
             except:
                 user_id = None
-
+        
         # ✅ СПОСОБ 2: Поиск по email из платежа
         if not user_id:
-            customer_email = metadata.get('custEmail')
+            # Проверяем разные варианты email в metadata
+            email_keys = ['custEmail', 'customer_email', 'email', 'payer_email', 'customerEmail']
+            customer_email = None
+            
+            for key in email_keys:
+                if key in metadata and metadata[key]:
+                    customer_email = metadata[key]
+                    logger.info(f"🔍 Found email in metadata[{key}]: {customer_email}")
+                    break
+            
             if customer_email:
                 logger.info(f"🔍 Searching by email: {customer_email}")
                 user_id = find_user_by_email(customer_email)
                 if user_id:
                     logger.info(f"✅ Found user {user_id} by email: {customer_email}")
+                    
+                    # ✅ Обновляем email пользователя в базе если его нет
+                    try:
+                        conn = db.get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE users 
+                            SET email = %s 
+                            WHERE user_id = %s AND (email IS NULL OR email = '')
+                        ''', (customer_email, user_id))
+                        conn.commit()
+                        conn.close()
+                        logger.info(f"✅ Updated email for user {user_id}: {customer_email}")
+                    except Exception as e:
+                        logger.error(f"❌ Error updating email: {e}")
 
         # ✅ СПОСОБ 3: Поиск по номеру телефона
         if not user_id:
-            customer_phone = metadata.get('custPhone') or metadata.get('phone')
+            # Проверяем разные варианты телефона
+            phone_keys = ['custPhone', 'customer_phone', 'phone', 'payer_phone', 'customerPhone']
+            customer_phone = None
+            
+            for key in phone_keys:
+                if key in metadata and metadata[key]:
+                    customer_phone = metadata[key]
+                    logger.info(f"🔍 Found phone in metadata[{key}]: {customer_phone}")
+                    break
+            
             if customer_phone:
                 logger.info(f"🔍 Searching by phone: {customer_phone}")
                 user_id = find_user_by_phone(customer_phone)
@@ -1187,13 +1229,29 @@ def handle_payment_notification(event_data):
             payment_time_str = payment_object.get('created_at')
             if payment_time_str:
                 try:
+                    # Преобразуем время из строки в datetime
                     payment_time = datetime.fromisoformat(payment_time_str.replace('Z', '+00:00'))
+                    
                     # Ищем пользователей, которые нажимали на кнопки подписки в последние 10 минут
                     user_id = find_recent_subscription_user_by_time(payment_time)
                     if user_id:
                         logger.info(f"✅ Found user {user_id} by recent action timing")
                 except Exception as e:
-                    logger.error(f"❌ Error parsing payment time: {e}")
+                    logger.error(f"❌ Error parsing payment time {payment_time_str}: {e}")
+
+        # ✅ СПОСОБ 5: Поиск в таблице pending_payments по payment_id
+        if not user_id:
+            try:
+                from yookassa_payment import payment_processor
+                # Проверяем, есть ли этот платеж в ожидающих
+                if hasattr(payment_processor, 'pending_payments'):
+                    for pid, info in payment_processor.pending_payments.items():
+                        if payment_id == info.get('yookassa_payment_id'):
+                            user_id = info.get('user_id')
+                            logger.info(f"✅ Found user {user_id} in pending_payments")
+                            break
+            except Exception as e:
+                logger.error(f"❌ Error checking pending payments: {e}")
 
         # ✅ ОБРАБОТКА ПЛАТЕЖА
         if user_id:
@@ -1213,14 +1271,13 @@ def handle_payment_notification(event_data):
                     try:
                         send_subscription_notification_sync(user_id, subscription_type, amount_value)
                     except Exception as e:
-                        logger.error(f"❌ Error sending notification: {e}")
+                        logger.error(f"❌ Error sending notification to user: {e}")
 
-                    # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРУ (ВАМ)
+                    # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРУ (ВАМ) - СИНХРОННО
                     try:
-                        from telegram import Bot
+                        import requests
                         from config import BOT_TOKEN
                         
-                        bot = Bot(token=BOT_TOKEN)
                         admin_message = f"""
 ✅ НОВЫЙ ПЛАТЕЖ УСПЕШНО ОБРАБОТАН
 
@@ -1228,16 +1285,25 @@ def handle_payment_notification(event_data):
 💰 Сумма: {amount_value}₽
 💎 Тип подписки: {subscription_type}
 🆔 Платеж ЮKassa: {payment_id}
+📧 Email: {customer_email or 'не указан'}
 ⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}
 
 Подписка активирована автоматически! 🎉
 """
-                        bot.send_message(
-                            chat_id=891422895,  # Ваш ID
-                            text=admin_message,
-                            parse_mode='Markdown'
-                        )
-                        logger.info(f"✅ Admin notification sent about payment {payment_id}")
+                        
+                        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                        payload = {
+                            "chat_id": 891422895,  # Ваш ID
+                            "text": admin_message,
+                            "parse_mode": "Markdown"
+                        }
+                        
+                        response = requests.post(telegram_url, json=payload, timeout=10)
+                        if response.status_code == 200:
+                            logger.info(f"✅ Admin notification sent about payment {payment_id}")
+                        else:
+                            logger.error(f"❌ Failed to send admin notification: {response.status_code}")
+                            
                     except Exception as e:
                         logger.error(f"❌ Error sending admin notification: {e}")
 
@@ -1253,12 +1319,23 @@ def handle_payment_notification(event_data):
             # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ И ЛОГИРУЕМ
             logger.warning(f"⚠️ Cannot identify user for payment {payment_id}")
             logger.warning(f"⚠️ Payment metadata: {metadata}")
+            
+            customer_email = None
+            for key in ['custEmail', 'customer_email', 'email', 'payer_email']:
+                if key in metadata:
+                    customer_email = metadata[key]
+                    break
+            
+            customer_phone = None
+            for key in ['custPhone', 'customer_phone', 'phone', 'payer_phone']:
+                if key in metadata:
+                    customer_phone = metadata[key]
+                    break
+            
             save_unknown_payment_for_review(payment_object)
             
             # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРУ О НЕИДЕНТИФИЦИРОВАННОМ ПЛАТЕЖЕ
-            notify_admin_about_unknown_payment_sync(payment_id, amount_value, 
-                                                   metadata.get('custEmail'), 
-                                                   metadata.get('custPhone'))
+            notify_admin_about_unknown_payment_sync(payment_id, amount_value, customer_email, customer_phone)
             
             return jsonify({"status": "success"}), 200
 
@@ -1297,11 +1374,9 @@ def save_successful_payment_to_db(user_id: int, subscription_type: str, yookassa
 def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email: str, phone: str):
     """Уведомляет администратора о неидентифицированном платеже - СИНХРОННАЯ ВЕРСИЯ"""
     try:
-        from telegram import Bot
+        import requests
         from config import BOT_TOKEN
-
-        bot = Bot(token=BOT_TOKEN)
-
+        
         message_text = f"""
 ⚠️ *НЕИДЕНТИФИЦИРОВАННЫЙ ПЛАТЕЖ ЮKASSA*
 
@@ -1317,22 +1392,29 @@ def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email:
 1. Проверить таблицу `unknown_payments`
 2. Найти пользователя по email/телефону
 3. Активировать подписку вручную командой `/subscribe_user`
+4. Или использовать `/unknown_payments`
+
+*Пользователь не идентифицирован, требуется ручная обработка!*
 """
-
-        # Отправляем вам (администратору)
-        try:
-            bot.send_message(
-                chat_id=891422895,  # Ваш ID
-                text=message_text,
-                parse_mode='Markdown'
-            )
+        
+        # Используем requests для синхронной отправки
+        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        
+        payload = {
+            "chat_id": 891422895,  # Ваш ID
+            "text": message_text,
+            "parse_mode": "Markdown"
+        }
+        
+        response = requests.post(telegram_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
             logger.info(f"✅ Unknown payment notification sent to admin")
-        except Exception as e:
-            logger.error(f"❌ Error notifying admin: {e}")
-
+        else:
+            logger.error(f"❌ Failed to send notification: {response.status_code} - {response.text}")
+        
     except Exception as e:
         logger.error(f"❌ Error notifying admin: {e}")
-
 def send_subscription_notification_sync(user_id: int, subscription_type: str, amount: str):
     """Отправляет уведомление об успешной активации подписки (синхронно)"""
     try:
@@ -1548,11 +1630,16 @@ def find_user_by_email(email: str):
         result = cursor.fetchone()
 
         if not result:
+            # Ищем похожие email
+            cursor.execute('SELECT user_id FROM users WHERE email LIKE %s LIMIT 1', (f"%{email}%",))
+            result = cursor.fetchone()
+
+        if not result:
             # Ищем в таблице платежей по историческим данным
             cursor.execute('''
                 SELECT user_id FROM payments 
                 WHERE customer_email = %s 
-                ORDER BY payment_date DESC 
+                ORDER BY created_at DESC 
                 LIMIT 1
             ''', (email,))
             result = cursor.fetchone()
@@ -1560,11 +1647,15 @@ def find_user_by_email(email: str):
         conn.close()
 
         if result:
-            return result[0]
+            user_id = result[0]
+            logger.info(f"✅ Found user {user_id} by email {email}")
+            return user_id
+        
+        logger.info(f"❌ User not found by email {email}")
         return None
 
     except Exception as e:
-        logger.error(f"❌ Error finding user by email: {e}")
+        logger.error(f"❌ Error finding user by email {email}: {e}")
         return None
 
 def find_user_by_phone(phone: str):

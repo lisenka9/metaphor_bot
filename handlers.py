@@ -330,7 +330,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data.startswith("cancel_process_"):
         await handle_cancel_process(query, context)
-        
+
     elif query.data == "show_unknown_payments":
         await show_unknown_payments(query, context)
 
@@ -2096,7 +2096,7 @@ async def reset_message_limit(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Ошибка при сбросе лимита посланий")
 
 async def handle_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает выбор типа подписки (оригинальный рабочий код)"""
+    """Обрабатывает выбор типа подписки"""
     query = update.callback_query
     await query.answer()
     
@@ -2105,6 +2105,33 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
         user_id = query.from_user.id
         
         logging.info(f"🔄 Subscription selected: {subscription_type} by user {user_id}")
+        
+        # ✅ ЛОГИРУЕМ ДЕЙСТВИЕ ПОЛЬЗОВАТЕЛЯ В БАЗУ ДАННЫХ
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Создаем таблицу если её нет
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_action_logs (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    action TEXT,
+                    action_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                INSERT INTO user_action_logs (user_id, action, action_data)
+                VALUES (%s, %s, %s)
+            ''', (user_id, 'subscription_selected', subscription_type))
+            
+            conn.commit()
+            conn.close()
+            logging.info(f"✅ User action logged for {user_id}")
+        except Exception as log_error:
+            logging.error(f"❌ Error logging user action: {log_error}")
         
         if subscription_type not in SUBSCRIPTION_PRICES:
             await query.message.reply_text(
