@@ -9,8 +9,39 @@ class DatabaseManager:
         self.database_url = os.environ.get('DATABASE_URL')
     
     def get_connection(self):
-        """Создает соединение с PostgreSQL"""
-        return psycopg2.connect(self.database_url, sslmode='require')
+        """Создает соединение с PostgreSQL с повторными попытками"""
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        import time
+        
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                # Добавляем параметры для лучшей устойчивости SSL
+                conn = psycopg2.connect(
+                    self.database_url,
+                    sslmode='require',
+                    connect_timeout=10,
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=5
+                )
+                return conn
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if attempt < max_retries - 1:
+                    logging.warning(f"⚠️ Database connection attempt {attempt + 1} failed: {e}")
+                    logging.info(f"🔄 Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Экспоненциальная задержка
+                else:
+                    logging.error(f"❌ Failed to connect to database after {max_retries} attempts: {e}")
+                    raise
+            except Exception as e:
+                logging.error(f"❌ Unexpected database connection error: {e}")
+                raise
     
     def init_database(self):
         """Инициализация таблиц в базе данных"""
@@ -1889,6 +1920,26 @@ class DatabaseManager:
             return False
         finally:
             conn.close()
+
+    def safe_db_operation(self, operation_func, *args, **kwargs):
+        """Безопасно выполняет операцию с базой данных с повторными попытками"""
+        import time
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return operation_func(*args, **kwargs)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if "SSL" in str(e) or "connection" in str(e).lower():
+                    if attempt < max_retries - 1:
+                        logging.warning(f"⚠️ Database SSL error on attempt {attempt + 1}: {e}")
+                        time.sleep(1)
+                        continue
+                raise
+            except Exception as e:
+                raise
+        
+        raise Exception("Database operation failed after retries")
 
 # Глобальный экземпляр для использования в других файлах
 db = DatabaseManager()
