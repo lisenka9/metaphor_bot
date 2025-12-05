@@ -88,11 +88,11 @@ def payment_callback():
         # Получаем JSON данные
         event_json = request.get_json()
         logger.info(f"📨 Received YooKassa webhook: {event_json}")
-        
+
         if not event_json:
             logger.error("❌ Empty webhook data received")
             return jsonify({"status": "error", "message": "No data received"}), 400
-        
+
         # Проверяем тип события
         event_type = event_json.get('type')
         if event_type == 'notification':
@@ -105,7 +105,7 @@ def payment_callback():
         else:
             logger.warning(f"⚠️ Unknown event type: {event_type}")
             return jsonify({"status": "success"}), 200
-            
+
     except Exception as e:
         logger.error(f"❌ Error in payment callback: {e}")
         return jsonify({"status": "error"}), 500
@@ -1106,91 +1106,92 @@ def handle_payment_notification(event_data):
         payment_id = payment_object.get('id')
         metadata = payment_object.get('metadata', {})
         amount_value = payment_object.get('amount', {}).get('value')
-        
+
         logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
-        logger.info(f"📋 Metadata: {metadata}")
-        
-        # ✅ ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
-        user_id = None
-        
-        # Способ 1: По user_id в metadata (если есть)
-        if 'user_id' in metadata:
-            user_id = int(metadata['user_id'])
-            logger.info(f"✅ Found user {user_id} by metadata.user_id")
-        
-        # Способ 2: По email из metadata
-        elif 'custEmail' in metadata:
-            email = metadata['custEmail']
-            user_id = find_user_by_email(email)
-            if user_id:
-                logger.info(f"✅ Found user {user_id} by email: {email}")
-                # ✅ ОБНОВЛЯЕМ EMAIL ПОЛЬЗОВАТЕЛЯ В БАЗЕ
-                db.update_user_email(user_id, email)
-        
-        # Способ 3: По customerNumber (тоже может быть email)
-        elif 'customerNumber' in metadata:
-            customer_number = metadata['customerNumber']
-            if '@' in customer_number:  # Проверяем, если это email
-                user_id = find_user_by_email(customer_number)
-                if user_id:
-                    logger.info(f"✅ Found user {user_id} by customerNumber: {customer_number}")
-                    # ✅ ОБНОВЛЯЕМ EMAIL ПОЛЬЗОВАТЕЛЯ В БАЗЕ
-                    db.update_user_email(user_id, customer_number)
-        
+
+        user_id = metadata.get('user_id')
+
+        # ✅ ЕСЛИ user_id НЕТ, ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
         if not user_id:
-            logger.error(f"❌ Could not identify user for payment {payment_id}")
-            # Сохраняем платеж для ручной обработки
-            save_unknown_payment_for_review(payment_object)
-            return jsonify({"status": "success"}), 200
-        
-        user_id = int(user_id)
-        
-        if payment_status == 'succeeded':
-            # ✅ ОПРЕДЕЛЯЕМ ТИП ПРОДУКТА ПО СУММЕ
-            if amount_value == "999.00":  # Колода
-                logger.info(f"✅ Deck purchase succeeded for user {user_id}")
-                
-                # Записываем покупку в базу
-                success = db.record_deck_purchase(user_id, payment_id)
-                
-                if success:
-                    logger.info(f"🎉 Deck purchase recorded for user {user_id}")
-                    
-                    # ✅ Используем СИНХРОННУЮ функцию для отправки уведомления
-                    send_deck_purchase_notification_sync(user_id)
-                    
-            else:  # Подписка
-                # ✅ ОПРЕДЕЛЯЕМ ТИП ПОДПИСКИ ПО СУММЕ
-                subscription_type = determine_subscription_type(amount_value)
-                if not subscription_type:
-                    logger.error(f"❌ Unknown subscription amount: {amount_value}")
-                    return jsonify({"status": "error"}), 400
-                
+            user_id = find_user_by_payment_data(payment_object)
+
+        if user_id:
+            subscription_type = determine_subscription_type(amount_value)
+
+            if payment_status == 'succeeded':
+                user_id = int(user_id)
                 logger.info(f"✅ Payment succeeded for user {user_id}, type: {subscription_type}")
-                
-                # ✅ АКТИВИРУЕМ ПОДПИСКУ
-                success = db.create_subscription(
-                    user_id, 
-                    subscription_type, 
-                    SUBSCRIPTION_DURATIONS[subscription_type]
-                )
-                
+
+                success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
+
                 if success:
                     logger.info(f"🎉 Subscription activated for user {user_id}")
-                    
-                    # ✅ СОХРАНЯЕМ ПЛАТЕЖ В БАЗУ
-                    save_payment_to_db_sync(user_id, subscription_type, payment_id, amount_value)
-                    
-                    # ✅ Используем СИНХРОННУЮ функцию для отправки уведомления
-                    send_subscription_notification_sync(user_id, subscription_type, amount_value)
-                    
-        elif payment_status in ['canceled', 'failed']:
-            logger.info(f"❌ Payment failed for user {user_id}")
+
+                    import asyncio
+                    asyncio.create_task(send_payment_success_notification(user_id, subscription_type, amount_value))
+
+                return jsonify({"status": "success"}), 200
+
+            elif payment_status in ['canceled', 'failed']:
+                logger.info(f"❌ Payment failed for user {user_id}")
+                return jsonify({"status": "success"}), 200
+            else:
+                logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
+                return jsonify({"status": "success"}), 200
         else:
-            logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
-            
-        return jsonify({"status": "success"}), 200
-            
+            # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ И ЛОГИРУЕМ
+            logger.warning(f"⚠️ Cannot identify user for payment {payment_id}")
+            save_unknown_payment_for_review(payment_object)
+            return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error handling payment notification: {e}")
+        return jsonify({"status": "error"}), 500def handle_payment_notification(event_data):
+    """Обрабатывает уведомление о платеже"""
+    try:
+        payment_object = event_data.get('object', {})
+        payment_status = payment_object.get('status')
+        payment_id = payment_object.get('id')
+        metadata = payment_object.get('metadata', {})
+        amount_value = payment_object.get('amount', {}).get('value')
+
+        logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
+
+        user_id = metadata.get('user_id')
+
+        # ✅ ЕСЛИ user_id НЕТ, ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
+        if not user_id:
+            user_id = find_user_by_payment_data(payment_object)
+
+        if user_id:
+            subscription_type = determine_subscription_type(amount_value)
+
+            if payment_status == 'succeeded':
+                user_id = int(user_id)
+                logger.info(f"✅ Payment succeeded for user {user_id}, type: {subscription_type}")
+
+                success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
+
+                if success:
+                    logger.info(f"🎉 Subscription activated for user {user_id}")
+
+                    import asyncio
+                    asyncio.create_task(send_payment_success_notification(user_id, subscription_type, amount_value))
+
+                return jsonify({"status": "success"}), 200
+
+            elif payment_status in ['canceled', 'failed']:
+                logger.info(f"❌ Payment failed for user {user_id}")
+                return jsonify({"status": "success"}), 200
+            else:
+                logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
+                return jsonify({"status": "success"}), 200
+        else:
+            # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ И ЛОГИРУЕМ
+            logger.warning(f"⚠️ Cannot identify user for payment {payment_id}")
+            save_unknown_payment_for_review(payment_object)
+            return jsonify({"status": "success"}), 200
+
     except Exception as e:
         logger.error(f"❌ Error handling payment notification: {e}")
         return jsonify({"status": "error"}), 500
@@ -1313,33 +1314,34 @@ def send_subscription_notification(user_id: int, subscription_type: str, amount:
     except Exception as e:
         logger.error(f"❌ Error sending subscription notification: {e}")
 
-def save_payment_to_db(user_id: int, subscription_type: str, yookassa_id: str, amount: str):
+def save_payment_to_db(user_id, subscription_type, yookassa_payment_id, internal_payment_id):
     """Сохраняет информацию о платеже в базу данных"""
     try:
+        from database import db
         from config import SUBSCRIPTION_PRICES
-        
+
         conn = db.get_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
-            INSERT INTO payments (user_id, amount, subscription_type, status, payment_method, yoomoney_payment_id)
+            INSERT INTO payments (user_id, amount, subscription_type, status, yoomoney_payment_id, payment_id)
             VALUES (%s, %s, %s, %s, %s, %s)
         ''', (
             user_id,
-            float(amount),
+            SUBSCRIPTION_PRICES[subscription_type],
             subscription_type,
             'success',
-            'yookassa',
-            yookassa_id
+            yookassa_payment_id,
+            internal_payment_id
         ))
-        
+
         conn.commit()
         conn.close()
         logger.info(f"✅ Payment saved to database for user {user_id}")
-        
+
     except Exception as e:
         logger.error(f"❌ Error saving payment to DB: {e}")
-
+        
 def find_user_by_payment_id(yookassa_payment_id: str):
     """Ищет пользователя по payment_id в базе"""
     try:
@@ -1395,47 +1397,32 @@ def find_user_by_payment_data(payment_object):
     try:
         metadata = payment_object.get('metadata', {})
         amount_value = payment_object.get('amount', {}).get('value')
-        
-        # ✅ СПОСОБ 1: По user_id в metadata
-        user_id = metadata.get('user_id')
-        if user_id:
-            logger.info(f"✅ Found user {user_id} by metadata.user_id")
-            return int(user_id)
-        
-        # ✅ СПОСОБ 2: По email
+
+        # ✅ СПОСОБ 1: По email
         customer_email = metadata.get('custEmail')
         if customer_email:
             user_id = find_user_by_email(customer_email)
             if user_id:
                 logger.info(f"✅ Found user {user_id} by email: {customer_email}")
                 return user_id
-        
-        # ✅ СПОСОБ 3: По номеру телефона
-        customer_phone = metadata.get('custPhone') or metadata.get('customerNumber')
+
+        # ✅ СПОСОБ 2: По номеру телефона (если есть в metadata)
+        customer_phone = metadata.get('phone') or metadata.get('custPhone')
         if customer_phone:
             user_id = find_user_by_phone(customer_phone)
             if user_id:
                 logger.info(f"✅ Found user {user_id} by phone: {customer_phone}")
                 return user_id
-        
-        # ✅ СПОСОБ 4: По pending payments (если платеж создавался через бота)
-        payment_id = payment_object.get('id')
-        if payment_id:
-            from yookassa_payment import payment_processor
-            for pending_id, pending_info in payment_processor.pending_payments.items():
-                if pending_info.get('yookassa_payment_id') == payment_id:
-                    user_id = pending_info.get('user_id')
-                    logger.info(f"✅ Found user {user_id} in pending payments")
-                    return user_id
-        
-        # ✅ СПОСОБ 5: По последним действиям пользователя
+
+        # ✅ СПОСОБ 3: По последним активным пользователям (если сумма совпадает)
+        # Ищем пользователей, которые недавно нажимали на кнопки подписки
         user_id = find_recent_subscription_user(amount_value)
         if user_id:
             logger.info(f"✅ Found recent subscription user {user_id} by amount: {amount_value}")
             return user_id
-            
+
         return None
-        
+
     except Exception as e:
         logger.error(f"❌ Error finding user by payment data: {e}")
         return None
@@ -1445,40 +1432,29 @@ def find_user_by_email(email: str):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        
-        # ✅ СПОСОБ 1: Пытаемся найти по email в таблице users
-        try:
-            cursor.execute('SELECT user_id FROM users WHERE email = %s LIMIT 1', (email,))
-            result = cursor.fetchone()
-            if result:
-                conn.close()
-                return result[0]
-        except Exception as e:
-            logging.warning(f"⚠️ Column 'email' might not exist: {e}")
-        
-        # ✅ СПОСОБ 2: Ищем в таблице payments
-        cursor.execute('''
-            SELECT user_id FROM payments 
-            WHERE customer_email = %s 
-            ORDER BY payment_date DESC 
-            LIMIT 1
-        ''', (email,))
+
+        # Ищем в таблице users
+        cursor.execute('SELECT user_id FROM users WHERE email = %s LIMIT 1', (email,))
         result = cursor.fetchone()
-        
-        # ✅ СПОСОБ 3: Ищем по username (если email похож на username)
-        if not result and '@' in email:
-            username = email.split('@')[0]
-            cursor.execute('SELECT user_id FROM users WHERE username = %s LIMIT 1', (username,))
+
+        if not result:
+            # Ищем в таблице платежей по историческим данным
+            cursor.execute('''
+                SELECT user_id FROM payments 
+                WHERE customer_email = %s 
+                ORDER BY payment_date DESC 
+                LIMIT 1
+            ''', (email,))
             result = cursor.fetchone()
-        
+
         conn.close()
-        
+
         if result:
             return result[0]
         return None
-        
+
     except Exception as e:
-        logging.error(f"❌ Error finding user by email: {e}")
+        logger.error(f"❌ Error finding user by email: {e}")
         return None
 
 def find_user_by_phone(phone: str):
@@ -1486,52 +1462,26 @@ def find_user_by_phone(phone: str):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        
+
         # Очищаем номер от лишних символов
         clean_phone = ''.join(filter(str.isdigit, phone))
-        
-        # Проверяем, есть ли колонка phone в таблице users
+
+        # Ищем в пользователях (если есть поле phone)
         cursor.execute('''
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'users' AND column_name = 'phone'
-        ''')
-        has_phone_column = cursor.fetchone() is not None
-        
-        if has_phone_column:
-            # Ищем по полному номеру
-            cursor.execute('SELECT user_id FROM users WHERE phone = %s LIMIT 1', (phone,))
-            result = cursor.fetchone()
-            
-            if result:
-                conn.close()
-                return result[0]
-            
-            # Ищем по чистому номеру (без +)
-            cursor.execute('SELECT user_id FROM users WHERE phone = %s LIMIT 1', (clean_phone,))
-            result = cursor.fetchone()
-            
-            if result:
-                conn.close()
-                return result[0]
-        
-        # Ищем в таблице payments по историческим данным
-        cursor.execute('''
-            SELECT user_id FROM payments 
-            WHERE customer_phone = %s 
-            ORDER BY payment_date DESC 
+            SELECT user_id FROM users 
+            WHERE phone = %s OR phone LIKE %s 
             LIMIT 1
-        ''', (phone,))
+        ''', (phone, f'%{clean_phone}%'))
+
         result = cursor.fetchone()
-        
         conn.close()
-        
+
         if result:
             return result[0]
         return None
-        
+
     except Exception as e:
-        logging.error(f"❌ Error finding user by phone: {e}")
+        logger.error(f"❌ Error finding user by phone: {e}")
         return None
 
 def find_recent_subscription_user(amount: str):
@@ -1539,7 +1489,7 @@ def find_recent_subscription_user(amount: str):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        
+
         # Создаем временную таблицу для хранения действий пользователей
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_actions (
@@ -1550,7 +1500,7 @@ def find_recent_subscription_user(amount: str):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
+
         # Ищем пользователей, которые недавно нажимали на кнопки подписки
         cursor.execute('''
             SELECT user_id FROM user_actions 
@@ -1559,14 +1509,14 @@ def find_recent_subscription_user(amount: str):
             ORDER BY created_at DESC 
             LIMIT 1
         ''')
-        
+
         result = cursor.fetchone()
         conn.close()
-        
+
         if result:
             return result[0]
         return None
-        
+
     except Exception as e:
         logger.error(f"❌ Error finding recent subscription user: {e}")
         return None
@@ -1589,7 +1539,7 @@ def save_unknown_payment_for_review(payment_object):
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS unknown_payments (
                 id SERIAL PRIMARY KEY,
@@ -1603,27 +1553,27 @@ def save_unknown_payment_for_review(payment_object):
                 processed BOOLEAN DEFAULT FALSE
             )
         ''')
-        
+
         payment_id = payment_object.get('id')
         amount = payment_object.get('amount', {}).get('value')
         metadata = payment_object.get('metadata', {})
         customer_email = metadata.get('custEmail')
         customer_phone = metadata.get('phone') or metadata.get('custPhone')
         status = payment_object.get('status')
-        
+
         cursor.execute('''
             INSERT INTO unknown_payments 
             (payment_id, amount, customer_email, customer_phone, payment_data, status)
             VALUES (%s, %s, %s, %s, %s, %s)
         ''', (payment_id, amount, customer_email, customer_phone, json.dumps(payment_object), status))
-        
+
         conn.commit()
         conn.close()
         logger.info(f"✅ Unknown payment saved for review: {payment_id}")
-        
+
         # ✅ УВЕДОМЛЯЕМ АДМИНИСТРАТОРА О НЕИДЕНТИФИЦИРОВАННОМ ПЛАТЕЖЕ
         notify_admin_about_unknown_payment(payment_id, amount, customer_email, customer_phone)
-        
+
     except Exception as e:
         logger.error(f"❌ Error saving unknown payment: {e}")
 
@@ -1632,16 +1582,16 @@ async def send_payment_success_notification(user_id: int, subscription_type: str
     try:
         from telegram import Bot
         from config import BOT_TOKEN
-        
+
         bot = Bot(token=BOT_TOKEN)
-        
+
         subscription_names = {
             "month": "1 месяц",
             "3months": "3 месяца", 
             "6months": "6 месяцев",
             "year": "1 год"
         }
-        
+
         message_text = f"""
 ✅ *Оплата прошла успешно!*
 
@@ -1652,33 +1602,33 @@ async def send_payment_success_notification(user_id: int, subscription_type: str
 ✨ Теперь вам доступны:
 • 5 карт дня вместо 1
 • Ежедневное послание дня  
-• Техники самопомощи
+• Архипелаг ресурсов
 
 Наслаждайтесь полным доступом! 💫
 """
-        
+
         await bot.send_message(
             chat_id=user_id,
             text=message_text,
             parse_mode='Markdown'
         )
         logger.info(f"✅ Success notification sent to user {user_id}")
-        
+
     except Exception as e:
         logger.error(f"❌ Error sending success notification: {e}")
 
 def notify_admin_about_unknown_payment(payment_id: str, amount: str, email: str, phone: str):
-    """Уведомляет администратора о неидентифицированном платеже - СИНХРОННАЯ версия"""
+    """Уведомляет администратора о неидентифицированном платеже - СИНХРОННАЯ ВЕРСИЯ"""
     try:
         from telegram import Bot
         from config import BOT_TOKEN, ADMIN_IDS
-        
+
         if not ADMIN_IDS:
             return
-            
-        # Используем синхронный подход
+
+        # Используем синхронный Bot
         bot = Bot(token=BOT_TOKEN)
-        
+
         message_text = f"""
 ⚠️ *Неидентифицированный платеж*
 
@@ -1689,10 +1639,10 @@ def notify_admin_about_unknown_payment(payment_id: str, amount: str, email: str,
 
 Требуется ручная обработка.
 """
-        
+
         for admin_id in ADMIN_IDS:
             try:
-                # Синхронный вызов
+                # СИНХРОННЫЙ вызов (без await)
                 bot.send_message(
                     chat_id=admin_id,
                     text=message_text,
@@ -1700,7 +1650,7 @@ def notify_admin_about_unknown_payment(payment_id: str, amount: str, email: str,
                 )
             except Exception as e:
                 logger.error(f"❌ Error notifying admin {admin_id}: {e}")
-                
+
     except Exception as e:
         logger.error(f"❌ Error notifying admin: {e}")
 
@@ -1709,20 +1659,20 @@ def activate_subscription_from_webhook(user_id, subscription_type, yookassa_paym
     try:
         from database import db
         from config import SUBSCRIPTION_DURATIONS
-        
+
         # Активируем подписку в базе данных
         success = db.create_subscription(
             user_id, 
             subscription_type, 
             SUBSCRIPTION_DURATIONS[subscription_type]
         )
-        
+
         if success:
             # Сохраняем информацию о платеже
             save_payment_to_db(user_id, subscription_type, yookassa_payment_id, internal_payment_id)
             return True
         return False
-        
+
     except Exception as e:
         logger.error(f"❌ Error activating subscription from webhook: {e}")
         return False
