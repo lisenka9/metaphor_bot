@@ -1343,7 +1343,7 @@ def send_admin_notification_successful(user_id: int, amount: str, currency: str,
         
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
-            "chat_id": 891422895,  # Ваш ID
+            "chat_id": 891422895,  
             "text": admin_message,
             "parse_mode": "Markdown"
         }
@@ -1384,7 +1384,7 @@ def send_admin_notification_failed(user_id: int, amount: str, currency: str, pro
         
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
-            "chat_id": 891422895,  # Ваш ID
+            "chat_id": 891422895,  
             "text": admin_message,
             "parse_mode": "Markdown"
         }
@@ -1701,7 +1701,7 @@ def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email:
         
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
-            "chat_id": 891422895,  # Ваш ID
+            "chat_id": 891422895,  
             "text": message_text,
             "parse_mode": "Markdown"
         }
@@ -2286,7 +2286,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("fix_expired_subscriptions", handlers.fix_expired_subscriptions))
     application.add_handler(CommandHandler("add_missing_columns", handlers.add_missing_columns))
     application.add_handler(CommandHandler("unknown_payments", handlers.process_unknown_payments))
-    application.add_handler(CommandHandler("test_notifications", test_notifications))
+    application.add_handler(CommandHandler("test_notifications", handlers.test_notifications))
 
 
     application.add_handler(CallbackQueryHandler(

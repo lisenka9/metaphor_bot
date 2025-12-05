@@ -5383,7 +5383,7 @@ async def process_unknown_payments(update: Update, context: ContextTypes.DEFAULT
     """Обработка неидентифицированных платежей (только для админа)"""
     user = update.effective_user
     
-    if user.id != 891422895:  # Только вы
+    if user.id != 891422895:  
         await update.message.reply_text("❌ У вас нет прав для этой команды")
         return
     
