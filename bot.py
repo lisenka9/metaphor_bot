@@ -639,19 +639,131 @@ def handle_paypal_deck_payment_completed(resource):
         logger.error(f"❌ Error handling PayPal deck payment completed: {e}")
         return jsonify({"status": "error"}), 500
 
+def update_payment_status_for_deck(user_id: int, status: str):
+    """Обновляет статус платежа за колоду"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE payments 
+            SET status = %s, product_type = 'deck'
+            WHERE user_id = %s 
+            AND payment_method = 'paypal'
+            AND status = 'pending'
+            AND amount = 80.00
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (status, user_id))
+        
+        updated = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if updated > 0:
+            logging.info(f"✅ PayPal deck payment status updated to {status} for user {user_id}")
+        else:
+            logging.warning(f"⚠️ No pending PayPal deck payment found for user {user_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating PayPal deck payment status: {e}")
+
+def send_deck_files_async(user_id: int):
+    """Асинхронно отправляет файлы колоды пользователю"""
+    import threading
+    
+    def send_files():
+        try:
+            # Импортируем здесь чтобы избежать циклических импортов
+            from telegram import Bot
+            from config import BOT_TOKEN
+            
+            bot = Bot(token=BOT_TOKEN)
+            
+            # Отправляем файлы
+            file_ids = {
+                "zip": "BQACAgIAAxkBAAILH2ka8spSoCXJz_jB1wFckPfGYkSXAAKNgQACUSbYSEhUWdaRMfa5NgQ",
+                "rar": "BQACAgIAAxkBAAILIWka8yBQZpQQw23Oj4rIGSF_zNYAA5KBAAJRJthIJUVWWMwVvMg2BA",
+                "pdf": "BQACAgIAAxkBAAILF2ka8jBpiM0_cTutmYhXeGoZs4PJAAJ1gQACUSbYSAUgICe9H14nNgQ"
+            }
+            
+            success_text = """
+✅ *Спасибо за покупку!*
+
+Ваша цифровая колода «Настроение как море» готова к скачиванию.
+
+📦 *Файлы отправляются...*
+"""
+            
+            bot.send_message(chat_id=user_id, text=success_text, parse_mode='Markdown')
+            
+            # ZIP файл
+            bot.send_document(
+                chat_id=user_id,
+                document=file_ids["zip"],
+                filename="Ограничения.zip",
+                caption="📦 Архив с картами (ZIP формат)"
+            )
+            
+            # RAR файл
+            bot.send_document(
+                chat_id=user_id,
+                document=file_ids["rar"],
+                filename="Возможности.rar",
+                caption="📦 Архив с картами (RAR формат)"
+            )
+            
+            # PDF файл
+            bot.send_document(
+                chat_id=user_id,
+                document=file_ids["pdf"],
+                filename="Колода_Настроение_как_море_методическое_пособие.pdf",
+                caption="📚 Методическое пособие с посланиями"
+            )
+            
+            final_text = """
+🎉 *Поздравляем с приобретением колоды!*
+
+Теперь у вас есть полный доступ ко всем картам и методическим материалам.
+
+💫 Приятного использования!
+"""
+            
+            bot.send_message(
+                chat_id=user_id,
+                text=final_text,
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"✅ Deck files sent to user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error sending deck files to user {user_id}: {e}")
+    
+    # Запускаем в отдельном потоке
+    thread = threading.Thread(target=send_files)
+    thread.daemon = True
+    thread.start()
+
 def handle_paypal_payment_completed(resource):
     """Обрабатывает подтвержденный платеж PayPal (captured)"""
     try:
         custom_id = resource.get('custom_id')
         amount = resource.get('amount', {}).get('value')
+        currency = resource.get('amount', {}).get('currency_code', 'ILS')
         
-        logging.info(f"🔧 PayPal payment captured: custom_id={custom_id}, amount={amount}")
+        logging.info(f"🔧 PayPal payment captured: custom_id={custom_id}, amount={amount} {currency}")
         
         # Проверяем, что платеж действительно подтвержден
         status = resource.get('status')
         if status != 'COMPLETED':
             logging.warning(f"⚠️ PayPal payment not completed: status={status}")
             return jsonify({"status": "success"}), 200
+        
+        # Определяем тип продукта
+        product_type = "subscription"
+        if amount == "80.00" and currency == "ILS":
+            product_type = "deck"
         
         # Ищем пользователя
         user_id = None
@@ -667,10 +779,18 @@ def handle_paypal_payment_completed(resource):
         
         if user_id and amount:
             # Определяем тип продукта по сумме
-            if amount == "80.00":  # Колода
+            if amount == "80.00" and currency == "ILS":  # Колода
                 from paypal_payment import paypal_processor
                 if paypal_processor.activate_paypal_deck_purchase(user_id):
                     logging.info(f"✅ PayPal deck purchase activated via webhook for user {user_id}")
+                    
+                    # Отправляем уведомление администратору
+                    send_admin_notification_successful(user_id, amount, currency, "deck", 
+                                                      resource.get('id', 'unknown'), 
+                                                      payer.get('email_address', 'не указан'), "PayPal")
+                    
+                    # Отправляем файлы пользователю (асинхронно)
+                    send_deck_files_async(user_id)
             else:
                 # Это подписка
                 subscription_type = determine_subscription_type_from_paypal(amount)
@@ -689,8 +809,48 @@ def handle_paypal_payment_completed(resource):
                         # Обновляем статус платежа в базе
                         update_paypal_payment_status_in_db(user_id, amount, 'success')
                         
-                        # Отправляем уведомление
-                        send_paypal_success_notification(user_id, subscription_type, amount)
+                        # Отправляем уведомление пользователю
+                        send_paypal_subscription_notification(user_id, subscription_type, amount)
+                        
+                        # Отправляем уведомление администратору
+                        send_admin_notification_successful(user_id, amount, currency, "subscription", 
+                                                          resource.get('id', 'unknown'), 
+                                                          payer.get('email_address', 'не указан'), "PayPal")
+        
+        # ✅ ВСЕГДА отправляем уведомление администратору о PayPal платеже
+        payer_email = resource.get('payer', {}).get('email_address', 'не указан')
+        payment_id = resource.get('id', 'unknown')
+        
+        admin_notification = f"""
+🔄 PAYPAL ПЛАТЕЖ ПОЛУЧЕН
+
+📦 Продукт: {product_type}
+💰 Сумма: {amount} {currency}
+👤 User ID: {user_id or 'не найден'}
+📧 Email: {payer_email}
+🆔 Payment ID: {payment_id}
+⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+
+{'✅ Автоматически обработан' if user_id else '⚠️ Требуется ручная обработка'}
+"""
+        
+        # Отправляем уведомление через requests
+        try:
+            import requests
+            from config import BOT_TOKEN
+            
+            telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": 891422895,
+                "text": admin_notification,
+                "parse_mode": "Markdown"
+            }
+            
+            response = requests.post(telegram_url, json=payload, timeout=10)
+            if response.status_code == 200:
+                logging.info(f"✅ PayPal admin notification sent")
+        except Exception as e:
+            logging.error(f"❌ Error sending PayPal admin notification: {e}")
         
         return jsonify({"status": "success"}), 200
         
@@ -1143,19 +1303,164 @@ def find_recent_subscription_user_by_time(payment_time):
         logger.error(f"❌ Error finding user by time: {e}")
         return None
 
+def send_admin_notification_successful(user_id: int, amount: str, currency: str, product_type: str, 
+                                      payment_id: str, email: str, payment_system: str):
+    """Отправляет уведомление об успешном платеже"""
+    try:
+        import requests
+        from config import BOT_TOKEN
+        
+        # Определяем название продукта
+        product_name = "Подписка" if product_type == "subscription" else "Колода"
+        
+        # Определяем тип подписки по сумме если это подписка
+        subscription_info = ""
+        if product_type == "subscription":
+            sub_type = determine_subscription_type(amount)
+            subscription_names = {
+                "month": "1 месяц",
+                "3months": "3 месяца", 
+                "6months": "6 месяцев",
+                "year": "1 год"
+            }
+            if sub_type in subscription_names:
+                subscription_info = f"\n💎 Тип: {subscription_names[sub_type]}"
+        
+        admin_message = f"""
+✅ УСПЕШНЫЙ ПЛАТЕЖ {payment_system.upper()}
+
+🎉 *{product_name} приобретена!*
+
+👤 Пользователь: {user_id}
+💰 Сумма: {amount} {currency}
+📦 Продукт: {product_name}{subscription_info}
+🆔 ID платежа: `{payment_id}`
+📧 Email: {email or 'не указан'}
+⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+
+Платеж обработан автоматически! 🎊
+"""
+        
+        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": 891422895,  # Ваш ID
+            "text": admin_message,
+            "parse_mode": "Markdown"
+        }
+        
+        response = requests.post(telegram_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            logger.info(f"✅ Admin notification sent for {product_type} payment {payment_id}")
+        else:
+            logger.error(f"❌ Failed to send admin notification: {response.status_code}")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending admin notification: {e}")
+
+def send_admin_notification_failed(user_id: int, amount: str, currency: str, product_type: str, 
+                                  payment_id: str, reason: str):
+    """Отправляет уведомление о неудачном платеже"""
+    try:
+        import requests
+        from config import BOT_TOKEN
+        
+        product_name = "Подписка" if product_type == "subscription" else "Колода"
+        
+        admin_message = f"""
+❌ НЕУДАЧНЫЙ ПЛАТЕЖ
+
+🚨 *{product_name} не активирована!*
+
+👤 Пользователь: {user_id}
+💰 Сумма: {amount} {currency}
+📦 Продукт: {product_name}
+🆔 ID платежа: `{payment_id}`
+📝 Причина: {reason}
+⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+
+Требуется проверка! ⚠️
+"""
+        
+        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": 891422895,  # Ваш ID
+            "text": admin_message,
+            "parse_mode": "Markdown"
+        }
+        
+        response = requests.post(telegram_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            logger.info(f"✅ Admin failure notification sent for payment {payment_id}")
+        else:
+            logger.error(f"❌ Failed to send failure notification: {response.status_code}")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending failure notification: {e}")
+
+def activate_deck_purchase_from_webhook(user_id: int, payment_id: str, amount: str, currency: str) -> bool:
+    """Активирует покупку колоды из вебхука"""
+    try:
+        from database import db
+        
+        # Проверяем, является ли это покупкой колоды
+        is_deck_purchase = False
+        
+        if currency == 'RUB' and float(amount) == 999.00:
+            is_deck_purchase = True
+        elif currency == 'ILS' and float(amount) == 80.00:
+            is_deck_purchase = True
+        
+        if not is_deck_purchase:
+            logger.error(f"❌ Amount {amount} {currency} doesn't match deck price")
+            return False
+        
+        # Активируем покупку колоды
+        success = db.record_deck_purchase(user_id, payment_id)
+        
+        if success:
+            logger.info(f"✅ Deck purchase activated for user {user_id}")
+            
+            # Обновляем статус платежа в базе
+            update_payment_status_in_db(user_id, payment_id, 'success', 'deck')
+            
+            return True
+        else:
+            logger.error(f"❌ Failed to record deck purchase for user {user_id}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Error activating deck purchase: {e}")
+        return False
+
 def handle_payment_notification(event_data):
-    """Обрабатывает уведомление о платеже - УЛУЧШЕННАЯ ВЕРСИЯ"""
+    """Обрабатывает уведомление о платеже"""
     try:
         payment_object = event_data.get('object', {})
         payment_status = payment_object.get('status')
         payment_id = payment_object.get('id')
         metadata = payment_object.get('metadata', {})
         amount_value = payment_object.get('amount', {}).get('value')
+        currency = payment_object.get('amount', {}).get('currency', 'RUB')
 
-        logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
+        logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}, currency={currency}")
         logger.info(f"🔍 Metadata: {metadata}")
 
-        # ✅ СПОСОБ 1: Поиск по user_id в metadata (прямой доступ)
+        # Определяем тип продукта
+        product_type = "subscription"  # по умолчанию
+        if 'product_type' in metadata:
+            product_type = metadata['product_type']
+        elif float(amount_value) == 999.00 and currency == 'RUB':
+            product_type = "deck"  # колода
+        elif float(amount_value) == 80.00 and currency == 'ILS':
+            product_type = "deck"  # колода PayPal
+        elif 'subscription_type' in metadata:
+            product_type = "subscription"
+
+        logger.info(f"📦 Product type detected: {product_type}")
+
+        # ✅ СПОСОБ 1: Поиск по user_id в metadata
         user_id = None
         
         # Проверяем разные варианты ключей
@@ -1248,7 +1553,8 @@ def handle_payment_notification(event_data):
                     for pid, info in payment_processor.pending_payments.items():
                         if payment_id == info.get('yookassa_payment_id'):
                             user_id = info.get('user_id')
-                            logger.info(f"✅ Found user {user_id} in pending_payments")
+                            product_type = info.get('product_type', product_type)
+                            logger.info(f"✅ Found user {user_id} in pending_payments, product: {product_type}")
                             break
             except Exception as e:
                 logger.error(f"❌ Error checking pending payments: {e}")
@@ -1256,61 +1562,53 @@ def handle_payment_notification(event_data):
         # ✅ ОБРАБОТКА ПЛАТЕЖА
         if user_id:
             user_id = int(user_id)
-            subscription_type = determine_subscription_type(amount_value)
             
             if payment_status == 'succeeded':
-                logger.info(f"✅ Payment succeeded for user {user_id}, type: {subscription_type}")
-
-                # Активируем подписку
-                success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
-
-                if success:
-                    logger.info(f"🎉 Subscription activated for user {user_id}")
-
-                    # Отправляем уведомление пользователю
-                    try:
-                        send_subscription_notification_sync(user_id, subscription_type, amount_value)
-                    except Exception as e:
-                        logger.error(f"❌ Error sending notification to user: {e}")
-
-                    # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРУ (ВАМ) - СИНХРОННО
-                    try:
-                        import requests
-                        from config import BOT_TOKEN
+                logger.info(f"✅ Payment succeeded for user {user_id}, product: {product_type}")
+                
+                # Обработка в зависимости от типа продукта
+                if product_type == "deck":
+                    # Обработка покупки колоды
+                    success = activate_deck_purchase_from_webhook(user_id, payment_id, amount_value, currency)
+                    
+                    if success:
+                        logger.info(f"🎉 Deck purchase activated for user {user_id}")
                         
-                        admin_message = f"""
-✅ НОВЫЙ ПЛАТЕЖ УСПЕШНО ОБРАБОТАН
-
-👤 Пользователь: {user_id}
-💰 Сумма: {amount_value}₽
-💎 Тип подписки: {subscription_type}
-🆔 Платеж ЮKassa: {payment_id}
-📧 Email: {customer_email or 'не указан'}
-⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-
-Подписка активирована автоматически! 🎉
-"""
+                        # Уведомление пользователю отправляется отдельно
+                        # Отправляем уведомление администратору
+                        send_admin_notification_successful(user_id, amount_value, currency, product_type, 
+                                                          payment_id, customer_email, "ЮKassa")
+                    else:
+                        logger.error(f"❌ Failed to activate deck purchase for user {user_id}")
+                        send_admin_notification_failed(user_id, amount_value, currency, product_type, 
+                                                      payment_id, "Ошибка активации покупки колоды")
                         
-                        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-                        payload = {
-                            "chat_id": 891422895,  # Ваш ID
-                            "text": admin_message,
-                            "parse_mode": "Markdown"
-                        }
-                        
-                        response = requests.post(telegram_url, json=payload, timeout=10)
-                        if response.status_code == 200:
-                            logger.info(f"✅ Admin notification sent about payment {payment_id}")
-                        else:
-                            logger.error(f"❌ Failed to send admin notification: {response.status_code}")
-                            
-                    except Exception as e:
-                        logger.error(f"❌ Error sending admin notification: {e}")
+                else:
+                    # Обработка подписки
+                    subscription_type = determine_subscription_type(amount_value)
+                    
+                    success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
+
+                    if success:
+                        logger.info(f"🎉 Subscription activated for user {user_id}, type: {subscription_type}")
+
+                        # Отправляем уведомление пользователю
+                        try:
+                            send_subscription_notification_sync(user_id, subscription_type, amount_value)
+                        except Exception as e:
+                            logger.error(f"❌ Error sending notification to user: {e}")
+
+                        # Отправляем уведомление администратору
+                        send_admin_notification_successful(user_id, amount_value, currency, "subscription", 
+                                                          payment_id, customer_email, "ЮKassa")
 
                 return jsonify({"status": "success"}), 200
 
             elif payment_status in ['canceled', 'failed']:
                 logger.info(f"❌ Payment failed for user {user_id}")
+                # Отправляем уведомление об отмене
+                send_admin_notification_failed(user_id, amount_value, currency, product_type, 
+                                              payment_id, f"Платеж {payment_status}")
                 return jsonify({"status": "success"}), 200
             else:
                 logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
@@ -1335,7 +1633,8 @@ def handle_payment_notification(event_data):
             save_unknown_payment_for_review(payment_object)
             
             # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРУ О НЕИДЕНТИФИЦИРОВАННОМ ПЛАТЕЖЕ
-            notify_admin_about_unknown_payment_sync(payment_id, amount_value, customer_email, customer_phone)
+            notify_admin_about_unknown_payment_sync(payment_id, amount_value, customer_email, customer_phone, 
+                                                   product_type, currency)
             
             return jsonify({"status": "success"}), 200
 
@@ -1371,18 +1670,22 @@ def save_successful_payment_to_db(user_id: int, subscription_type: str, yookassa
     except Exception as e:
         logger.error(f"❌ Error saving payment to DB: {e}")
 
-def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email: str, phone: str):
-    """Уведомляет администратора о неидентифицированном платеже - СИНХРОННАЯ ВЕРСИЯ"""
+def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email: str, phone: str, 
+                                           product_type: str = "unknown", currency: str = "RUB"):
+    """Уведомляет администратора о неидентифицированном платеже"""
     try:
         import requests
         from config import BOT_TOKEN
         
+        product_name = "Подписка" if product_type == "subscription" else "Колода" if product_type == "deck" else "Неизвестно"
+        
         message_text = f"""
-⚠️ *НЕИДЕНТИФИЦИРОВАННЫЙ ПЛАТЕЖ ЮKASSA*
+⚠️ *НЕИДЕНТИФИЦИРОВАННЫЙ ПЛАТЕЖ*
 
 🚨 Требуется ручная обработка!
 
-💰 *Сумма:* {amount}₽
+📦 *Продукт:* {product_name}
+💰 *Сумма:* {amount} {currency}
 📧 *Email:* {email or 'Не указан'}
 📞 *Телефон:* {phone or 'Не указан'}
 🆔 *Payment ID:* `{payment_id}`
@@ -1391,15 +1694,12 @@ def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email:
 🔍 *Что делать:*
 1. Проверить таблицу `unknown_payments`
 2. Найти пользователя по email/телефону
-3. Активировать подписку вручную командой `/subscribe_user`
-4. Или использовать `/unknown_payments`
+3. Использовать команду `/unknown_payments`
 
 *Пользователь не идентифицирован, требуется ручная обработка!*
 """
         
-        # Используем requests для синхронной отправки
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        
         payload = {
             "chat_id": 891422895,  # Ваш ID
             "text": message_text,
@@ -1411,10 +1711,11 @@ def notify_admin_about_unknown_payment_sync(payment_id: str, amount: str, email:
         if response.status_code == 200:
             logger.info(f"✅ Unknown payment notification sent to admin")
         else:
-            logger.error(f"❌ Failed to send notification: {response.status_code} - {response.text}")
+            logger.error(f"❌ Failed to send notification: {response.status_code}")
         
     except Exception as e:
         logger.error(f"❌ Error notifying admin: {e}")
+
 def send_subscription_notification_sync(user_id: int, subscription_type: str, amount: str):
     """Отправляет уведомление об успешной активации подписки (синхронно)"""
     try:
@@ -1985,6 +2286,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("fix_expired_subscriptions", handlers.fix_expired_subscriptions))
     application.add_handler(CommandHandler("add_missing_columns", handlers.add_missing_columns))
     application.add_handler(CommandHandler("unknown_payments", handlers.process_unknown_payments))
+    application.add_handler(CommandHandler("test_notifications", test_notifications))
 
 
     application.add_handler(CallbackQueryHandler(

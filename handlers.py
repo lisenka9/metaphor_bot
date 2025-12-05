@@ -5941,3 +5941,39 @@ def determine_subscription_type_from_amount(amount: float):
     
     return None
 
+async def test_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тестирование уведомлений (только для админа)"""
+    if update.effective_user.id != 891422895:
+        return
+    
+    try:
+        import requests
+        from config import BOT_TOKEN
+        
+        test_messages = [
+            ("✅ Тест: Успешная подписка ЮKassa", "subscription", "99.00", "RUB", "ЮKassa"),
+            ("✅ Тест: Успешная колода ЮKassa", "deck", "999.00", "RUB", "ЮKassa"),
+            ("✅ Тест: Успешная подписка PayPal", "subscription", "5.00", "ILS", "PayPal"),
+            ("✅ Тест: Успешная колода PayPal", "deck", "80.00", "ILS", "PayPal"),
+            ("❌ Тест: Неудачный платеж", "subscription", "99.00", "RUB", "failed"),
+            ("⚠️ Тест: Неизвестный платеж", "unknown", "99.00", "RUB", "unknown")
+        ]
+        
+        for message, product, amount, currency, system in test_messages:
+            if system == "failed":
+                send_admin_notification_failed(891422895, amount, currency, product, "test_id", "Тестовая ошибка")
+            elif system == "unknown":
+                notify_admin_about_unknown_payment_sync("test_id", amount, "test@example.com", "+123456789", product, currency)
+            else:
+                send_admin_notification_successful(891422895, amount, currency, product, "test_id", "test@example.com", system)
+            
+            await update.message.reply_text(f"Отправлено: {message}")
+            import time
+            time.sleep(1)
+        
+        await update.message.reply_text("✅ Все тестовые уведомления отправлены!")
+        
+    except Exception as e:
+        logger.error(f"❌ Error testing notifications: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
