@@ -1146,54 +1146,6 @@ def handle_payment_notification(event_data):
 
     except Exception as e:
         logger.error(f"❌ Error handling payment notification: {e}")
-        return jsonify({"status": "error"}), 500def handle_payment_notification(event_data):
-    """Обрабатывает уведомление о платеже"""
-    try:
-        payment_object = event_data.get('object', {})
-        payment_status = payment_object.get('status')
-        payment_id = payment_object.get('id')
-        metadata = payment_object.get('metadata', {})
-        amount_value = payment_object.get('amount', {}).get('value')
-
-        logger.info(f"🔔 Payment notification: status={payment_status}, payment_id={payment_id}, amount={amount_value}")
-
-        user_id = metadata.get('user_id')
-
-        # ✅ ЕСЛИ user_id НЕТ, ИЩЕМ ПОЛЬЗОВАТЕЛЯ ПО РАЗНЫМ СПОСОБАМ
-        if not user_id:
-            user_id = find_user_by_payment_data(payment_object)
-
-        if user_id:
-            subscription_type = determine_subscription_type(amount_value)
-
-            if payment_status == 'succeeded':
-                user_id = int(user_id)
-                logger.info(f"✅ Payment succeeded for user {user_id}, type: {subscription_type}")
-
-                success = activate_subscription_from_webhook(user_id, subscription_type, payment_id, payment_id)
-
-                if success:
-                    logger.info(f"🎉 Subscription activated for user {user_id}")
-
-                    import asyncio
-                    asyncio.create_task(send_payment_success_notification(user_id, subscription_type, amount_value))
-
-                return jsonify({"status": "success"}), 200
-
-            elif payment_status in ['canceled', 'failed']:
-                logger.info(f"❌ Payment failed for user {user_id}")
-                return jsonify({"status": "success"}), 200
-            else:
-                logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
-                return jsonify({"status": "success"}), 200
-        else:
-            # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ И ЛОГИРУЕМ
-            logger.warning(f"⚠️ Cannot identify user for payment {payment_id}")
-            save_unknown_payment_for_review(payment_object)
-            return jsonify({"status": "success"}), 200
-
-    except Exception as e:
-        logger.error(f"❌ Error handling payment notification: {e}")
         return jsonify({"status": "error"}), 500
 
 def save_successful_payment_to_db(user_id: int, subscription_type: str, yookassa_id: str, amount: str, email: str):
