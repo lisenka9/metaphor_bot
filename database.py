@@ -1034,7 +1034,7 @@ class DatabaseManager:
                 logging.info(f"📊 Free user {user_id}: total_messages_count={total_messages_count}")
                 
                 if total_messages_count >= 3:
-                    return False, "Вы использовали все бесплатные послания. Оформите подписку для неограниченного доступа!"
+                    return False, "Вы использовали все бесплатные послания"
                 else:
                     remaining = 3 - total_messages_count
                     return True, f"Можно взять послание ({remaining} из 3 бесплатных осталось)"

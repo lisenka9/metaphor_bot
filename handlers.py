@@ -4771,21 +4771,21 @@ async def manual_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Проверяем аргументы команды
     if not context.args or len(context.args) < 2:
         help_text = """
-📋 *Использование команды:*
-`/subscribe_user <user_id> <тип_подписки> [дней]`
+📋 <b>Использование команды:</b>
+<code>/subscribe_user &lt;user_id&gt; &lt;тип_подписки&gt; [дней]</code>
 
-*Типы подписок:*
-• `month` - 1 месяц (30 дней)
-• `3months` - 3 месяца (90 дней) 
-• `6months` - 6 месяцев (180 дней)
-• `year` - 1 год (365 дней)
+<b>Типы подписок:</b>
+• <code>month</code> - 1 месяц (30 дней)
+• <code>3months</code> - 3 месяца (90 дней) 
+• <code>6months</code> - 6 месяцев (180 дней)
+• <code>year</code> - 1 год (365 дней)
 
-*Примеры:*
-`/subscribe_user 123456789 month` - подписка на 1 месяц
-`/subscribe_user 123456789 year 400` - подписка на 400 дней
-`/subscribe_user 123456789 custom 15` - подписка на 15 дней
+<b>Примеры:</b>
+<code>/subscribe_user 123456789 month</code> - подписка на 1 месяц
+<code>/subscribe_user 123456789 year 400</code> - подписка на 400 дней
+<code>/subscribe_user 123456789 custom 15</code> - подписка на 15 дней
 """
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        await update.message.reply_text(help_text, parse_mode='HTML')
         return
     
     try:
@@ -4830,50 +4830,51 @@ async def manual_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE
             user_display = f"@{user_info['username']}" if user_info['username'] else user_info['first_name'] or f"ID {target_user_id}"
             
             success_text = f"""
-✅ *Подписка успешно активирована!*
+✅ <b>Подписка успешно активирована!</b>
 
-👤 *Пользователь:* {user_display}
-🆔 *ID:* {target_user_id}
-💎 *Тип подписки:* {subscription_name}
-📅 *Длительность:* {duration_days} дней
-📊 *Карт в истории:* {user_info['total_cards']}
-📅 *Регистрация:* {user_info['registered_date'].strftime('%d.%m.%Y') if user_info['registered_date'] else 'Неизвестно'}
+👤 <b>Пользователь:</b> {user_display}
+🆔 <b>ID:</b> {target_user_id}
+💎 <b>Тип подписки:</b> {subscription_name}
+📅 <b>Длительность:</b> {duration_days} дней
+📊 <b>Карт в истории:</b> {user_info['total_cards']}
+📅 <b>Регистрация:</b> {user_info['registered_date'].strftime('%d.%m.%Y') if user_info['registered_date'] else 'Неизвестно'}
 
 {message}
 """
-            await update.message.reply_text(success_text, parse_mode='Markdown')
+            await update.message.reply_text(success_text, parse_mode='HTML')
             
             # Пытаемся отправить уведомление пользователю
             try:
                 from telegram import Bot
                 from config import BOT_TOKEN
+                from datetime import datetime, timedelta
                 
                 bot = Bot(token=BOT_TOKEN)
                 
                 user_notification = f"""
-🎉 *Вам активирована премиум подписка!*
+🎉 <b>Вам активирована премиум подписка!</b>
 
-💎 *Тип подписки:* {subscription_name}
-📅 *Действует до:* {(datetime.now() + timedelta(days=duration_days)).strftime('%d.%m.%Y')}
+💎 <b>Тип подписки:</b> {subscription_name}
+📅 <b>Действует до:</b> {(datetime.now() + timedelta(days=duration_days)).strftime('%d.%m.%Y')}
 
-✨ *Теперь вам доступны:*
+✨ <b>Теперь вам доступны:</b>
 • 5 карт дня вместо 1
 • Ежедневное послание дня  
 • Техники самопомощи
-• Медитация «Дары Моря»
+• Медитация "Дары Моря"
 
 Наслаждайтесь полным доступом! 💫
 """
                 await bot.send_message(
                     chat_id=target_user_id,
                     text=user_notification,
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
                 logging.info(f"✅ Notification sent to user {target_user_id}")
                 
             except Exception as notify_error:
                 logging.error(f"❌ Error sending notification to user {target_user_id}: {notify_error}")
-                await update.message.reply_text(f"⚠️ Подписка активирована, но не удалось отправить уведомление пользователю: {notify_error}")
+                await update.message.reply_text(f"⚠️ Подписка активирована, но не удалось отправить уведомление пользователю")
                 
         else:
             await update.message.reply_text(f"❌ {message}")
