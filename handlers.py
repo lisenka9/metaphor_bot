@@ -4894,14 +4894,17 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if not context.args:
-        await update.message.reply_text("❌ Укажите ID пользователя\nПример: `/user_info 123456789`", parse_mode='Markdown')
+        await update.message.reply_text(
+            "❌ Укажите ID пользователя\nПример: <code>/user_info 123456789</code>", 
+            parse_mode='HTML'
+        )
         return
     
     try:
         target_user_id = int(context.args[0])
-        user_info = db.get_user_info(target_user_id)
+        user_data = db.get_user_info(target_user_id)  # Переименуем переменную чтобы не конфликтовать
         
-        if not user_info:
+        if not user_data:
             await update.message.reply_text(f"❌ Пользователь с ID {target_user_id} не найден")
             return
         
@@ -4909,8 +4912,8 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subscription = db.get_user_subscription(target_user_id)
         
         # Форматируем информацию
-        user_display = f"@{user_info['username']}" if user_info['username'] else user_info['first_name'] or f"ID {target_user_id}"
-        premium_status = "✅ Активна" if user_info['is_premium'] else "❌ Неактивна"
+        user_display = f"@{user_data['username']}" if user_data['username'] else user_data['first_name'] or f"ID {target_user_id}"
+        premium_status = "✅ Активна" if user_data['is_premium'] else "❌ Неактивна"
         
         subscription_info = "❌ Нет активной подписки"
         if subscription:
@@ -4920,20 +4923,28 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 end_date_str = str(end_date)[:10]
             
-            subscription_info = f"✅ {sub_type} (до {end_date_str})"
+            # Исправляем названия типов подписок
+            subscription_names = {
+                'month': '1 месяц',
+                '3months': '3 месяца',
+                '6months': '6 месяцев',
+                'year': '1 год'
+            }
+            sub_type_display = subscription_names.get(sub_type, sub_type)
+            subscription_info = f"✅ {sub_type_display} (до {end_date_str})"
         
         info_text = f"""
-👤 *Информация о пользователе*
+👤 <b>Информация о пользователе</b>
 
-*Имя:* {user_display}
-*ID:* {target_user_id}
-*Премиум статус:* {premium_status}
-*Подписка:* {subscription_info}
-*Карт в истории:* {user_info['total_cards']}
-*Лимит карт:* {user_info.get('daily_cards_limit', 1)}/день
-*Дата регистрации:* {user_info['registered_date'].strftime('%d.%m.%Y') if user_info['registered_date'] else 'Неизвестно'}
+<b>Имя:</b> {user_display}
+<b>ID:</b> {target_user_id}
+<b>Премиум статус:</b> {premium_status}
+<b>Подписка:</b> {subscription_info}
+<b>Карт в истории:</b> {user_data['total_cards']}
+<b>Лимит карт:</b> {user_data.get('daily_cards_limit', 1)}/день
+<b>Дата регистрации:</b> {user_data['registered_date'].strftime('%d.%m.%Y') if user_data['registered_date'] else 'Неизвестно'}
 """
-        await update.message.reply_text(info_text, parse_mode='Markdown')
+        await update.message.reply_text(info_text, parse_mode='HTML')
         
     except ValueError:
         await update.message.reply_text("❌ Неверный формат ID пользователя")
