@@ -5384,7 +5384,7 @@ async def add_missing_columns(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def process_unknown_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка неидентифицированных платежей (только для админа)"""
-    user = update.effective_user
+    user = update.effective_user 
     
     if user.id != 891422895:  
         await update.message.reply_text("❌ У вас нет прав для этой команды")
