@@ -2486,13 +2486,9 @@ def check_expired_subscriptions_periodically():
         except Exception as e:
             logger.error(f"❌ Error in expired subscriptions check: {e}")
 
-def send_reminders():
-    """Отправляет напоминания пользователям, которые давно не брали карты"""
+async def send_reminders():
+    """Отправляет напоминания пользователям, которые давно не брали карты (АСИНХРОННАЯ версия)"""
     try:
-        from telegram import Bot
-        from config import BOT_TOKEN
-        from datetime import datetime, timedelta
-        
         bot = Bot(token=BOT_TOKEN)
         conn = db.get_connection()
         cursor = conn.cursor()
@@ -2542,8 +2538,8 @@ def send_reminders():
 Вернитесь к практике самопознания! 💫
 """
                 
-                # Отправляем сообщение
-                bot.send_message(
+                # АСИНХРОННЫЙ вызов send_message
+                await bot.send_message(
                     chat_id=user_id,
                     text=message,
                     parse_mode='Markdown'
@@ -2559,8 +2555,7 @@ def send_reminders():
                 reminded_count += 1
                 
                 # Небольшая пауза между сообщениями
-                import time
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
                 
             except Exception as e:
                 # Если не удалось отправить (пользователь заблокировал бота и т.д.)
@@ -2570,7 +2565,7 @@ def send_reminders():
         conn.commit()
         conn.close()
         
-        # Отправляем отчет администратору
+        # Отправляем отчет администратору (асинхронно)
         if reminded_count > 0:
             try:
                 report = f"""
@@ -2581,7 +2576,7 @@ def send_reminders():
 
 Пользователи получили напоминания о картах дня 🎴
 """
-                bot.send_message(
+                await bot.send_message(
                     chat_id=891422895,  # Ваш ID
                     text=report,
                     parse_mode='Markdown'
@@ -2596,7 +2591,7 @@ def send_reminders():
 
 def start_simple_reminders():
     """Простой планировщик напоминаний без внешних зависимостей"""
-    from threading import Thread
+    import threading
     import time
     from datetime import datetime
     
@@ -2608,7 +2603,22 @@ def start_simple_reminders():
                 # Проверяем время (10:00 или 18:00)
                 if now.hour in [10, 18] and now.minute == 0:
                     logging.info(f"⏰ Time for reminders: {now.hour}:00")
-                    send_reminders()
+                    
+                    # Запускаем асинхронную функцию в отдельном потоке
+                    import asyncio
+                    
+                    def run_async():
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(send_reminders())
+                            loop.close()
+                        except Exception as e:
+                            logging.error(f"❌ Error in async reminder: {e}")
+                    
+                    # Запускаем в отдельном потоке
+                    thread = threading.Thread(target=run_async, daemon=True)
+                    thread.start()
                     
                     # Ждем час, чтобы не отправлять повторно
                     time.sleep(3600)
@@ -2620,7 +2630,7 @@ def start_simple_reminders():
                 logging.error(f"❌ Error in reminder loop: {e}")
                 time.sleep(300)
     
-    thread = Thread(target=reminder_loop, daemon=True)
+    thread = threading.Thread(target=reminder_loop, daemon=True)
     thread.start()
     logging.info("✅ Simple reminder scheduler started")
     return thread

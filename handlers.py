@@ -6000,19 +6000,16 @@ async def test_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        from bot import send_reminders
-        import threading
+        # Запускаем асинхронную функцию
+        import asyncio
         
-        # Запускаем в отдельном потоке, чтобы не блокировать бота
-        def run_reminders():
-            send_reminders()
+        await update.message.reply_text("🔄 Запускаю тестовую отправку напоминаний...")
         
-        thread = threading.Thread(target=run_reminders, daemon=True)
-        thread.start()
+        # Запускаем напоминания
+        result = await send_reminders()
         
-        await update.message.reply_text("🔄 Запущена отправка тестовых напоминаний...")
+        await update.message.reply_text("✅ Тестовая отправка напоминаний завершена!")
         
     except Exception as e:
         logging.error(f"❌ Error testing reminders: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-
