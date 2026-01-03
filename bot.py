@@ -2287,6 +2287,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("add_missing_columns", handlers.add_missing_columns))
     application.add_handler(CommandHandler("unknown_payments", handlers.process_unknown_payments))
     application.add_handler(CommandHandler("test_notifications", handlers.test_notifications))
+    application.add_handler(CommandHandler("test_reminder", handlers.test_reminder))
 
 
     application.add_handler(CallbackQueryHandler(
@@ -2485,6 +2486,145 @@ def check_expired_subscriptions_periodically():
         except Exception as e:
             logger.error(f"❌ Error in expired subscriptions check: {e}")
 
+def send_reminders():
+    """Отправляет напоминания пользователям, которые давно не брали карты"""
+    try:
+        from telegram import Bot
+        from config import BOT_TOKEN
+        from datetime import datetime, timedelta
+        
+        bot = Bot(token=BOT_TOKEN)
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        week_ago = (datetime.now() - timedelta(days=7)).date()
+        
+        cursor.execute('''
+            SELECT user_id, first_name, username, last_daily_card_date 
+            FROM users 
+            WHERE (last_daily_card_date IS NULL OR last_daily_card_date < %s)
+            AND user_id NOT IN (
+                SELECT user_id FROM user_reminders 
+                WHERE reminder_date = CURRENT_DATE
+            )
+        ''', (week_ago,))
+        
+        users_to_remind = cursor.fetchall()
+        
+        reminded_count = 0
+        
+        for user_id, first_name, username, last_date in users_to_remind:
+            try:
+                user_name = f"@{username}" if username else first_name or "Дорогой пользователь"
+                
+                if last_date is None:
+                    message = f"""
+{user_name}, Вы еще не пробовали карты дня! 🎴
+
+Каждый день вы можете получить уникальную карту с подсказкой от Вселенной 🌊
+
+Начните свой день с карты дня — она поможет увидеть новые возможности и ресурсы! 💫
+
+"""
+                else:
+                    days_passed = (datetime.now().date() - last_date).days
+                    message = f"""
+{user_name}, Вы давно не брали карту дня! 🎴
+
+Прошло уже {days_passed} дней с вашей последней карты. 
+За это время могло многое измениться! 🌊
+
+Карты дня ждут, чтобы подсказать вам:
+• Новые возможности
+• Скрытые ресурсы  
+• Подсказки для важных решений
+
+Вернитесь к практике самопознания! 💫
+"""
+                
+                # Отправляем сообщение
+                bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    parse_mode='Markdown'
+                )
+                
+                # Записываем факт отправки напоминания
+                cursor.execute('''
+                    INSERT INTO user_reminders (user_id, reminder_date, reminder_type)
+                    VALUES (%s, CURRENT_DATE, 'card_reminder')
+                    ON CONFLICT (user_id, reminder_date, reminder_type) DO NOTHING
+                ''', (user_id,))
+                
+                reminded_count += 1
+                
+                # Небольшая пауза между сообщениями
+                import time
+                time.sleep(0.1)
+                
+            except Exception as e:
+                # Если не удалось отправить (пользователь заблокировал бота и т.д.)
+                logging.error(f"❌ Error sending reminder to user {user_id}: {e}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        # Отправляем отчет администратору
+        if reminded_count > 0:
+            try:
+                report = f"""
+📊 Отчет по напоминаниям
+
+✅ Отправлено напоминаний: {reminded_count}
+⏰ Время отправки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+
+Пользователи получили напоминания о картах дня 🎴
+"""
+                bot.send_message(
+                    chat_id=891422895,  # Ваш ID
+                    text=report,
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logging.error(f"❌ Error sending reminder report: {e}")
+        
+        logging.info(f"✅ Sent reminders to {reminded_count} users")
+        
+    except Exception as e:
+        logging.error(f"❌ Error in send_reminders: {e}")
+
+def start_simple_reminders():
+    """Простой планировщик напоминаний без внешних зависимостей"""
+    from threading import Thread
+    import time
+    from datetime import datetime
+    
+    def reminder_loop():
+        while not shutdown_manager.shutdown_event.is_set():
+            try:
+                now = datetime.now()
+                
+                # Проверяем время (10:00 или 18:00)
+                if now.hour in [10, 18] and now.minute == 0:
+                    logging.info(f"⏰ Time for reminders: {now.hour}:00")
+                    send_reminders()
+                    
+                    # Ждем час, чтобы не отправлять повторно
+                    time.sleep(3600)
+                else:
+                    # Ждем минуту и проверяем снова
+                    time.sleep(60)
+                    
+            except Exception as e:
+                logging.error(f"❌ Error in reminder loop: {e}")
+                time.sleep(300)
+    
+    thread = Thread(target=reminder_loop, daemon=True)
+    thread.start()
+    logging.info("✅ Simple reminder scheduler started")
+    return thread
+
 def main():
     """Основная функция запуска - ТОЛЬКО ОДИН ПРОЦЕСС"""
     # Регистрируем обработчики сигналов
@@ -2521,6 +2661,10 @@ def main():
         expired_check_thread = threading.Thread(target=check_expired_subscriptions_periodically, daemon=True)
         expired_check_thread.start()
         logger.info("✅ Expired subscriptions checker started")
+
+        # Запускаем планировщик напоминаний
+        reminder_thread = start_simple_reminders()
+        logger.info("✅ Reminder scheduler started")
 
         # Запускаем бота в ОСНОВНОМ потоке
         logger.info("✅ Starting bot in main thread...")

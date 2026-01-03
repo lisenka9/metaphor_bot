@@ -205,6 +205,18 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # Таблица для отслеживания отправленных напоминаний
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_reminders (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    reminder_date DATE NOT NULL,
+                    reminder_type TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, reminder_date, reminder_type)
+                )
+            ''')
         
             # Обновляем структуру существующей таблицы
             self.update_video_links_table()

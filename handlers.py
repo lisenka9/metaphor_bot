@@ -5991,3 +5991,28 @@ async def test_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logging.error(f"❌ Error testing notifications: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+async def test_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тестирует отправку напоминаний (только для администратора)"""
+    user = update.effective_user
+    
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ У вас нет прав для этой команды")
+        return
+    
+    try:
+        from bot import send_reminders
+        import threading
+        
+        # Запускаем в отдельном потоке, чтобы не блокировать бота
+        def run_reminders():
+            send_reminders()
+        
+        thread = threading.Thread(target=run_reminders, daemon=True)
+        thread.start()
+        
+        await update.message.reply_text("🔄 Запущена отправка тестовых напоминаний...")
+        
+    except Exception as e:
+        logging.error(f"❌ Error testing reminders: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
