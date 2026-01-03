@@ -31,6 +31,7 @@ import asyncio
 import multiprocessing
 import time
 from threading import Event
+from telegram import Bot
 
 class GracefulShutdown:
     def __init__(self):
