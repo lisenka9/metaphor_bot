@@ -9,34 +9,41 @@ class DatabaseManager:
         self.database_url = os.environ.get('DATABASE_URL')
     
     def get_connection(self):
-        """Создает соединение с PostgreSQL с повторными попытками и улучшенными параметрами"""
+        """Создает соединение с PostgreSQL через PgBouncer"""
         import psycopg2
         from psycopg2.extras import RealDictCursor
         import time
         
-        max_retries = 5
-        retry_delay = 3
+        max_retries = 3
+        retry_delay = 2
         
         for attempt in range(max_retries):
             try:
-                # Убедитесь, что используете правильный URL
+                # Базовое подключение без лишних параметров
                 conn = psycopg2.connect(
                     self.database_url,
-                    sslmode='require',
-                    connect_timeout=15,  # Увеличиваем до 15 секунд
+                    connect_timeout=10,
                     keepalives=1,
                     keepalives_idle=30,
                     keepalives_interval=10,
                     keepalives_count=5,
-                    application_name='metaphor-bot'  # Добавляем имя приложения
+                    application_name='metaphor-bot',
                 )
                 
-                # Проверяем соединение
+                # ВАЖНО: Для PgBouncer нужно установить эти параметры ПОСЛЕ подключения
                 cursor = conn.cursor()
-                cursor.execute('SELECT 1')
+                
+                # Устанавливаем таймаут
+                cursor.execute('SET statement_timeout = 30000')  # 30 секунд
+                
+                # Для режима Transaction PgBouncer - начинаем транзакцию
+                cursor.execute('BEGIN')
+                cursor.execute('SELECT 1')  # Тестовый запрос в транзакции
+                cursor.execute('COMMIT')
+                
                 cursor.close()
                 
-                logging.info(f"✅ Database connection established successfully (attempt {attempt + 1})")
+                logging.info(f"✅ Database connection established (attempt {attempt + 1})")
                 return conn
                 
             except psycopg2.OperationalError as e:
@@ -44,26 +51,33 @@ class DatabaseManager:
                 
                 if "timeout" in error_msg.lower():
                     logging.warning(f"⚠️ Database timeout on attempt {attempt + 1}")
-                elif "ssl" in error_msg.lower():
-                    logging.warning(f"⚠️ Database SSL error on attempt {attempt + 1}")
+                elif "connection" in error_msg.lower():
+                    logging.warning(f"⚠️ Connection error on attempt {attempt + 1}")
                 else:
-                    logging.warning(f"⚠️ Database connection error on attempt {attempt + 1}: {error_msg[:100]}")
+                    logging.warning(f"⚠️ Database error on attempt {attempt + 1}: {error_msg[:100]}")
                 
                 if attempt < max_retries - 1:
                     logging.info(f"🔄 Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
-                    retry_delay *= 1.5  # Экспоненциальная задержка
+                    retry_delay *= 1.5
                 else:
                     logging.error(f"❌ Failed to connect to database after {max_retries} attempts")
-                    # Не бросаем исключение, чтобы бот продолжал работать
-                    raise Exception(f"Database connection failed: {error_msg[:200]}")
+                    # Возвращаем None вместо исключения
+                    return None
                     
+            except psycopg2.ProgrammingError as e:
+                # Ошибка в SQL или параметрах соединения
+                logging.error(f"❌ Database programming error: {e}")
+                return None
+                
             except Exception as e:
                 logging.error(f"❌ Unexpected database error: {e}")
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
                 else:
-                    raise
+                    return None
+        
+        return None
 
     def init_database(self):
         """Инициализация таблиц в базе данных"""

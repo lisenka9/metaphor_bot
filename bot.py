@@ -2382,7 +2382,7 @@ def start_payment_monitoring():
             time.sleep(1)
 
 def run_bot():
-    """Запускает бота в основном потоке"""
+    """Запускает бота в основном потоке с обработкой ошибок базы данных"""
     max_retries = 3
     retry_delay = 30
     
@@ -2400,10 +2400,25 @@ def run_bot():
                 time.sleep(retry_delay)
                 continue
             
-            # Инициализация базы данных
-            logger.info("🔄 Initializing database...")
-            db.init_database()
-            db.update_existing_users_limits()
+            # Пытаемся инициализировать базу данных
+            try:
+                logger.info("🔄 Testing database connection...")
+                conn = db.get_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT 1')
+                    conn.close()
+                    logger.info("✅ Database connection successful")
+                    
+                    # Инициализируем базу только если соединение успешно
+                    logger.info("🔄 Initializing database...")
+                    db.init_database()
+                    db.update_existing_users_limits()
+                else:
+                    logger.warning("⚠️ Database connection failed, running in limited mode")
+            except Exception as e:
+                logger.warning(f"⚠️ Database initialization failed: {e}")
+                logger.warning("⚠️ Bot will run in limited mode without database")
             
             # Создаем приложение
             application = Application.builder().token(BOT_TOKEN).build()
