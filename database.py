@@ -9,40 +9,62 @@ class DatabaseManager:
         self.database_url = os.environ.get('DATABASE_URL')
     
     def get_connection(self):
-        """Создает соединение с PostgreSQL с повторными попытками"""
+        """Создает соединение с PostgreSQL с повторными попытками и улучшенными параметрами"""
         import psycopg2
         from psycopg2.extras import RealDictCursor
         import time
         
-        max_retries = 3
-        retry_delay = 2
+        max_retries = 5
+        retry_delay = 3
         
         for attempt in range(max_retries):
             try:
-                # Добавляем параметры для лучшей устойчивости SSL
+                # Убедитесь, что используете правильный URL
                 conn = psycopg2.connect(
                     self.database_url,
                     sslmode='require',
-                    connect_timeout=10,
+                    connect_timeout=15,  # Увеличиваем до 15 секунд
                     keepalives=1,
                     keepalives_idle=30,
                     keepalives_interval=10,
-                    keepalives_count=5
+                    keepalives_count=5,
+                    application_name='metaphor-bot'  # Добавляем имя приложения
                 )
+                
+                # Проверяем соединение
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1')
+                cursor.close()
+                
+                logging.info(f"✅ Database connection established successfully (attempt {attempt + 1})")
                 return conn
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                
+            except psycopg2.OperationalError as e:
+                error_msg = str(e)
+                
+                if "timeout" in error_msg.lower():
+                    logging.warning(f"⚠️ Database timeout on attempt {attempt + 1}")
+                elif "ssl" in error_msg.lower():
+                    logging.warning(f"⚠️ Database SSL error on attempt {attempt + 1}")
+                else:
+                    logging.warning(f"⚠️ Database connection error on attempt {attempt + 1}: {error_msg[:100]}")
+                
                 if attempt < max_retries - 1:
-                    logging.warning(f"⚠️ Database connection attempt {attempt + 1} failed: {e}")
                     logging.info(f"🔄 Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # Экспоненциальная задержка
+                    retry_delay *= 1.5  # Экспоненциальная задержка
                 else:
-                    logging.error(f"❌ Failed to connect to database after {max_retries} attempts: {e}")
-                    raise
+                    logging.error(f"❌ Failed to connect to database after {max_retries} attempts")
+                    # Не бросаем исключение, чтобы бот продолжал работать
+                    raise Exception(f"Database connection failed: {error_msg[:200]}")
+                    
             except Exception as e:
-                logging.error(f"❌ Unexpected database connection error: {e}")
-                raise
-    
+                logging.error(f"❌ Unexpected database error: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                else:
+                    raise
+
     def init_database(self):
         """Инициализация таблиц в базе данных"""
         conn = self.get_connection()
