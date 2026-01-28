@@ -2340,31 +2340,19 @@ def cleanup_video_links():
             logger.error(f"❌ Error in periodic video links cleanup: {e}")
 
 def start_payment_monitoring():
-    """Запускает автоматический мониторинг платежей с обработкой ошибок"""
-    while not shutdown_manager.shutdown_event.is_set():
+    """Запускает автоматический мониторинг платежей"""
+    while True:
         try:
             # Мониторинг ЮKassa платежей
-            try:
-                payment_processor.check_all_pending_payments()
-            except Exception as e:
-                logging.error(f"❌ Error in YooKassa payment monitoring: {e}")
+            payment_processor.check_all_pending_payments()
             
             # Мониторинг PayPal платежей
             try:
                 from paypal_payment import paypal_processor
                 # Подписки
-                try:
-                    activated_subs = paypal_processor.check_paypal_static_payments()
-                except Exception as e:
-                    logging.error(f"❌ Error in PayPal subscription monitoring: {e}")
-                    activated_subs = 0
-                    
+                activated_subs = paypal_processor.check_paypal_static_payments()
                 # Колоды
-                try:
-                    activated_decks = paypal_processor.check_paypal_deck_payments()
-                except Exception as e:
-                    logging.error(f"❌ Error in PayPal deck monitoring: {e}")
-                    activated_decks = 0
+                activated_decks = paypal_processor.check_paypal_deck_payments()
                 
                 if activated_subs > 0 or activated_decks > 0:
                     logging.info(f"✅ PayPal monitor: activated {activated_subs} subscriptions, {activated_decks} deck purchases")

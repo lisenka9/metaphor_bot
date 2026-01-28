@@ -9,7 +9,7 @@ class DatabaseManager:
         self.database_url = os.environ.get('DATABASE_URL')
     
     def get_connection(self):
-        """Создает соединение с PostgreSQL через PgBouncer"""
+        """Создает соединение с PostgreSQL с повторными попытками"""
         import psycopg2
         from psycopg2.extras import RealDictCursor
         import time
@@ -19,66 +19,30 @@ class DatabaseManager:
         
         for attempt in range(max_retries):
             try:
-                # Базовое подключение без лишних параметров
+                # Добавляем параметры для лучшей устойчивости SSL
                 conn = psycopg2.connect(
                     self.database_url,
+                    sslmode='require',
                     connect_timeout=10,
                     keepalives=1,
                     keepalives_idle=30,
                     keepalives_interval=10,
-                    keepalives_count=5,
-                    application_name='metaphor-bot',
+                    keepalives_count=5
                 )
-                
-                # ВАЖНО: Для PgBouncer нужно установить эти параметры ПОСЛЕ подключения
-                cursor = conn.cursor()
-                
-                # Устанавливаем таймаут
-                cursor.execute('SET statement_timeout = 30000')  # 30 секунд
-                
-                # Для режима Transaction PgBouncer - начинаем транзакцию
-                cursor.execute('BEGIN')
-                cursor.execute('SELECT 1')  # Тестовый запрос в транзакции
-                cursor.execute('COMMIT')
-                
-                cursor.close()
-                
-                logging.info(f"✅ Database connection established (attempt {attempt + 1})")
                 return conn
-                
-            except psycopg2.OperationalError as e:
-                error_msg = str(e)
-                
-                if "timeout" in error_msg.lower():
-                    logging.warning(f"⚠️ Database timeout on attempt {attempt + 1}")
-                elif "connection" in error_msg.lower():
-                    logging.warning(f"⚠️ Connection error on attempt {attempt + 1}")
-                else:
-                    logging.warning(f"⚠️ Database error on attempt {attempt + 1}: {error_msg[:100]}")
-                
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
                 if attempt < max_retries - 1:
+                    logging.warning(f"⚠️ Database connection attempt {attempt + 1} failed: {e}")
                     logging.info(f"🔄 Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
-                    retry_delay *= 1.5
+                    retry_delay *= 2  # Экспоненциальная задержка
                 else:
-                    logging.error(f"❌ Failed to connect to database after {max_retries} attempts")
-                    # Возвращаем None вместо исключения
-                    return None
-                    
-            except psycopg2.ProgrammingError as e:
-                # Ошибка в SQL или параметрах соединения
-                logging.error(f"❌ Database programming error: {e}")
-                return None
-                
+                    logging.error(f"❌ Failed to connect to database after {max_retries} attempts: {e}")
+                    raise
             except Exception as e:
-                logging.error(f"❌ Unexpected database error: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                else:
-                    return None
-        
-        return None
-
+                logging.error(f"❌ Unexpected database connection error: {e}")
+                raise
+    
     def init_database(self):
         """Инициализация таблиц в базе данных"""
         conn = self.get_connection()
