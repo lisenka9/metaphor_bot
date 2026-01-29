@@ -3,78 +3,46 @@ import logging
 from datetime import datetime, date, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import logging
 
-
-logger = logging.getLogger(__name__)
 class DatabaseManager:
     def __init__(self):
         self.database_url = os.environ.get('DATABASE_URL')
     
     def get_connection(self):
+        """Создает соединение с PostgreSQL с повторными попытками"""
         import psycopg2
+        from psycopg2.extras import RealDictCursor
         import time
         
-        # Специальные параметры для обхода блокировки
-        connection_params = {
-            'host': 'aws-1-eu-west-1.pooler.supabase.com',
-            'port': 6543,
-            'database': 'postgres',
-            'user': 'postgres.rfqewgtpjfublesenaki',
-            'password': 'tetyaSveta2025$',
-            'connect_timeout': 10,
-            'sslmode': 'require',
-            'application_name': 'MetaphorCardsBot/1.0',  # Добавляем User-Agent
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-            'options': '-c statement_timeout=30000 -c client_encoding=UTF8'
-        }
+        max_retries = 3
+        retry_delay = 2
         
-        for attempt in range(3):
+        for attempt in range(max_retries):
             try:
-                conn = psycopg2.connect(**connection_params)
-                
-                # Устанавливаем session параметры
-                cursor = conn.cursor()
-                cursor.execute("SET search_path TO public")
-                cursor.execute("SET client_encoding TO 'UTF8'")
-                cursor.close()
-                
-                logger.info(f"✅ Connected to Supabase (attempt {attempt + 1})")
-                return conn
-                
-            except psycopg2.OperationalError as e:
-                logger.warning(f"⚠️ Connection failed: {str(e)[:100]}")
-                if attempt < 2:
-                    time.sleep(2 * (attempt + 1))  # Увеличивающаяся задержка
-                else:
-                    logger.error("❌ All connection attempts failed")
-                    return None
-
-    def get_connection_with_fallback():
-        """Пробует разные хосты Supabase"""
-        hosts = [
-            ('aws-0-eu-west-1.pooler.supabase.com', 6543),
-            ('aws-1-eu-west-1.pooler.supabase.com', 6543), 
-            ('aws-0-eu-west-1.pooler.supabase.com', 5432),
-            ('aws-1-eu-west-1.pooler.supabase.com', 5432)
-        ]
-        
-        for host, port in hosts:
-            try:
+                # Добавляем параметры для лучшей устойчивости SSL
                 conn = psycopg2.connect(
-                    f"postgresql://postgres.rfqewgtpjfublesenaki:tetyaSveta2025$@{host}:{port}/postgres",
-                    connect_timeout=5
+                    self.database_url,
+                    sslmode='require',
+                    connect_timeout=10,
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=5
                 )
-                logger.info(f"✅ Connected via {host}:{port}")
                 return conn
-            except:
-                continue
-        
-        return None
-
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if attempt < max_retries - 1:
+                    logging.warning(f"⚠️ Database connection attempt {attempt + 1} failed: {e}")
+                    logging.info(f"🔄 Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Экспоненциальная задержка
+                else:
+                    logging.error(f"❌ Failed to connect to database after {max_retries} attempts: {e}")
+                    raise
+            except Exception as e:
+                logging.error(f"❌ Unexpected database connection error: {e}")
+                raise
+    
     def init_database(self):
         """Инициализация таблиц в базе данных"""
         conn = self.get_connection()
