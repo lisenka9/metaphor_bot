@@ -8,7 +8,7 @@ class DatabaseManager:
     def __init__(self):
         self.database_url = os.environ.get('DATABASE_URL')
     
-    '''def get_connection(self):
+    def get_connection(self):
         """Создает соединение с PostgreSQL с повторными попытками"""
         import psycopg2
         from psycopg2.extras import RealDictCursor
@@ -41,82 +41,7 @@ class DatabaseManager:
                     raise
             except Exception as e:
                 logging.error(f"❌ Unexpected database connection error: {e}")
-                raise'''
-    
-    def get_connection(self):
-        """Создает соединение с PostgreSQL с оптимизацией"""
-        import psycopg2
-        import time
-        
-        max_retries = 5
-        retry_delay = 1
-        
-        for attempt in range(max_retries):
-            try:
-                # Уменьшаем timeout и добавляем параметры
-                conn = psycopg2.connect(
-                    dsn=self.database_url,
-                    connect_timeout=5,  # Уменьшаем до 5 секунд
-                    keepalives=1,
-                    keepalives_idle=30,
-                    keepalives_interval=10,
-                    keepalives_count=5,
-                    application_name="metaphor-bot"  # Добавляем имя приложения
-                )
-                
-                # Устанавливаем timeout на операции
-                conn.autocommit = False
-                return conn
-                
-            except psycopg2.OperationalError as e:
-                if attempt < max_retries - 1:
-                    logging.warning(f"⚠️ Database connection attempt {attempt + 1} failed: {e}")
-                    
-                    # Проверяем конкретную ошибку
-                    error_msg = str(e).lower()
-                    if "timeout" in error_msg or "connection" in error_msg:
-                        # Меняем endpoint при таймауте
-                        if "pooler.supabase.com" in self.database_url:
-                            # Пробуем разные регионы
-                            if "aws-0-eu-west-1" in self.database_url:
-                                self.database_url = self.database_url.replace(
-                                    "aws-0-eu-west-1", "aws-1-eu-west-1"
-                                )
-                            elif "aws-1-eu-west-1" in self.database_url:
-                                self.database_url = self.database_url.replace(
-                                    "aws-1-eu-west-1", "aws-0-eu-west-1"
-                                )
-                            logging.info(f"🔄 Switched to alternative endpoint")
-                        
-                    time.sleep(retry_delay * (attempt + 1))
-                else:
-                    logging.error(f"❌ Failed to connect after {max_retries} attempts")
-                    # Пробуем прямое подключение (без pooler)
-                    return self.get_direct_connection()
-                    
-            except Exception as e:
-                logging.error(f"❌ Unexpected connection error: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-        
-        return None
-
-    def get_direct_connection(self):
-        """Прямое подключение (не через pooler)"""
-        try:
-            # Используем прямой endpoint Supabase
-            direct_url = "postgresql://postgres.rfqewgtpjfublesenaki:tetyaSveta2025$@aws-0-eu-west-1.supabase.co:5432/postgres?sslmode=require"
-            
-            conn = psycopg2.connect(
-                dsn=direct_url,
-                connect_timeout=10,
-                sslmode='require'
-            )
-            logging.info("✅ Connected via direct endpoint")
-            return conn
-        except Exception as e:
-            logging.error(f"❌ Direct connection also failed: {e}")
-            return None
+                raise
     
     def init_database(self):
         """Инициализация таблиц в базе данных"""

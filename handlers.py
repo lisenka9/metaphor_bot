@@ -29,7 +29,7 @@ def get_video_system_safe():
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /start"""
+    """Обработчик команды /start с соглашением"""
     user = update.effective_user
     
     # Логируем данные пользователя для отладки
@@ -44,18 +44,53 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         last_name=user.last_name or ""  # Если last_name None
     )
     
-    # Создаем приветственное сообщение с учетом доступных данных
+    # Текст соглашения
+    agreement_text = """
+*Переходя далее, я:*
+
+- Даю свое согласие на обработку персональных данных
+
+- Соглашаюсь с Политикой конфиденциальности
+
+- Принимаю условия Публичной оферты
+
+- Даю согласие на получение рассылки
+
+*Нажимая кнопку ниже, вы подтверждаете свое согласие.*
+"""
+    
+    # Создаем клавиатуру с кнопкой принятия
+    keyboard = [
+        [InlineKeyboardButton("✅ Принимаю. Иду дальше", callback_data="accept_agreement")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        agreement_text,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+async def handle_agreement_acceptance(query, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик принятия соглашения"""
+    await query.answer()
+    
+    user = query.from_user
+    photo_url = "https://ibb.co/dJgLgMCz" 
+    
+    # Убираем кнопку
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # Показываем оригинальное приветственное сообщение
     if user.first_name:
         greeting = f"{user.first_name}, приветствую!"
     else:
         greeting = f"@{user.username}, приветствую!"
     
-    photo_url = "https://ibb.co/dJgLgMCz" 
-    
     try:
         # Сначала отправляем фото с коротким заголовком
         short_caption = f"{greeting}\n\nМеня зовут Светлана Скромова. Я практикующий психотерапевт и автор уникальной колоды метафорических карт «Настроение как море»."
-        await update.message.reply_photo(
+        await query.message.reply_photo(
             photo=photo_url,
             caption=short_caption,
             parse_mode='Markdown'
@@ -79,7 +114,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎁А еще у меня для тебя подарок: гайд по эмоциональному интеллекту, который ты можешь скачать бесплатно!
         """
         
-        await update.message.reply_text(
+        await query.message.reply_text(
             welcome_text,
             reply_markup=keyboard.get_main_menu_keyboard(),
             parse_mode='Markdown'
@@ -112,7 +147,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Выбирайте в меню бота то, что для Вас сейчас наиболее актуально!
         """
         
-        await update.message.reply_text(
+        await query.message.reply_text(
             full_text,
             reply_markup=keyboard.get_main_menu_keyboard(),
             parse_mode='Markdown'
@@ -335,6 +370,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "show_unknown_payments":
         await show_unknown_payments(query, context)
+
+    elif query.data == "accept_agreement":
+        await handle_agreement_acceptance(query, context)
 
 async def start_consult_form(query, context: ContextTypes.DEFAULT_TYPE):
     """Начинает процесс заполнения формы консультации"""
