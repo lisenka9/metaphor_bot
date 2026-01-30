@@ -2494,17 +2494,31 @@ async def send_reminders():
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        week_ago = (datetime.now() - timedelta(days=7)).date()
+        # Получаем текущую дату
+        today = date.today()
+        week_ago = today - timedelta(days=7)
         
+        # Ищем пользователей, которые не брали карты более 7 дней
+        # И у которых последнее напоминание было более 7 дней назад или вообще не было
         cursor.execute('''
-            SELECT user_id, first_name, username, last_daily_card_date 
-            FROM users 
-            WHERE (last_daily_card_date IS NULL OR last_daily_card_date < %s)
-            AND user_id NOT IN (
+            SELECT u.user_id, u.first_name, u.username, u.last_daily_card_date 
+            FROM users u
+            WHERE (u.last_daily_card_date IS NULL OR u.last_daily_card_date < %s)
+            AND u.user_id NOT IN (
+                -- Исключаем пользователей, которым уже отправляли напоминание в последние 7 дней
                 SELECT user_id FROM user_reminders 
-                WHERE reminder_date = CURRENT_DATE
+                WHERE reminder_type = 'card_reminder' 
+                AND reminder_date >= %s - INTERVAL '7 days'
             )
-        ''', (week_ago,))
+            AND u.user_id NOT IN (
+                -- Исключаем пользователей, которые заблокировали бота (опционально)
+                SELECT user_id FROM user_action_logs 
+                WHERE action = 'bot_blocked' 
+                AND created_at >= %s - INTERVAL '30 days'
+            )
+            -- Ограничиваем количество, чтобы не перегружать
+            LIMIT 50
+        ''', (week_ago, today, today))
         
         users_to_remind = cursor.fetchall()
         
@@ -2512,19 +2526,20 @@ async def send_reminders():
         
         for user_id, first_name, username, last_date in users_to_remind:
             try:
-                user_name = f"@{username}" if username else first_name or "Дорогой пользователь"
+                user_name = f"@{first_name}" if first_name else username or "Дорогой пользователь"
                 
                 if last_date is None:
+                    # Для пользователей, которые никогда не брали карты
                     message = f"""
 {user_name}, Вы еще не пробовали карты дня! 🎴
 
 Каждый день вы можете получить уникальную карту с подсказкой от Вселенной 🌊
 
 Начните свой день с карты дня — она поможет увидеть новые возможности и ресурсы! 💫
-
 """
                 else:
-                    days_passed = (datetime.now().date() - last_date).days
+                    # Для пользователей, которые давно не брали карты
+                    days_passed = (today - last_date).days
                     message = f"""
 {user_name}, Вы давно не брали карту дня! 🎴
 
@@ -2546,12 +2561,13 @@ async def send_reminders():
                     parse_mode='Markdown'
                 )
                 
-                # Записываем факт отправки напоминания
+                # Записываем факт отправки напоминания СЕГОДНЯ
                 cursor.execute('''
                     INSERT INTO user_reminders (user_id, reminder_date, reminder_type)
-                    VALUES (%s, CURRENT_DATE, 'card_reminder')
-                    ON CONFLICT (user_id, reminder_date, reminder_type) DO NOTHING
-                ''', (user_id,))
+                    VALUES (%s, %s, 'card_reminder')
+                    ON CONFLICT (user_id, reminder_date, reminder_type) 
+                    DO NOTHING
+                ''', (user_id, today))
                 
                 reminded_count += 1
                 
@@ -2560,7 +2576,30 @@ async def send_reminders():
                 
             except Exception as e:
                 # Если не удалось отправить (пользователь заблокировал бота и т.д.)
-                logging.error(f"❌ Error sending reminder to user {user_id}: {e}")
+                error_msg = str(e).lower()
+                
+                if 'forbidden' in error_msg or 'blocked' in error_msg or 'bot was blocked' in error_msg:
+                    # Пользователь заблокировал бота - записываем в логи
+                    logging.info(f"⚠️ User {user_id} blocked the bot")
+                    
+                    try:
+                        cursor.execute('''
+                            INSERT INTO user_action_logs (user_id, action, action_data)
+                            VALUES (%s, 'bot_blocked', %s)
+                        ''', (user_id, json.dumps({'date': today.isoformat()})))
+                    except:
+                        pass
+                    
+                    # Пропускаем этого пользователя в будущем
+                    cursor.execute('''
+                        INSERT INTO user_reminders (user_id, reminder_date, reminder_type)
+                        VALUES (%s, %s, 'bot_blocked')
+                        ON CONFLICT (user_id, reminder_date, reminder_type) 
+                        DO NOTHING
+                    ''', (user_id, today))
+                
+                else:
+                    logging.error(f"❌ Error sending reminder to user {user_id}: {e}")
                 continue
         
         conn.commit()
@@ -2574,6 +2613,7 @@ async def send_reminders():
 
 ✅ Отправлено напоминаний: {reminded_count}
 ⏰ Время отправки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+📅 Дата: {today.strftime('%d.%m.%Y')}
 
 Пользователи получили напоминания о картах дня 🎴
 """
