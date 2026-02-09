@@ -16,7 +16,7 @@ import logging
 import multiprocessing
 import signal
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from telegram import Update
 
 
