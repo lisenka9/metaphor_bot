@@ -13,6 +13,7 @@ import uuid
 import json
 from bot import send_admin_notification_successful, send_admin_notification_failed, notify_admin_about_unknown_payment_sync, send_reminders, start_simple_reminders
 
+recent_payments = {}
 
 def get_video_system_safe():
     """Безопасно создает экземпляр video_system"""
@@ -2152,31 +2153,37 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             cursor = conn.cursor()
             
             # Создаем таблицу если её нет
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS user_action_logs (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    action TEXT,
-                    action_data TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+            try:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS user_action_logs (
+                        id SERIAL PRIMARY KEY,
+                        user_id BIGINT,
+                        action TEXT,
+                        action_data TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            except:
+                pass  # Таблица уже существует
             
             # Сохраняем user_id и subscription_type для поиска
-            cursor.execute('''
-                INSERT INTO user_action_logs (user_id, action, action_data)
-                VALUES (%s, %s, %s)
-            ''', (user_id, 'subscription_clicked', json.dumps({
+            action_data = {
                 'subscription_type': subscription_type,
                 'user_id': user_id,
                 'username': query.from_user.username,
                 'first_name': query.from_user.first_name,
-                'timestamp': datetime.now().isoformat()
-            })))
+                'timestamp': datetime.now().isoformat(),
+                'amount': SUBSCRIPTION_PRICES.get(subscription_type, 0)
+            }
+            
+            cursor.execute('''
+                INSERT INTO user_action_logs (user_id, action, action_data)
+                VALUES (%s, %s, %s)
+            ''', (user_id, 'subscription_selected', json.dumps(action_data)))
             
             conn.commit()
             conn.close()
-            logging.info(f"✅ User action logged for {user_id}")
+            logging.info(f"✅ User action logged for {user_id}: {subscription_type}")
         except Exception as log_error:
             logging.error(f"❌ Error logging user action: {log_error}")
         
@@ -2200,6 +2207,46 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
             )
             return
         
+        # ✅ СОХРАНЯЕМ ИНФОРМАЦИЮ О ПЛАТЕЖЕ В ГЛОБАЛЬНОМ СЛОВАРЕ
+        payment_key = f"payment_{user_id}_{int(datetime.now().timestamp())}"
+        recent_payments[payment_key] = {
+            'user_id': user_id,
+            'subscription_type': subscription_type,
+            'amount': price,
+            'created_at': datetime.now().isoformat()
+        }
+
+        # Также сохраняем в базу для надежности
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS pending_payments (
+                    id SERIAL PRIMARY KEY,
+                    payment_key TEXT UNIQUE,
+                    user_id BIGINT,
+                    subscription_type TEXT,
+                    amount DECIMAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'pending'
+                )
+            ''')
+            
+            cursor.execute('''
+                INSERT INTO pending_payments (payment_key, user_id, subscription_type, amount)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (payment_key) DO NOTHING
+            ''', (payment_key, user_id, subscription_type, price))
+            
+            conn.commit()
+            conn.close()
+            logging.info(f"✅ Pending payment saved: {payment_key} for user {user_id}")
+        except Exception as e:
+            logging.error(f"❌ Error saving pending payment: {e}")
+
+
+
         # Генерируем простой payment_id
         payment_id = f"{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
         

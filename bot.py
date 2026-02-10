@@ -1497,10 +1497,24 @@ def handle_payment_notification(event_data):
 
                         # Отправляем уведомление пользователю
                         try:
-                            send_subscription_notification_sync(user_id, subscription_type, amount_value)
+                            conn = db.get_connection()
+                            cursor = conn.cursor()
+                            
+                            cursor.execute('''
+                                UPDATE pending_payments 
+                                SET status = 'completed'
+                                WHERE user_id = %s 
+                                AND status = 'pending'
+                                AND amount = %s
+                            ''', (user_id, float(amount_value)))
+                            
+                            conn.commit()
+                            conn.close()
+                            logging.info(f"✅ Pending payment marked as completed for user {user_id}")
                         except Exception as e:
-                            logger.error(f"❌ Error sending notification to user: {e}")
-
+                            logging.error(f"❌ Error updating pending payment status: {e}")
+                            send_subscription_notification_sync(user_id, subscription_type, amount_value)
+                        
                         # Отправляем уведомление администратору
                         customer_email = metadata.get('custEmail', 'не указан')
                         send_admin_notification_successful(user_id, amount_value, currency, "subscription", 
@@ -1993,38 +2007,74 @@ def save_unknown_payment_for_review(payment_object):
     except Exception as e:
         logger.error(f"❌ Error saving unknown payment: {e}")
 
-def find_user_for_payment(metadata, amount):
+def find_user_for_payment(metadata, amount, payment_time=None):
     """Улучшенный поиск пользователя для платежа"""
     try:
-        email = metadata.get('custEmail')
+        if payment_time is None:
+            payment_time = datetime.now()
         
-        # СПОСОБ 1: Ищем в action logs по времени (последние 10 минут)
-        payment_time = datetime.now()
-        recent_users = find_recent_subscription_users(payment_time)
+        email = metadata.get('custEmail')
+
+        # СПОСОБ 0: Ищем в pending_payments по сумме и времени
+        user_id = find_user_from_pending_payments(email, amount)
+        if user_id:
+            return user_id
+        
+        # СПОСОБ 1: Ищем в action logs по времени (последние 5-10 минут)
+        recent_users = find_recent_subscription_users(payment_time, minutes=10)
         
         if recent_users:
-            for user_id in recent_users:
-                logging.info(f"🔍 Found recent subscription user: {user_id}")
+            logging.info(f"🔍 Found recent subscription users: {recent_users}")
+            
+            # Если есть email, проверяем совпадение с историческими данными
+            if email:
+                for user_id in recent_users:
+                    # Проверяем, совпадает ли email пользователя с email из платежа
+                    user_email = get_user_email(user_id)
+                    if user_email and (user_email.lower() == email.lower()):
+                        logging.info(f"✅ Email match! User {user_id} has email {user_email}")
+                        return user_id
+            
+            # Если email не совпал или его нет, берем первого пользователя из недавних
+            logging.info(f"✅ Using first recent user: {recent_users[0]}")
+            return recent_users[0]
+        
+        # СПОСОБ 2: Ищем по email в таблице users
+        if email:
+            user_id = find_user_by_email(email)
+            if user_id:
+                logging.info(f"🔍 Found user by email in users table: {user_id}")
                 return user_id
         
-        # СПОСОБ 2: Ищем по email в таблице payments (исторические платежи)
+        # СПОСОБ 3: Ищем по email в таблице payments (исторические платежи)
         if email:
             user_id = find_user_by_email_in_payments(email)
             if user_id:
                 logging.info(f"🔍 Found user by email in payments: {user_id}")
                 return user_id
         
-        # СПОСОБ 3: Если сумма 99.00 (месячная подписка), ищем последних пользователей
-        if amount == "99.00":
-            user_id = find_last_active_user()
-            if user_id:
-                logging.info(f"🔍 Found last active user for monthly subscription: {user_id}")
-                return user_id
-        
         return None
         
     except Exception as e:
         logging.error(f"❌ Error in find_user_for_payment: {e}")
+        return None
+
+def get_user_email(user_id):
+    """Получает email пользователя из базы"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT email FROM users WHERE user_id = %s', (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting user email: {e}")
         return None
 
 def find_recent_subscription_users(payment_time, minutes=10):
@@ -2035,12 +2085,14 @@ def find_recent_subscription_users(payment_time, minutes=10):
         
         time_before = payment_time - timedelta(minutes=minutes)
         
+        # ИСПРАВЛЕННЫЙ ЗАПРОС
         cursor.execute('''
-            SELECT DISTINCT user_id 
+            SELECT DISTINCT user_id, MAX(created_at) as last_action 
             FROM user_action_logs 
             WHERE action IN ('subscription_clicked', 'subscription_selected', 'payment_attempt')
             AND created_at >= %s
-            ORDER BY created_at DESC 
+            GROUP BY user_id
+            ORDER BY last_action DESC 
             LIMIT 5
         ''', (time_before,))
         
@@ -2059,14 +2111,32 @@ def find_user_by_email_in_payments(email):
         conn = db.get_connection()
         cursor = conn.cursor()
         
+        # Проверяем наличие колонки payment_data
         cursor.execute('''
-            SELECT user_id 
-            FROM payments 
-            WHERE customer_email = %s 
-            OR payment_data::jsonb->>'custEmail' = %s
-            ORDER BY created_at DESC 
-            LIMIT 1
-        ''', (email, email))
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'payments' AND column_name = 'payment_data'
+        ''')
+        
+        has_payment_data = cursor.fetchone() is not None
+        
+        if has_payment_data:
+            cursor.execute('''
+                SELECT user_id 
+                FROM payments 
+                WHERE customer_email = %s 
+                OR payment_data::jsonb->>'custEmail' = %s
+                ORDER BY created_at DESC 
+                LIMIT 1
+            ''', (email, email))
+        else:
+            cursor.execute('''
+                SELECT user_id 
+                FROM payments 
+                WHERE customer_email = %s 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            ''', (email,))
         
         result = cursor.fetchone()
         conn.close()
@@ -2079,30 +2149,51 @@ def find_user_by_email_in_payments(email):
         logger.error(f"❌ Error finding user by email in payments: {e}")
         return None
 
-def find_last_active_user():
-    """Ищет последнего активного пользователя"""
+def find_user_from_pending_payments(email, amount):
+    """Ищет пользователя в pending_payments"""
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Ищем пользователей, которые недавно брали карты
+        # Проверяем наличие таблицы
         cursor.execute('''
-            SELECT user_id 
-            FROM users 
-            WHERE last_daily_card_date >= CURRENT_DATE - INTERVAL '7 days'
-            ORDER BY last_daily_card_date DESC 
-            LIMIT 1
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'pending_payments'
+            )
         ''')
+        table_exists = cursor.fetchone()[0]
         
-        result = cursor.fetchone()
+        if not table_exists:
+            conn.close()
+            return None
+        
+        # Ищем по времени (последние 30 минут) и сумме
+        time_limit = datetime.now() - timedelta(minutes=30)
+        
+        cursor.execute('''
+            SELECT user_id, subscription_type 
+            FROM pending_payments 
+            WHERE amount = %s 
+            AND created_at >= %s
+            AND status = 'pending'
+            ORDER BY created_at DESC 
+            LIMIT 3
+        ''', (float(amount), time_limit))
+        
+        results = cursor.fetchall()
         conn.close()
         
-        if result:
-            return result[0]
+        if results:
+            # Возвращаем последнего пользователя
+            user_id, subscription_type = results[0]
+            logging.info(f"✅ Found user {user_id} in pending_payments for amount {amount}")
+            return user_id
+        
         return None
         
     except Exception as e:
-        logger.error(f"❌ Error finding last active user: {e}")
+        logger.error(f"❌ Error finding user from pending_payments: {e}")
         return None
 
 async def send_payment_success_notification(user_id: int, subscription_type: str, amount: str):
