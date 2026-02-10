@@ -231,6 +231,21 @@ class DatabaseManager:
                     status TEXT DEFAULT 'pending'
                 )
             ''')
+
+            # Таблица для отслеживания платежей по ссылкам
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS pending_payments (
+                    id SERIAL PRIMARY KEY,
+                    payment_key TEXT UNIQUE,
+                    user_id BIGINT,
+                    subscription_type TEXT,
+                    amount DECIMAL,
+                    payment_method TEXT DEFAULT 'yookassa',
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP
+                )
+            ''')
         
             # Обновляем структуру существующей таблицы
             self.update_video_links_table()
