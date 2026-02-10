@@ -217,6 +217,20 @@ class DatabaseManager:
                     UNIQUE(user_id, reminder_date, reminder_type)
                 )
             ''')
+
+            # Таблица для отслеживания платежей по ссылкам
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payment_tracking (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    subscription_type TEXT,
+                    amount DECIMAL,
+                    payment_link TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    payment_id TEXT,
+                    status TEXT DEFAULT 'pending'
+                )
+            ''')
         
             # Обновляем структуру существующей таблицы
             self.update_video_links_table()

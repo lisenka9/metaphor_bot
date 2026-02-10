@@ -1282,12 +1282,14 @@ def find_recent_subscription_user_by_time(payment_time):
         # Ищем действия за последние 10 минут до платежа
         time_before_payment = payment_time - timedelta(minutes=10)
         
+        # ИСПРАВЛЕННЫЙ ЗАПРОС - добавляем created_at в SELECT
         cursor.execute('''
-            SELECT DISTINCT user_id 
+            SELECT DISTINCT user_id, MAX(created_at) as last_action_time 
             FROM user_action_logs 
             WHERE action LIKE '%%subscribe%%' 
             AND created_at BETWEEN %s AND %s
-            ORDER BY created_at DESC 
+            GROUP BY user_id 
+            ORDER BY last_action_time DESC 
             LIMIT 3
         ''', (time_before_payment, payment_time))
         
@@ -1450,117 +1452,16 @@ def handle_payment_notification(event_data):
 
         # Определяем тип продукта
         product_type = "subscription"  # по умолчанию
-        if 'product_type' in metadata:
-            product_type = metadata['product_type']
-        elif float(amount_value) == 999.00 and currency == 'RUB':
+        if float(amount_value) == 999.00 and currency == 'RUB':
             product_type = "deck"  # колода
         elif float(amount_value) == 80.00 and currency == 'ILS':
             product_type = "deck"  # колода PayPal
-        elif 'subscription_type' in metadata:
-            product_type = "subscription"
 
         logger.info(f"📦 Product type detected: {product_type}")
 
-        # ✅ СПОСОБ 1: Поиск по user_id в metadata
-        user_id = None
+        # ✅ УЛУЧШЕННЫЙ ПОИСК ПОЛЬЗОВАТЕЛЯ
+        user_id = find_user_for_payment(metadata, amount_value)
         
-        # Проверяем разные варианты ключей
-        for key in ['user_id', 'userId', 'user', 'userID']:
-            if key in metadata:
-                user_id = metadata[key]
-                logger.info(f"✅ Found user_id in metadata[{key}]: {user_id}")
-                break
-        
-        # Если user_id строка, пытаемся преобразовать
-        if user_id and isinstance(user_id, str):
-            try:
-                user_id = int(user_id)
-            except:
-                user_id = None
-        
-        # ✅ СПОСОБ 2: Поиск по email из платежа
-        if not user_id:
-            # Проверяем разные варианты email в metadata
-            email_keys = ['custEmail', 'customer_email', 'email', 'payer_email', 'customerEmail']
-            customer_email = None
-            
-            for key in email_keys:
-                if key in metadata and metadata[key]:
-                    customer_email = metadata[key]
-                    logger.info(f"🔍 Found email in metadata[{key}]: {customer_email}")
-                    break
-            
-            if customer_email:
-                logger.info(f"🔍 Searching by email: {customer_email}")
-                user_id = find_user_by_email(customer_email)
-                if user_id:
-                    logger.info(f"✅ Found user {user_id} by email: {customer_email}")
-                    
-                    # ✅ Обновляем email пользователя в базе если его нет
-                    try:
-                        conn = db.get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute('''
-                            UPDATE users 
-                            SET email = %s 
-                            WHERE user_id = %s AND (email IS NULL OR email = '')
-                        ''', (customer_email, user_id))
-                        conn.commit()
-                        conn.close()
-                        logger.info(f"✅ Updated email for user {user_id}: {customer_email}")
-                    except Exception as e:
-                        logger.error(f"❌ Error updating email: {e}")
-
-        # ✅ СПОСОБ 3: Поиск по номеру телефона
-        if not user_id:
-            # Проверяем разные варианты телефона
-            phone_keys = ['custPhone', 'customer_phone', 'phone', 'payer_phone', 'customerPhone']
-            customer_phone = None
-            
-            for key in phone_keys:
-                if key in metadata and metadata[key]:
-                    customer_phone = metadata[key]
-                    logger.info(f"🔍 Found phone in metadata[{key}]: {customer_phone}")
-                    break
-            
-            if customer_phone:
-                logger.info(f"🔍 Searching by phone: {customer_phone}")
-                user_id = find_user_by_phone(customer_phone)
-                if user_id:
-                    logger.info(f"✅ Found user {user_id} by phone: {customer_phone}")
-
-        # ✅ СПОСОБ 4: Поиск по последним действиям (по времени)
-        if not user_id:
-            logger.info("🔍 Searching by recent actions...")
-            payment_time_str = payment_object.get('created_at')
-            if payment_time_str:
-                try:
-                    # Преобразуем время из строки в datetime
-                    payment_time = datetime.fromisoformat(payment_time_str.replace('Z', '+00:00'))
-                    
-                    # Ищем пользователей, которые нажимали на кнопки подписки в последние 10 минут
-                    user_id = find_recent_subscription_user_by_time(payment_time)
-                    if user_id:
-                        logger.info(f"✅ Found user {user_id} by recent action timing")
-                except Exception as e:
-                    logger.error(f"❌ Error parsing payment time {payment_time_str}: {e}")
-
-        # ✅ СПОСОБ 5: Поиск в таблице pending_payments по payment_id
-        if not user_id:
-            try:
-                from yookassa_payment import payment_processor
-                # Проверяем, есть ли этот платеж в ожидающих
-                if hasattr(payment_processor, 'pending_payments'):
-                    for pid, info in payment_processor.pending_payments.items():
-                        if payment_id == info.get('yookassa_payment_id'):
-                            user_id = info.get('user_id')
-                            product_type = info.get('product_type', product_type)
-                            logger.info(f"✅ Found user {user_id} in pending_payments, product: {product_type}")
-                            break
-            except Exception as e:
-                logger.error(f"❌ Error checking pending payments: {e}")
-
-        # ✅ ОБРАБОТКА ПЛАТЕЖА
         if user_id:
             user_id = int(user_id)
             
@@ -1577,6 +1478,7 @@ def handle_payment_notification(event_data):
                         
                         # Уведомление пользователю отправляется отдельно
                         # Отправляем уведомление администратору
+                        customer_email = metadata.get('custEmail', 'не указан')
                         send_admin_notification_successful(user_id, amount_value, currency, product_type, 
                                                           payment_id, customer_email, "ЮKassa")
                     else:
@@ -1600,6 +1502,7 @@ def handle_payment_notification(event_data):
                             logger.error(f"❌ Error sending notification to user: {e}")
 
                         # Отправляем уведомление администратору
+                        customer_email = metadata.get('custEmail', 'не указан')
                         send_admin_notification_successful(user_id, amount_value, currency, "subscription", 
                                                           payment_id, customer_email, "ЮKassa")
 
@@ -1615,27 +1518,37 @@ def handle_payment_notification(event_data):
                 logger.info(f"⏳ Payment still processing for user {user_id}: {payment_status}")
                 return jsonify({"status": "success"}), 200
         else:
-            # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ И ЛОГИРУЕМ
+            # ✅ СОХРАНЯЕМ ДЛЯ РУЧНОЙ ОБРАБОТКИ
             logger.warning(f"⚠️ Cannot identify user for payment {payment_id}")
-            logger.warning(f"⚠️ Payment metadata: {metadata}")
             
-            customer_email = None
-            for key in ['custEmail', 'customer_email', 'email', 'payer_email']:
-                if key in metadata:
-                    customer_email = metadata[key]
-                    break
+            # Сохраняем в unknown_payments
+            try:
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO unknown_payments 
+                    (payment_id, amount, customer_email, payment_data, status)
+                    VALUES (%s, %s, %s, %s, %s)
+                ''', (
+                    payment_id,
+                    amount_value,
+                    metadata.get('custEmail'),
+                    json.dumps(payment_object),
+                    payment_status
+                ))
+                
+                conn.commit()
+                conn.close()
+                logger.info(f"✅ Unknown payment saved: {payment_id}")
+            except Exception as save_error:
+                logger.error(f"❌ Error saving unknown payment: {save_error}")
             
-            customer_phone = None
-            for key in ['custPhone', 'customer_phone', 'phone', 'payer_phone']:
-                if key in metadata:
-                    customer_phone = metadata[key]
-                    break
-            
-            save_unknown_payment_for_review(payment_object)
-            
-            # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНИСТРАТОРУ О НЕИДЕНТИФИЦИРОВАННОМ ПЛАТЕЖЕ
-            notify_admin_about_unknown_payment_sync(payment_id, amount_value, customer_email, customer_phone, 
-                                                   product_type, currency)
+            # Уведомляем администратора
+            notify_admin_about_unknown_payment_sync(
+                payment_id, amount_value, metadata.get('custEmail'), 
+                metadata.get('custPhone'), product_type, currency
+            )
             
             return jsonify({"status": "success"}), 200
 
@@ -2079,6 +1992,118 @@ def save_unknown_payment_for_review(payment_object):
 
     except Exception as e:
         logger.error(f"❌ Error saving unknown payment: {e}")
+
+def find_user_for_payment(metadata, amount):
+    """Улучшенный поиск пользователя для платежа"""
+    try:
+        email = metadata.get('custEmail')
+        
+        # СПОСОБ 1: Ищем в action logs по времени (последние 10 минут)
+        payment_time = datetime.now()
+        recent_users = find_recent_subscription_users(payment_time)
+        
+        if recent_users:
+            for user_id in recent_users:
+                logging.info(f"🔍 Found recent subscription user: {user_id}")
+                return user_id
+        
+        # СПОСОБ 2: Ищем по email в таблице payments (исторические платежи)
+        if email:
+            user_id = find_user_by_email_in_payments(email)
+            if user_id:
+                logging.info(f"🔍 Found user by email in payments: {user_id}")
+                return user_id
+        
+        # СПОСОБ 3: Если сумма 99.00 (месячная подписка), ищем последних пользователей
+        if amount == "99.00":
+            user_id = find_last_active_user()
+            if user_id:
+                logging.info(f"🔍 Found last active user for monthly subscription: {user_id}")
+                return user_id
+        
+        return None
+        
+    except Exception as e:
+        logging.error(f"❌ Error in find_user_for_payment: {e}")
+        return None
+
+def find_recent_subscription_users(payment_time, minutes=10):
+    """Ищет пользователей, которые недавно нажимали на подписку"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        time_before = payment_time - timedelta(minutes=minutes)
+        
+        cursor.execute('''
+            SELECT DISTINCT user_id 
+            FROM user_action_logs 
+            WHERE action IN ('subscription_clicked', 'subscription_selected', 'payment_attempt')
+            AND created_at >= %s
+            ORDER BY created_at DESC 
+            LIMIT 5
+        ''', (time_before,))
+        
+        results = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Error finding recent subscription users: {e}")
+        return []
+
+def find_user_by_email_in_payments(email):
+    """Ищет пользователя по email в исторических платежах"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT user_id 
+            FROM payments 
+            WHERE customer_email = %s 
+            OR payment_data::jsonb->>'custEmail' = %s
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (email, email))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error finding user by email in payments: {e}")
+        return None
+
+def find_last_active_user():
+    """Ищет последнего активного пользователя"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Ищем пользователей, которые недавно брали карты
+        cursor.execute('''
+            SELECT user_id 
+            FROM users 
+            WHERE last_daily_card_date >= CURRENT_DATE - INTERVAL '7 days'
+            ORDER BY last_daily_card_date DESC 
+            LIMIT 1
+        ''')
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error finding last active user: {e}")
+        return None
 
 async def send_payment_success_notification(user_id: int, subscription_type: str, amount: str):
     """Отправляет уведомление пользователю об успешной оплате"""
@@ -2526,7 +2551,7 @@ async def send_reminders():
         
         for user_id, first_name, username, last_date in users_to_remind:
             try:
-                user_name = f"@{first_name}" if first_name else username or "Дорогой пользователь"
+                user_name = f"{first_name}" if first_name else username or "Дорогой пользователь"
                 
                 if last_date is None:
                     # Для пользователей, которые никогда не брали карты

@@ -2162,10 +2162,17 @@ async def handle_subscription_selection(update: Update, context: ContextTypes.DE
                 )
             ''')
             
+            # Сохраняем user_id и subscription_type для поиска
             cursor.execute('''
                 INSERT INTO user_action_logs (user_id, action, action_data)
                 VALUES (%s, %s, %s)
-            ''', (user_id, 'subscription_selected', subscription_type))
+            ''', (user_id, 'subscription_clicked', json.dumps({
+                'subscription_type': subscription_type,
+                'user_id': user_id,
+                'username': query.from_user.username,
+                'first_name': query.from_user.first_name,
+                'timestamp': datetime.now().isoformat()
+            })))
             
             conn.commit()
             conn.close()
