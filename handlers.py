@@ -4703,6 +4703,24 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         price = PAYPAL_PRICES[subscription_type]
         duration = SUBSCRIPTION_NAMES[subscription_type]
         
+        try:
+            payment_key = f"paypal_{user_id}_{subscription_type}_{int(datetime.now().timestamp())}"
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO pending_payments (payment_key, user_id, subscription_type, amount, payment_method)
+                VALUES (%s, %s, %s, %s, 'paypal')
+                ON CONFLICT (payment_key) DO NOTHING
+            ''', (payment_key, user_id, subscription_type, float(price)))
+            
+            conn.commit()
+            conn.close()
+            logging.info(f"✅ PayPal pending payment saved: {payment_key} for user {user_id}")
+        except Exception as e:
+            logging.error(f"❌ Error saving PayPal pending payment: {e}")
+
         # ИСПОЛЬЗУЕМ СТАТИЧЕСКИЕ ССЫЛКИ PAYPAL (не ЮKassa!)
         payment_url = PAYPAL_LINKS.get(subscription_type)
         

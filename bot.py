@@ -476,6 +476,9 @@ def paypal_webhook():
         event_json = request.get_json()
         if event_json:
             logging.info(f"🔍 Parsed JSON: {event_json}")
+            logging.info(f"🔍 Event type: {event_json.get('event_type')}")
+            logging.info(f"🔍 Custom ID: {event_json.get('resource', {}).get('custom_id')}")
+            logging.info(f"🔍 Amount: {event_json.get('resource', {}).get('amount', {})}")
         else:
             logging.error("❌ Cannot parse JSON from webhook")
         # Получаем данные вебхука
@@ -768,15 +771,27 @@ def handle_paypal_payment_completed(resource):
         
         # Ищем пользователя
         user_id = None
-        if custom_id and custom_id.startswith('user_'):
-            user_id = int(custom_id.replace('user_', ''))
         
+        # СПОСОБ 1: Из custom_id (если он есть в формате user_123456)
+        if custom_id and custom_id.startswith('user_'):
+            try:
+                user_id = int(custom_id.replace('user_', ''))
+                logging.info(f"✅ Found user from custom_id: {user_id}")
+            except:
+                pass
+        
+        # СПОСОБ 2: Из pending_payments
         if not user_id:
-            # Пробуем найти по другим данным
+            user_id = find_user_from_pending_payments(None, amount, 'paypal')
+        
+        # СПОСОБ 3: По email плательщика
+        if not user_id:
             payer = resource.get('payer', {})
             email = payer.get('email_address')
             if email:
                 user_id = find_user_by_email(email)
+                if user_id:
+                    logging.info(f"✅ Found user by email: {user_id}")
         
         if user_id and amount:
             # Определяем тип продукта по сумме
@@ -785,19 +800,21 @@ def handle_paypal_payment_completed(resource):
                 if paypal_processor.activate_paypal_deck_purchase(user_id):
                     logging.info(f"✅ PayPal deck purchase activated via webhook for user {user_id}")
                     
-                    # Отправляем уведомление администратору
-                    send_admin_notification_successful(user_id, amount, currency, "deck", 
-                                                      resource.get('id', 'unknown'), 
-                                                      payer.get('email_address', 'не указан'), "PayPal")
+                    # Обновляем статус в pending_payments
+                    update_pending_payment_status(user_id, amount, 'paypal', 'completed')
                     
-                    # Отправляем файлы пользователю (асинхронно)
-                    send_deck_files_async(user_id)
+                    # Отправляем уведомление администратору
+                    payer_email = resource.get('payer', {}).get('email_address', 'не указан')
+                    payment_id = resource.get('id', 'unknown')
+                    
+                    send_admin_notification_successful(user_id, amount, currency, "deck", 
+                                                      payment_id, payer_email, "PayPal")
             else:
                 # Это подписка
                 subscription_type = determine_subscription_type_from_paypal(amount)
                 
                 if subscription_type:
-                    # ✅ Активируем подписку ТОЛЬКО при подтвержденном платеже
+                    # ✅ Активируем подписку
                     success = db.create_subscription(
                         user_id, 
                         subscription_type, 
@@ -807,57 +824,61 @@ def handle_paypal_payment_completed(resource):
                     if success:
                         logging.info(f"✅ PayPal subscription activated via webhook for user {user_id}")
                         
-                        # Обновляем статус платежа в базе
-                        update_paypal_payment_status_in_db(user_id, amount, 'success')
+                        # Обновляем статус в pending_payments
+                        update_pending_payment_status(user_id, amount, 'paypal', 'completed')
                         
                         # Отправляем уведомление пользователю
                         send_paypal_subscription_notification(user_id, subscription_type, amount)
                         
                         # Отправляем уведомление администратору
+                        payer_email = resource.get('payer', {}).get('email_address', 'не указан')
+                        payment_id = resource.get('id', 'unknown')
+                        
                         send_admin_notification_successful(user_id, amount, currency, "subscription", 
-                                                          resource.get('id', 'unknown'), 
-                                                          payer.get('email_address', 'не указан'), "PayPal")
-        
-        # ✅ ВСЕГДА отправляем уведомление администратору о PayPal платеже
-        payer_email = resource.get('payer', {}).get('email_address', 'не указан')
-        payment_id = resource.get('id', 'unknown')
-        
-        admin_notification = f"""
-🔄 PAYPAL ПЛАТЕЖ ПОЛУЧЕН
-
-📦 Продукт: {product_type}
-💰 Сумма: {amount} {currency}
-👤 User ID: {user_id or 'не найден'}
-📧 Email: {payer_email}
-🆔 Payment ID: {payment_id}
-⏰ Время: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-
-{'✅ Автоматически обработан' if user_id else '⚠️ Требуется ручная обработка'}
-"""
-        
-        # Отправляем уведомление через requests
-        try:
-            import requests
-            from config import BOT_TOKEN
-            
-            telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            payload = {
-                "chat_id": 891422895,
-                "text": admin_notification,
-                "parse_mode": "Markdown"
-            }
-            
-            response = requests.post(telegram_url, json=payload, timeout=10)
-            if response.status_code == 200:
-                logging.info(f"✅ PayPal admin notification sent")
-        except Exception as e:
-            logging.error(f"❌ Error sending PayPal admin notification: {e}")
+                                                          payment_id, payer_email, "PayPal")
         
         return jsonify({"status": "success"}), 200
         
     except Exception as e:
         logging.error(f"❌ Error handling PayPal payment captured: {e}")
         return jsonify({"status": "error"}), 500
+
+def update_pending_payment_status(user_id, amount, payment_method, status):
+    """Обновляет статус в pending_payments"""
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Для PayPal конвертируем сумму
+        if payment_method == 'paypal':
+            try:
+                amount_float = float(amount)
+            except:
+                amount_float = 0.0
+        else:
+            amount_float = float(amount)
+        
+        cursor.execute('''
+            UPDATE pending_payments 
+            SET status = %s,
+                updated_at = NOW()
+            WHERE user_id = %s 
+            AND amount = %s
+            AND payment_method = %s
+            AND status = 'pending'
+        ''', (status, user_id, amount_float, payment_method))
+        
+        updated = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if updated > 0:
+            logging.info(f"✅ Pending payment status updated to {status} for user {user_id}")
+        else:
+            logging.warning(f"⚠️ No pending payment found for user {user_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error updating pending payment status: {e}")
 
 def handle_paypal_order_completed(resource):
     """Обрабатывает завершенный заказ PayPal - ДОПОЛНЕННАЯ ВЕРСИЯ"""
@@ -2168,18 +2189,41 @@ def find_user_from_pending_payments(email, amount):
             conn.close()
             return None
         
-        # Ищем по времени (последние 30 минут) и сумме
-        time_limit = datetime.now() - timedelta(minutes=30)
+        # Для PayPal ищем по сумме в шекелях
+        if payment_method == 'paypal':
+            # Конвертируем сумму если нужно (5.00 ILS -> 5.0)
+            try:
+                amount_float = float(amount)
+            except:
+                amount_float = 0.0
+            
+            time_limit = datetime.now() - timedelta(minutes=30)
+            
+            cursor.execute('''
+                SELECT user_id, subscription_type 
+                FROM pending_payments 
+                WHERE payment_method = 'paypal'
+                AND amount = %s 
+                AND created_at >= %s
+                AND status = 'pending'
+                ORDER BY created_at DESC 
+                LIMIT 3
+            ''', (amount_float, time_limit))
         
-        cursor.execute('''
-            SELECT user_id, subscription_type 
-            FROM pending_payments 
-            WHERE amount = %s 
-            AND created_at >= %s
-            AND status = 'pending'
-            ORDER BY created_at DESC 
-            LIMIT 3
-        ''', (float(amount), time_limit))
+        else:
+
+            # Ищем по времени (последние 30 минут) и сумме
+            time_limit = datetime.now() - timedelta(minutes=30)
+            
+            cursor.execute('''
+                SELECT user_id, subscription_type 
+                FROM pending_payments 
+                WHERE amount = %s 
+                AND created_at >= %s
+                AND status = 'pending'
+                ORDER BY created_at DESC 
+                LIMIT 3
+            ''', (float(amount), time_limit))
         
         results = cursor.fetchall()
         conn.close()
