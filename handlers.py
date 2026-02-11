@@ -4681,7 +4681,7 @@ async def show_paypal_subscription_choice(query, context: ContextTypes.DEFAULT_T
         parse_mode='Markdown'
     )
 
-def send_admin_payment_created_notification(user_id: int, amount: str, subscription_type: str, payment_system: str):
+def send_admin_payment_created_notification(user_id: int, amount: float, subscription_type: str, payment_system: str):
     """Отправляет уведомление администратору о создании платежа"""
     try:
         import requests
@@ -4700,7 +4700,7 @@ def send_admin_payment_created_notification(user_id: int, amount: str, subscript
         
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
-            "chat_id": 891422895,  
+            "chat_id": 891422895,  # Ваш ID
             "text": admin_message,
             "parse_mode": "Markdown"
         }
@@ -4708,12 +4708,12 @@ def send_admin_payment_created_notification(user_id: int, amount: str, subscript
         response = requests.post(telegram_url, json=payload, timeout=10)
         
         if response.status_code == 200:
-            logger.info(f"✅ Admin notification sent for {payment_system} payment creation")
+            logging.info(f"✅ Admin notification sent for {payment_system} payment creation")
         else:
-            logger.error(f"❌ Failed to send admin notification: {response.status_code}")
+            logging.error(f"❌ Failed to send admin notification: {response.status_code}")
             
     except Exception as e:
-        logger.error(f"❌ Error sending admin notification: {e}")
+        logging.error(f"❌ Error sending admin notification: {e}")
 
 async def handle_paypal_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор типа подписки PayPal"""
@@ -4742,30 +4742,13 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Проверяем наличие колонки payment_method
-            cursor.execute('''
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'pending_payments' 
-                AND column_name = 'payment_method'
-            ''')
-            
-            has_payment_method = cursor.fetchone() is not None
-            
             payment_key = f"paypal_{user_id}_{subscription_type}_{int(datetime.now().timestamp())}"
             
-            if has_payment_method:
-                cursor.execute('''
-                    INSERT INTO pending_payments (payment_key, user_id, subscription_type, amount, payment_method)
-                    VALUES (%s, %s, %s, %s, 'paypal')
-                    ON CONFLICT (payment_key) DO NOTHING
-                ''', (payment_key, user_id, subscription_type, float(price)))
-            else:
-                cursor.execute('''
-                    INSERT INTO pending_payments (payment_key, user_id, subscription_type, amount)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (payment_key) DO NOTHING
-                ''', (payment_key, user_id, subscription_type, float(price)))
+            cursor.execute('''
+                INSERT INTO pending_payments (payment_key, user_id, subscription_type, amount, payment_method)
+                VALUES (%s, %s, %s, %s, 'paypal')
+                ON CONFLICT (payment_key) DO NOTHING
+            ''', (payment_key, user_id, subscription_type, float(price)))
             
             conn.commit()
             conn.close()
@@ -4773,25 +4756,32 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         except Exception as e:
             logging.error(f"❌ Error saving PayPal pending payment: {e}")
         
-        # ✅ Также сохраняем в таблицу payments для отслеживания
+        # ✅ СОХРАНЯЕМ В ТАБЛИЦУ PAYMENTS
         try:
             from paypal_payment import paypal_processor
             payment_id = f"paypal_{subscription_type}_{user_id}_{int(datetime.now().timestamp())}"
             
-            # Сохраняем с указанием product_type='subscription'
+            # Сохраняем с указанием product_type='subscription' и custom_id
             paypal_processor.save_paypal_payment(
                 user_id=user_id,
                 amount=price,
                 payment_id=payment_id,
                 product_type='subscription',
-                subscription_type=subscription_type
+                subscription_type=subscription_type,
+                custom_id=f"user_{user_id}"  # Важно для вебхуков!
             )
             
+            logging.info(f"✅ PayPal payment saved to database for user {user_id}, custom_id: user_{user_id}")
             logging.info(f"✅ PayPal payment saved to database for user {user_id}, product_type: subscription")
         except Exception as e:
             logging.error(f"❌ Error saving PayPal payment to DB: {e}")
         
-
+        # ✅ ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНУ
+        try:
+            send_admin_payment_created_notification(user_id, price, subscription_type, "PayPal")
+        except Exception as e:
+            logging.error(f"❌ Error sending admin notification: {e}")
+        
         # Сохраняем в контексте
         context.user_data['paypal_payment_id'] = payment_id
         context.user_data['subscription_type'] = subscription_type
@@ -4828,8 +4818,6 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         )
         
         logging.info(f"✅ PayPal payment message sent for user {user_id}")
-
-        send_admin_payment_created_notification(user_id, price, subscription_type, "PayPal")
         
     except Exception as e:
         logging.error(f"❌ Error in handle_paypal_subscription_selection: {e}")
@@ -4859,20 +4847,40 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
         await handle_successful_payment(query, subscription)
         return
     
-    # Для статических ссылок PayPal просто сообщаем, что проверка в процессе
-    if payment_id.startswith('paypal_'):
-        await query.message.reply_text(
-            "⏳ Платеж обрабатывается...\n\n"
-            "✅ Автоматическая проверка активна - подписка активируется сама при успешной оплате.\n"
-            "Обычно это занимает 1-5 минут.\n\n"
-            "Вы можете закрыть это окно и вернуться позже.",
-            reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id)
-        )
-    else:
-        await query.message.reply_text(
-            "❌ Неизвестный тип платежа.",
-            reply_markup=keyboard.get_paypal_subscription_keyboard()
-        )
+    # Проверяем статус в pending_payments
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT status 
+            FROM pending_payments 
+            WHERE user_id = %s 
+            AND payment_method = 'paypal'
+            AND amount = %s
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (user_id, PAYPAL_PRICES.get(subscription_type, 0)))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result and result[0] == 'completed':
+            # Платеж уже обработан
+            subscription = db.get_user_subscription(user_id)
+            if subscription:
+                await handle_successful_payment(query, subscription)
+                return
+    except Exception as e:
+        logging.error(f"❌ Error checking pending payment: {e}")
+    
+    await query.message.reply_text(
+        "⏳ Платеж обрабатывается...\n\n"
+        "✅ После успешной оплаты подписка активируется автоматически.\n"
+        "Обычно это занимает 1-5 минут.\n\n"
+        "Вы можете закрыть это окно и вернуться позже.",
+        reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id)
+    )
 
 async def handle_successful_payment(query, subscription):
     """Обрабатывает успешную оплату"""
