@@ -944,17 +944,6 @@ class DatabaseManager:
             
             result = cursor.fetchone()
             
-            # Также проверяем поле premium_until в users
-            if not result:
-                cursor.execute('''
-                    SELECT premium_until 
-                    FROM users 
-                    WHERE user_id = %s AND premium_until > CURRENT_TIMESTAMP
-                ''', (user_id,))
-                
-                premium_result = cursor.fetchone()
-                if premium_result:
-                    return ("premium", premium_result[0])
             
             return result
         except Exception as e:
