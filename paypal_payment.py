@@ -592,7 +592,8 @@ class PayPalPayment:
         except Exception as e:
             logging.error(f"❌ Error updating payment status: {e}")
 
-    def save_paypal_payment(self, user_id: int, amount: float, payment_id: str, product_type: str = "subscription", subscription_type: str = None):
+    def save_paypal_payment(self, user_id: int, amount: float, payment_id: str, product_type: str = "subscription", subscription_type: str = None,
+                        custom_id: str = None):
         """Сохраняет информацию о PayPal платеже в базу"""
         conn = db.get_connection()
         cursor = conn.cursor()
