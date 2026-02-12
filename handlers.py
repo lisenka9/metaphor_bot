@@ -4896,7 +4896,7 @@ async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE)
         "✅ *После успешной оплаты:*\n"
         "• Подписка активируется автоматически\n"
         "• Обычно это занимает 1-5 минут\n"
-        "• Вы получите уведомление,
+        "• Вы получите уведомление",
         reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id),
         parse_mode='Markdown'
     )
