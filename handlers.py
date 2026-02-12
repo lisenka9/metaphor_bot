@@ -4827,79 +4827,27 @@ async def handle_paypal_subscription_selection(update: Update, context: ContextT
         )
 
 async def handle_paypal_payment_check(query, context: ContextTypes.DEFAULT_TYPE):
-    """Проверяет статус оплаты PayPal - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Проверяет статус оплаты PayPal - ТОЛЬКО ПО РЕАЛЬНОЙ ПОДПИСКЕ"""
     await query.answer()
     
     user_id = query.from_user.id
-    payment_id = context.user_data.get('paypal_payment_id')
-    subscription_type = context.user_data.get('subscription_type')
     
-    if not payment_id:
-        await query.message.reply_text(
-            "❌ Не найден активный платеж PayPal. Пожалуйста, начните процесс заново.",
-            reply_markup=keyboard.get_paypal_subscription_keyboard()
-        )
-        return
-    
-    # ✅ ПРОВЕРЯЕМ БАЗУ ДАННЫХ - ЕСТЬ ЛИ РЕАЛЬНАЯ ПОДПИСКА?
+    # ✅ ЕДИНСТВЕННАЯ ПРОВЕРКА - ЕСТЬ ЛИ АКТИВНАЯ ПОДПИСКА?
     subscription = db.get_user_subscription(user_id)
+    
     if subscription:
-        # Подписка действительно есть в базе
+        # Подписка есть в базе - значит реальный платеж прошел
         subscription_type, end_date = subscription
         await handle_successful_payment(query, subscription)
-        return
-    
-    # ✅ ПРОВЕРЯЕМ, БЫЛ ЛИ РЕАЛЬНЫЙ ПЛАТЕЖ ЧЕРЕЗ БАЗУ ДАННЫХ
-    try:
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        
-        # Ищем успешный платеж в базе
-        cursor.execute('''
-            SELECT status, amount, payment_id 
-            FROM payments 
-            WHERE user_id = %s 
-            AND payment_method = 'paypal'
-            AND status = 'success'
-            AND product_type = 'subscription'
-            ORDER BY created_at DESC 
-            LIMIT 1
-        ''', (user_id,))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            status, amount, db_payment_id = result
-            # Найден успешный платеж - активируем подписку
-            from paypal_payment import paypal_processor
-            
-            # Определяем тип подписки по сумме
-            sub_type = determine_subscription_type_from_paypal(str(amount))
-            if sub_type:
-                success = db.create_subscription(
-                    user_id, 
-                    sub_type, 
-                    SUBSCRIPTION_DURATIONS[sub_type]
-                )
-                
-                if success:
-                    await handle_successful_payment(query, (sub_type, datetime.now() + timedelta(days=SUBSCRIPTION_DURATIONS[sub_type])))
-                    return
-        
-    except Exception as e:
-        logging.error(f"❌ Error checking payment status in DB: {e}")
-    
-    # ✅ ЕСЛИ НИЧЕГО НЕ НАШЛИ - ПЛАТЕЖ ЕЩЕ НЕ ПРОШЕЛ
-    await query.message.reply_text(
-        "⏳ Платеж еще не получен или обрабатывается PayPal...\n\n"
-        "✅ *После успешной оплаты:*\n"
-        "• Подписка активируется автоматически\n"
-        "• Обычно это занимает 1-5 минут\n"
-        "• Вы получите уведомление",
-        reply_markup=keyboard.get_paypal_check_keyboard(subscription_type, payment_id),
-        parse_mode='Markdown'
-    )
+    else:
+        # Подписки нет - платеж не прошел
+        await query.message.reply_text(
+            "⏳ Платеж еще не получен или обрабатывается PayPal...\n\n"
+            "✅ *После успешной оплаты подписка активируется автоматически.*\n"
+            "Обычно это занимает 1-5 минут.\n\n",
+            reply_markup=keyboard.get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
 
 async def handle_successful_payment(query, subscription):
     """Обрабатывает успешную оплату"""
