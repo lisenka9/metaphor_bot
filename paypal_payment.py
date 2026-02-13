@@ -614,7 +614,7 @@ class PayPalPayment:
                     'paypal',
                     payment_id,
                     'ILS',
-                    custom_id  # ✅ ДОБАВЛЯЕМ CUSTOM_ID
+                    custom_id  
                 ))
             else:
                 cursor.execute('''
@@ -629,7 +629,7 @@ class PayPalPayment:
                     'paypal',
                     payment_id,
                     'ILS',
-                    custom_id  # ✅ ДОБАВЛЯЕМ CUSTOM_ID
+                    custom_id  #
                 ))
             
             conn.commit()

@@ -2766,9 +2766,8 @@ async def send_reminders():
         conn.close()
         
         # Отправляем отчет администратору (асинхронно)
-        if reminded_count > 0:
-            try:
-                report = f"""
+        try:
+            report = f"""
 📊 Отчет по напоминаниям
 
 ✅ Отправлено напоминаний: {reminded_count}
@@ -2777,13 +2776,13 @@ async def send_reminders():
 
 Пользователи получили напоминания о картах дня 🎴
 """
-                await bot.send_message(
-                    chat_id=891422895,  # Ваш ID
-                    text=report,
-                    parse_mode='Markdown'
-                )
-            except Exception as e:
-                logging.error(f"❌ Error sending reminder report: {e}")
+            await bot.send_message(
+                chat_id=891422895,  
+                text=report,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logging.error(f"❌ Error sending reminder report: {e}")
         
         logging.info(f"✅ Sent reminders to {reminded_count} users")
         
