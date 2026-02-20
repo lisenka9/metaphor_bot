@@ -4679,10 +4679,10 @@ async def show_paypal_subscription_choice(query, context: ContextTypes.DEFAULT_T
     )
 
 def send_admin_payment_created_notification(user_id: int, amount: float, subscription_type: str, payment_system: str):
-    """Отправляет уведомление администратору о создании платежа"""
+    """Отправляет уведомление ВСЕМ администраторам о создании платежа"""
     try:
         import requests
-        from config import BOT_TOKEN
+        from config import BOT_TOKEN, ADMIN_IDS
         
         admin_message = f"""
 🔄 СОЗДАН ПЛАТЕЖ {payment_system.upper()}
@@ -4696,21 +4696,27 @@ def send_admin_payment_created_notification(user_id: int, amount: float, subscri
 """
         
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": 891422895,  # Ваш ID
-            "text": admin_message,
-            "parse_mode": "Markdown"
-        }
         
-        response = requests.post(telegram_url, json=payload, timeout=10)
-        
-        if response.status_code == 200:
-            logging.info(f"✅ Admin notification sent for {payment_system} payment creation")
-        else:
-            logging.error(f"❌ Failed to send admin notification: {response.status_code}")
+        for admin_id in ADMIN_IDS:
+            try:
+                payload = {
+                    "chat_id": admin_id,
+                    "text": admin_message,
+                    "parse_mode": "Markdown"
+                }
+                
+                response = requests.post(telegram_url, json=payload, timeout=10)
+                
+                if response.status_code == 200:
+                    logging.info(f"✅ Admin notification sent to {admin_id} for {payment_system} payment creation")
+                else:
+                    logging.error(f"❌ Failed to send admin notification to {admin_id}: {response.status_code}")
+                    
+            except Exception as e:
+                logging.error(f"❌ Error sending notification to admin {admin_id}: {e}")
             
     except Exception as e:
-        logging.error(f"❌ Error sending admin notification: {e}")
+        logging.error(f"❌ Error sending admin notifications: {e}")
 
 async def handle_paypal_subscription_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает выбор типа подписки PayPal"""
