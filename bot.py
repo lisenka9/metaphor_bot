@@ -2475,7 +2475,7 @@ def setup_handlers(application):
 
     application.add_handler(CallbackQueryHandler(handlers.meditation_button_handler, pattern="^meditation$"))
 
-    application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
+    #application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_any_document))
     
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,

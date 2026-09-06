@@ -1593,7 +1593,7 @@ async def show_history_pics_from_button(query, context: ContextTypes.DEFAULT_TYP
 async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /guide"""
     try:
-        file_id = "BQACAgIAAxkBAAIPyWksJ2oB7zWcPGDuD4Y10SFMGxW4AAIRiAACi_RhSZpuTPvDNakwNgQ"
+        file_id = "BQACAgIAAxkBAAIpK2qdWh-7nh4SZTeKStdvbV5pQKSaAALRrgAC5vXoSNzda8RWMBODPQQ"
         
         logging.info(f"🔄 Attempting to send guide with file_id: {file_id}")
         
@@ -1635,7 +1635,7 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_guide_from_button(query, context: ContextTypes.DEFAULT_TYPE):
     """Показывает гайд из кнопки меню"""
     try:
-        file_id = "BQACAgIAAxkBAAIPyWksJ2oB7zWcPGDuD4Y10SFMGxW4AAIRiAACi_RhSZpuTPvDNakwNgQ"
+        file_id = "BQACAgIAAxkBAAIpK2qdWh-7nh4SZTeKStdvbV5pQKSaAALRrgAC5vXoSNzda8RWMBODPQQ"
         
         logging.info(f"🔄 Attempting to send guide from button with file_id: {file_id}")
         
